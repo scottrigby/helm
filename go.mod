@@ -42,8 +42,6 @@ require (
 	k8s.io/client-go v0.23.1
 	k8s.io/klog/v2 v2.30.0
 	k8s.io/kubectl v0.23.1
-	oras.land/oras-go v1.0.0
+	oras.land/oras-go v1.1.0-rc1
 	sigs.k8s.io/yaml v1.3.0
 )
-
-replace oras.land/oras-go => github.com/sabre1041/oras-go v1.0.1-0.20220105042547-7ebb8809edae
