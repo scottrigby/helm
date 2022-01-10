@@ -45,6 +45,35 @@ func ContainsTag(tags []string, tag string) bool {
 	return false
 }
 
+func GetTagMatchingVersionOrConstraint(tags []string, versionString) (string, error) {
+	var constraint *semver.Constraints
+	if versionString == "" {
+		// If string is empty, set wildcard constraint
+		constraint, _ = semver.NewConstraint("*")
+	} else {
+		// Otherwise set constraint to the string given
+		var err error
+		constraint, err = semver.NewConstraint(versionString)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Otherwise try to find the first available version matching the string,
+	// in case it is a constraint
+	for i, v := range versions {
+		test, err := semver.NewVersion(v)
+		if err != nil {
+			continue
+		}
+		if constraint.Check(test) {
+			return i, nil
+		}
+	}
+
+	return nil, errors.Errorf("Could not locate a version matching provided version string %s", versionString)
+}
+
 // extractChartMeta is used to extract a chart metadata from a byte array
 func extractChartMeta(chartData []byte) (*chart.Metadata, error) {
 	ch, err := loader.LoadArchive(bytes.NewReader(chartData))
