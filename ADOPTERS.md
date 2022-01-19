@@ -12,5 +12,6 @@
 - [Samsung SDS](https://www.samsungsds.com/)
 - [Softonic](https://hello.softonic.com/)
 - [Ville de Montreal](https://montreal.ca)
+- [Weaveworks](https://weave.works)
 
 _This file is part of the CNCF official documentation for projects._
