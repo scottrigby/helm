@@ -127,6 +127,7 @@ type ChartPathOptions struct {
 	PlainHTTP             bool   // --plain-http
 	Keyring               string // --keyring
 	Password              string // --password
+	ForceAttemptOAuth2    bool   // --force-attempt-oauth2
 	PassCredentialsAll    bool   // --pass-credentials
 	RepoURL               string // --repo
 	Username              string // --username

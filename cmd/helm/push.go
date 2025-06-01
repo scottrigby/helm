@@ -42,6 +42,7 @@ type registryPushOptions struct {
 	plainHTTP             bool
 	password              string
 	username              string
+	forceAttemptOAuth2    bool
 }
 
 func newPushCmd(cfg *action.Configuration, out io.Writer) *cobra.Command {
@@ -71,7 +72,7 @@ func newPushCmd(cfg *action.Configuration, out io.Writer) *cobra.Command {
 		},
 		RunE: func(_ *cobra.Command, args []string) error {
 			registryClient, err := newRegistryClient(
-				o.certFile, o.keyFile, o.caFile, o.insecureSkipTLSverify, o.plainHTTP, o.username, o.password,
+				o.certFile, o.keyFile, o.caFile, o.insecureSkipTLSverify, o.plainHTTP, o.username, o.password, o.forceAttemptOAuth2,
 			)
 
 			if err != nil {
@@ -103,6 +104,7 @@ func newPushCmd(cfg *action.Configuration, out io.Writer) *cobra.Command {
 	f.BoolVar(&o.plainHTTP, "plain-http", false, "use insecure HTTP connections for the chart upload")
 	f.StringVar(&o.username, "username", "", "chart repository username where to locate the requested chart")
 	f.StringVar(&o.password, "password", "", "chart repository password where to locate the requested chart")
+	f.BoolVar(&o.forceAttemptOAuth2, "force-attempt-oauth2", false, "force attempt to use OAuth 2 endpoint")
 
 	return cmd
 }

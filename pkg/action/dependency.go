@@ -40,6 +40,7 @@ type Dependency struct {
 	ColumnWidth           uint
 	Username              string
 	Password              string
+	ForceAttemptOAuth2    bool
 	CertFile              string
 	KeyFile               string
 	CaFile                string

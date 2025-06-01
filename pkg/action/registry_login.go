@@ -82,7 +82,7 @@ func NewRegistryLogin(cfg *Configuration) *RegistryLogin {
 }
 
 // Run executes the registry login operation
-func (a *RegistryLogin) Run(_ io.Writer, hostname string, username string, password string, opts ...RegistryLoginOpt) error {
+func (a *RegistryLogin) Run(_ io.Writer, hostname string, username string, password string, forceAttemptOAuth2 bool, opts ...RegistryLoginOpt) error {
 	for _, opt := range opts {
 		if err := opt(a); err != nil {
 			return err
@@ -92,6 +92,7 @@ func (a *RegistryLogin) Run(_ io.Writer, hostname string, username string, passw
 	return a.cfg.RegistryClient.Login(
 		hostname,
 		registry.LoginOptBasicAuth(username, password),
+		registry.LoginOptOAuth2(forceAttemptOAuth2),
 		registry.LoginOptInsecure(a.insecure),
 		registry.LoginOptTLSClientConfig(a.certFile, a.keyFile, a.caFile),
 		registry.LoginOptPlainText(a.plainHTTP),

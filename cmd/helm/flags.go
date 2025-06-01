@@ -58,6 +58,7 @@ func addChartPathOptionsFlags(f *pflag.FlagSet, c *action.ChartPathOptions) {
 	f.StringVar(&c.RepoURL, "repo", "", "chart repository url where to locate the requested chart")
 	f.StringVar(&c.Username, "username", "", "chart repository username where to locate the requested chart")
 	f.StringVar(&c.Password, "password", "", "chart repository password where to locate the requested chart")
+	f.BoolVar(&c.ForceAttemptOAuth2, "force-attempt-oauth2", false, "force attempt to use OAuth 2 endpoint")
 	f.StringVar(&c.CertFile, "cert-file", "", "identify HTTPS client using this SSL certificate file")
 	f.StringVar(&c.KeyFile, "key-file", "", "identify HTTPS client using this SSL key file")
 	f.BoolVar(&c.InsecureSkipTLSverify, "insecure-skip-tls-verify", false, "skip tls certificate checks for the chart download")

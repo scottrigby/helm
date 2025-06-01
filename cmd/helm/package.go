@@ -76,7 +76,7 @@ func newPackageCmd(out io.Writer) *cobra.Command {
 			}
 
 			registryClient, err := newRegistryClient(client.CertFile, client.KeyFile, client.CaFile,
-				client.InsecureSkipTLSverify, client.PlainHTTP, client.Username, client.Password)
+				client.InsecureSkipTLSverify, client.PlainHTTP, client.Username, client.Password, client.ForceAttemptOAuth2)
 			if err != nil {
 				return fmt.Errorf("missing registry client: %w", err)
 			}
@@ -127,6 +127,7 @@ func newPackageCmd(out io.Writer) *cobra.Command {
 	f.BoolVarP(&client.DependencyUpdate, "dependency-update", "u", false, `update dependencies from "Chart.yaml" to dir "charts/" before packaging`)
 	f.StringVar(&client.Username, "username", "", "chart repository username where to locate the requested chart")
 	f.StringVar(&client.Password, "password", "", "chart repository password where to locate the requested chart")
+	f.BoolVar(&client.ForceAttemptOAuth2, "force-attempt-oauth2", false, "force attempt to use OAuth 2 endpoint")
 	f.StringVar(&client.CertFile, "cert-file", "", "identify HTTPS client using this SSL certificate file")
 	f.StringVar(&client.KeyFile, "key-file", "", "identify HTTPS client using this SSL key file")
 	f.BoolVar(&client.InsecureSkipTLSverify, "insecure-skip-tls-verify", false, "skip tls certificate checks for the chart download")

@@ -38,6 +38,7 @@ Authenticate to a remote registry.
 type registryLoginOptions struct {
 	username             string
 	password             string
+	forceAttemptOAuth2   bool
 	passwordFromStdinOpt bool
 	certFile             string
 	keyFile              string
@@ -63,7 +64,7 @@ func newRegistryLoginCmd(cfg *action.Configuration, out io.Writer) *cobra.Comman
 				return err
 			}
 
-			return action.NewRegistryLogin(cfg).Run(out, hostname, username, password,
+			return action.NewRegistryLogin(cfg).Run(out, hostname, username, password, o.forceAttemptOAuth2,
 				action.WithCertFile(o.certFile),
 				action.WithKeyFile(o.keyFile),
 				action.WithCAFile(o.caFile),
@@ -75,6 +76,7 @@ func newRegistryLoginCmd(cfg *action.Configuration, out io.Writer) *cobra.Comman
 	f := cmd.Flags()
 	f.StringVarP(&o.username, "username", "u", "", "registry username")
 	f.StringVarP(&o.password, "password", "p", "", "registry password or identity token")
+	f.BoolVar(&o.forceAttemptOAuth2, "force-attempt-oauth2", false, "force attempt to use OAuth 2 endpoint")
 	f.BoolVarP(&o.passwordFromStdinOpt, "password-stdin", "", false, "read password or identity token from stdin")
 	f.BoolVarP(&o.insecure, "insecure", "", false, "allow connections to TLS registry without certs")
 	f.StringVar(&o.certFile, "cert-file", "", "identify registry client using this SSL certificate file")

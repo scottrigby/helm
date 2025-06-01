@@ -74,6 +74,7 @@ type (
 		credentialsFile    string
 		username           string
 		password           string
+		forceAttemptOAuth2 bool
 		out                io.Writer
 		authorizer         *auth.Client
 		registryAuthorizer RemoteClient
@@ -156,6 +157,10 @@ func NewClient(options ...ClientOption) (*Client, error) {
 			authorizer.Cache = auth.NewCache()
 		}
 
+		if client.forceAttemptOAuth2 {
+			authorizer.ForceAttemptOAuth2 = true
+		}
+
 		client.authorizer = &authorizer
 	}
 
@@ -181,6 +186,13 @@ func ClientOptBasicAuth(username, password string) ClientOption {
 	return func(client *Client) {
 		client.username = username
 		client.password = password
+	}
+}
+
+// ClientOptOAuth2 returns a function that sets the client option to force attempt to use OAuth 2 endpoint
+func ClientOptOAuth2(force bool) ClientOption {
+	return func(client *Client) {
+		client.forceAttemptOAuth2 = force
 	}
 }
 
@@ -341,6 +353,13 @@ func LoginOptBasicAuth(username string, password string) LoginOption {
 		o.client.username = username
 		o.client.password = password
 		o.client.authorizer.Credential = auth.StaticCredential(o.host, auth.Credential{Username: username, Password: password})
+	}
+}
+
+// LoginOptOAuth2 returns a function that forces attempt to use OAuth 2 endpoint on login
+func LoginOptOAuth2(force bool) LoginOption {
+	return func(o *loginOperation) {
+		o.client.forceAttemptOAuth2 = force
 	}
 }
 

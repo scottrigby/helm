@@ -49,6 +49,7 @@ type Package struct {
 	PlainHTTP             bool
 	Username              string
 	Password              string
+	ForceAttemptOAuth2    bool
 	CertFile              string
 	KeyFile               string
 	CaFile                string
