@@ -1,13 +1,16 @@
 # syntax=docker/dockerfile:1
+# Global args
+ARG HELM_VERSION=v3.18.3
+
 # Download and verify Helm binary in builder stage
 FROM alpine:3.22.0 AS builder
 
 # Define Helm version and architecture
-ARG HELM_VERSION=v3.18.3
+ARG HELM_VERSION
+ARG TARGETOS
 ARG TARGETARCH
 ARG HELM_BASE_URL=https://get.helm.sh
 ARG HELM_GITHUB_URL=https://github.com/helm/helm/releases/download/${HELM_VERSION}
-ARG HELM_ARCH=linux-${TARGETARCH}
 
 # Install only essential packages for downloading and verification
 RUN apk add --no-cache \
@@ -21,21 +24,21 @@ RUN echo "nonroot:x:65532:65532:nonroot:/tmp:/sbin/nologin" >> /etc/passwd \
     && echo "nonroot:x:65532:" >> /etc/group
 
 # Download Helm binary, checksums, and signature
-RUN curl -fsSLO "${HELM_BASE_URL}/helm-${HELM_VERSION}-${HELM_ARCH}.tar.gz" \
-    && curl -fsSLO "${HELM_BASE_URL}/helm-${HELM_VERSION}-${HELM_ARCH}.tar.gz.sha256sum" \
-    && curl -fsSLO "${HELM_GITHUB_URL}/helm-${HELM_VERSION}-${HELM_ARCH}.tar.gz.asc" \
+RUN curl -fsSLO "${HELM_BASE_URL}/helm-${HELM_VERSION}-${TARGETOS}-${TARGETARCH}.tar.gz" \
+    && curl -fsSLO "${HELM_BASE_URL}/helm-${HELM_VERSION}-${TARGETOS}-${TARGETARCH}.tar.gz.sha256sum" \
+    && curl -fsSLO "${HELM_GITHUB_URL}/helm-${HELM_VERSION}-${TARGETOS}-${TARGETARCH}.tar.gz.asc" \
     && curl -fsSLO "${HELM_BASE_URL}/KEYS"
 
 # Import Helm public keys and verify signature
 RUN gpg --import KEYS \
-    && gpg --verify "helm-${HELM_VERSION}-${HELM_ARCH}.tar.gz.asc" "helm-${HELM_VERSION}-${HELM_ARCH}.tar.gz"
+    && gpg --verify "helm-${HELM_VERSION}-${TARGETOS}-${TARGETARCH}.tar.gz.asc" "helm-${HELM_VERSION}-${TARGETOS}-${TARGETARCH}.tar.gz"
 
 # Verify checksum
-RUN sha256sum -c "helm-${HELM_VERSION}-${HELM_ARCH}.tar.gz.sha256sum"
+RUN sha256sum -c "helm-${HELM_VERSION}-${TARGETOS}-${TARGETARCH}.tar.gz.sha256sum"
 
 # Extract Helm binary
-RUN tar -xzf "helm-${HELM_VERSION}-${HELM_ARCH}.tar.gz" ${HELM_ARCH}/helm \
-    && mv ${HELM_ARCH}/helm /usr/local/bin/helm \
+RUN tar -xzf "helm-${HELM_VERSION}-${TARGETOS}-${TARGETARCH}.tar.gz" ${TARGETOS}-${TARGETARCH}/helm \
+    && mv ${TARGETOS}-${TARGETARCH}/helm /usr/local/bin/helm \
     && chmod +x /usr/local/bin/helm
 
 # Verify helm binary works
@@ -45,7 +48,7 @@ RUN /usr/local/bin/helm version --client
 FROM scratch
 
 # Redeclare version for metadata
-ARG HELM_VERSION=v3.18.3
+ARG HELM_VERSION
 
 # Set metadata
 LABEL org.opencontainers.image.title="Helm"
