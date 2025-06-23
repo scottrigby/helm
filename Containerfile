@@ -2,8 +2,8 @@
 # Global args
 ARG HELM_VERSION=v3.18.3
 
-# Download and verify Helm binary in builder stage
-FROM alpine:3.22.0 AS builder
+# Download and verify Helm binary in download-verify stage
+FROM alpine:3.22.0 AS download-verify
 
 # Define Helm version and architecture
 ARG HELM_VERSION
@@ -19,7 +19,7 @@ RUN apk add --no-cache \
     tar \
     && rm -rf /var/cache/apk/*
 
-# Create non-root user in builder stage
+# Create non-root user in download-verify stage
 RUN echo "nonroot:x:65532:65532:nonroot:/tmp:/sbin/nologin" >> /etc/passwd \
     && echo "nonroot:x:65532:" >> /etc/group
 
@@ -59,12 +59,12 @@ LABEL org.opencontainers.image.documentation="https://helm.sh/docs/install"
 LABEL org.opencontainers.image.source="https://github.com/helm/helm/blob/main/Containerfile"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
-# Copy only the Helm binary from builder stage
-COPY --from=builder /usr/local/bin/helm /helm
+# Copy only the Helm binary from download-verify stage
+COPY --from=download-verify /usr/local/bin/helm /helm
 
 # Copy minimal required files for user context
-COPY --from=builder /etc/passwd /etc/passwd
-COPY --from=builder /etc/group /etc/group
+COPY --from=download-verify /etc/passwd /etc/passwd
+COPY --from=download-verify /etc/group /etc/group
 
 # Set security context - use nonroot user
 USER 65532:65532
@@ -78,13 +78,14 @@ CMD ["--help"]
 
 # Security notes:
 # 1. Uses scratch base image - absolutely nothing except what we add
-# 2. Multi-stage build to avoid build tools in final image
-# 3. Checksum verification of downloaded binary
-# 4. Non-root user (UID 65532)
-# 5. Only contains Helm binary and minimal user files
-# 6. No shell, no libraries, no package manager - zero attack surface
-# 7. Specific version pinning to avoid unexpected updates
-# 8. Statically linked binary required for scratch images
+# 2. Multi-stage build to avoid download/verification tools in final image
+# 3. PGP signature verification of downloaded binary
+# 4. Checksum verification of downloaded binary
+# 5. Non-root user (UID 65532)
+# 6. Only contains Helm binary and minimal user files
+# 7. No shell, no libraries, no package manager - zero attack surface
+# 8. Specific version pinning to avoid unexpected updates
+# 9. Statically linked binary required for scratch images
 
 # Build with no context
 # cat Containerfile | podman build -t helm-secure:latest -
