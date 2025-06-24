@@ -18,17 +18,23 @@ RUN apk add --no-cache \
 RUN echo "nonroot:x:65532:65532:nonroot:/tmp:/sbin/nologin" >> /etc/passwd \
     && echo "nonroot:x:65532:" >> /etc/group
 
-RUN curl -fsSLO "${HELM_BASE_URL}/helm-${HELM_VERSION}-${TARGETOS}-${TARGETARCH}.tar.gz" \
+# TODO fix arm -> arm64 workaround
+# helm's arm build does not run on linux/arm/v7 TARGETPLATFORM but it's arm64 build does
+RUN if [ "${TARGETARCH}" = "arm" ]; then TARGETARCH=arm64; fi \
+    && curl -fsSLO "${HELM_BASE_URL}/helm-${HELM_VERSION}-${TARGETOS}-${TARGETARCH}.tar.gz" \
     && curl -fsSLO "${HELM_BASE_URL}/helm-${HELM_VERSION}-${TARGETOS}-${TARGETARCH}.tar.gz.sha256sum" \
     && curl -fsSLO "${HELM_GITHUB_URL}/helm-${HELM_VERSION}-${TARGETOS}-${TARGETARCH}.tar.gz.asc" \
     && curl -fsSLO "${HELM_BASE_URL}/KEYS"
 
-RUN gpg --import KEYS \
+RUN if [ "${TARGETARCH}" = "arm" ]; then TARGETARCH=arm64; fi \
+    && gpg --import KEYS \
     && gpg --verify "helm-${HELM_VERSION}-${TARGETOS}-${TARGETARCH}.tar.gz.asc" "helm-${HELM_VERSION}-${TARGETOS}-${TARGETARCH}.tar.gz"
 
-RUN sha256sum -c "helm-${HELM_VERSION}-${TARGETOS}-${TARGETARCH}.tar.gz.sha256sum"
+RUN if [ "${TARGETARCH}" = "arm" ]; then TARGETARCH=arm64; fi \
+    && sha256sum -c "helm-${HELM_VERSION}-${TARGETOS}-${TARGETARCH}.tar.gz.sha256sum"
 
-RUN tar -xzf "helm-${HELM_VERSION}-${TARGETOS}-${TARGETARCH}.tar.gz" ${TARGETOS}-${TARGETARCH}/helm \
+RUN if [ "${TARGETARCH}" = "arm" ]; then TARGETARCH=arm64; fi \
+    && tar -xzf "helm-${HELM_VERSION}-${TARGETOS}-${TARGETARCH}.tar.gz" ${TARGETOS}-${TARGETARCH}/helm \
     && mv ${TARGETOS}-${TARGETARCH}/helm /usr/local/bin/helm \
     && chmod +x /usr/local/bin/helm
 
