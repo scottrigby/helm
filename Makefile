@@ -237,7 +237,7 @@ endif
 endif
 
 .PHONY: container-build
-container-build: VERSION ?= $(shell curl -SsLf https://get.helm.sh/helm-latest-version)
+container-build: VERSION ?= $(shell $(MAKE) .latest-release)
 container-build:
 	@echo Building VERSION: $(VERSION) ; \
 	cat Containerfile | $(CONTAINER_RUNTIME) build \
@@ -254,7 +254,7 @@ comma := ,
 .PHONY: container-build-multiarch
 container-build-multiarch: FILTERED_PLATFORMS := $(subst $(space),$(comma),$(filter-out darwin/% windows/%,$(TARGETS)))
 container-build-multiarch: CONTAINER_IMAGE = helm-multiarch
-container-build-multiarch: VERSION ?= $(shell curl -SsLf https://get.helm.sh/helm-latest-version)
+container-build-multiarch: VERSION ?= $(shell $(MAKE) .latest-release)
 container-build-multiarch: .multiarch-$(CONTAINER_RUNTIME)
 
 # internal called by container-build-multiarch
@@ -301,6 +301,11 @@ container-run:
 		-e KUBECONFIG=/tmp/kubeconfig \
 		$(CONTAINER_IMAGE):$(VERSION) \
 		$(CONTAINER_CMD)
+
+# internal only called by certain commands when a version is not passed
+.PHONY: .latest-release
+.latest-release:
+	@curl -SsLf https://get.helm.sh/helm-latest-version
 
 # ------------------------------------------------------------------------------
 
