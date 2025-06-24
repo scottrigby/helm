@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 ARG HELM_VERSION=v3.18.3
 
-FROM alpine:3.22.0 AS download-verify
+FROM --platform=$BUILDPLATFORM alpine:3.22.0 AS download-verify
 
 ARG HELM_VERSION
 ARG TARGETOS
