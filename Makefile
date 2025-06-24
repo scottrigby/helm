@@ -228,6 +228,14 @@ CONTAINER_CMD ?= version --client
 CONTAINER_DIR ?= $(shell pwd)
 CONTAINER_REGISTRY ?= docker.io
 
+RUNTIME_OUTPUT := --load
+ifeq ($(PUSH),true)
+ifeq ($(CONTAINER_RUNTIME),docker)
+docker login $(CONTAINER_REGISTRY)
+RUNTIME_OUTPUT := --push
+endif
+endif
+
 .PHONY: container-build
 container-build: VERSION ?= $(shell curl -SsLf https://get.helm.sh/helm-latest-version)
 container-build:
@@ -235,57 +243,46 @@ container-build:
 	cat Containerfile | $(CONTAINER_RUNTIME) build \
 		--build-arg HELM_VERSION=$(VERSION) \
 		-t $(CONTAINER_IMAGE):$(VERSION) \
-		--load \
+		$(RUNTIME_OUTPUT) \
 		- ; \
 
 # build multi-platform image
-# https://docs.docker.com/build/building/multi-platform
-# TODO fix for darwin, windows, and linux/arm/v7
-#	for now, replace
-#		platforms="$$(echo '$(TARGETS)' | tr ' ' ',')";
-# 	with the below
-# 	excluding darwin/* windows/* and linux/arm
-# TODO make code less obnoxious when CONTAINER_RUNTIME is docker
 space := $(subst ,, )
 comma := ,
-# TODO fix arm -> arm64 issue. See comment in Containerfile
-# FILTERED_PLATFORMS := $(subst $(space),$(comma),$(filter-out darwin/% windows/% linux/arm,$(TARGETS)))
-FILTERED_PLATFORMS := $(subst $(space),$(comma),$(filter-out darwin/% windows/%,$(TARGETS)))
+# TODO fix for darwin and windows
+# FILTERED_ITEMS := $(subst $(space),$(comma),$(TARGETS))
 .PHONY: container-build-multiarch
+container-build-multiarch: FILTERED_PLATFORMS := $(subst $(space),$(comma),$(filter-out darwin/% windows/%,$(TARGETS)))
 container-build-multiarch: CONTAINER_IMAGE = helm-multiarch
 container-build-multiarch: VERSION ?= $(shell curl -SsLf https://get.helm.sh/helm-latest-version)
-container-build-multiarch:
-	@echo Building multiarch VERSION: $(VERSION) ; \
-	echo "PLATFORMS: $(FILTERED_PLATFORMS)" ; \
-	\
-	if [ "$(CONTAINER_RUNTIME)" = "podman" ]; then \
-		podman rmi $(CONTAINER_IMAGE):$(VERSION) >/dev/null 2>&1 || true ; \
-		podman manifest rm $(CONTAINER_IMAGE):$(VERSION) >/dev/null 2>&1 || true ; \
-		podman manifest create $(CONTAINER_IMAGE):$(VERSION) ; \
-		podman manifest inspect localhost/$(CONTAINER_IMAGE):$(VERSION) ; \
-		cat Containerfile | podman build \
-			--manifest localhost/$(CONTAINER_IMAGE):$(VERSION) \
-			--platform "$(FILTERED_PLATFORMS)" \
-			--build-arg HELM_VERSION=$(VERSION) \
-			- ; \
-		podman manifest inspect localhost/$(CONTAINER_IMAGE):$(VERSION) ; \
-	\
-	elif [ "$(CONTAINER_RUNTIME)" = "docker" ]; then \
-		export DOCKER_CLI_EXPERIMENTAL=enabled ; \
-		if [ "$(PUSH)" = "true" ]; then \
-			docker login $(CONTAINER_REGISTRY) ; \
-			PUSHFLAG="--push" ; \
-		fi ; \
-		cat Containerfile | docker buildx build \
-			--platform "$(FILTERED_PLATFORMS)" \
-			--build-arg HELM_VERSION=$(VERSION) \
-			-t $(CONTAINER_REGISTRY)/$(CONTAINER_IMAGE):$(VERSION) \
-			$${PUSHFLAG:-} \
-			- ; \
-		if [ "$(PUSH)" = "true" ]; then \
-			docker manifest inspect $(CONTAINER_REGISTRY)/$(CONTAINER_IMAGE):$(VERSION) ; \
-		fi ; \
-	fi
+container-build-multiarch: .multiarch-$(CONTAINER_RUNTIME)
+
+# internal called by container-build-multiarch
+.PHONY: .multiarch-podman
+.multiarch-podman:
+	@podman rmi $(CONTAINER_IMAGE):$(VERSION) >/dev/null 2>&1 || true ; \
+	podman manifest rm $(CONTAINER_IMAGE):$(VERSION) >/dev/null 2>&1 || true ; \
+	podman manifest create $(CONTAINER_IMAGE):$(VERSION) ; \
+	podman manifest inspect localhost/$(CONTAINER_IMAGE):$(VERSION) ; \
+	cat Containerfile | podman build \
+		--manifest localhost/$(CONTAINER_IMAGE):$(VERSION) \
+		--platform "$(FILTERED_PLATFORMS)" \
+		--build-arg HELM_VERSION=$(VERSION) \
+		$(RUNTIME_OUTPUT) \
+		- ; \
+	podman manifest inspect localhost/$(CONTAINER_IMAGE):$(VERSION)
+
+# internal called by container-build-multiarch
+.PHONY: .multiarch-docker
+.multiarch-docker:
+	@export DOCKER_CLI_EXPERIMENTAL=enabled ; \
+	cat Containerfile | docker buildx build \
+		--platform "$(FILTERED_PLATFORMS)" \
+		--build-arg HELM_VERSION=$(VERSION) \
+		-t $(CONTAINER_REGISTRY)/$(CONTAINER_IMAGE):$(VERSION) \
+		$(RUNTIME_OUTPUT) \
+		- ; \
+	docker manifest inspect $(CONTAINER_REGISTRY)/$(CONTAINER_IMAGE):$(VERSION)
 
 .PHONY: container-run
 container-run: VERSION ?= $(shell curl -SsLf https://get.helm.sh/helm-latest-version)
