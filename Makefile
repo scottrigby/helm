@@ -249,10 +249,10 @@ container-build:
 # build multi-platform image
 space := $(subst ,, )
 comma := ,
-# TODO fix for darwin and windows
-# FILTERED_ITEMS := $(subst $(space),$(comma),$(TARGETS))
 .PHONY: container-build-multiarch
-container-build-multiarch: FILTERED_PLATFORMS := $(subst $(space),$(comma),$(filter-out darwin/% windows/%,$(TARGETS)))
+# TODO set up container build process for darwin, windows and linux/arm
+# container-build-multiarch: FILTERED_ITEMS := $(subst $(space),$(comma),$(TARGETS))
+container-build-multiarch: FILTERED_PLATFORMS := $(subst $(space),$(comma),$(filter-out darwin/% windows/% linux/arm,$(TARGETS)))
 container-build-multiarch: CONTAINER_IMAGE = helm-multiarch
 container-build-multiarch: VERSION ?= $(shell $(MAKE) .latest-release)
 container-build-multiarch: .multiarch-$(CONTAINER_RUNTIME)
