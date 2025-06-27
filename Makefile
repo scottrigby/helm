@@ -231,7 +231,6 @@ CONTAINER_REGISTRY ?= docker.io
 RUNTIME_OUTPUT := --load
 ifeq ($(PUSH),true)
 ifeq ($(CONTAINER_RUNTIME),docker)
-docker login $(CONTAINER_REGISTRY)
 RUNTIME_OUTPUT := --push
 endif
 endif
@@ -276,6 +275,9 @@ container-build-multiarch: .multiarch-$(CONTAINER_RUNTIME)
 .PHONY: .multiarch-docker
 .multiarch-docker:
 	@export DOCKER_CLI_EXPERIMENTAL=enabled ; \
+	if [ "$(RUNTIME_OUTPUT)" = "--push" ]; then \
+		docker login $(CONTAINER_REGISTRY); \
+	fi; \
 	cat Containerfile | docker buildx build \
 		--platform "$(FILTERED_PLATFORMS)" \
 		--build-arg HELM_VERSION=$(VERSION) \
