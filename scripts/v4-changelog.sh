@@ -3,27 +3,10 @@
 set -e
 trap 'echo "Error on line $LINENO: Command failed with exit code $?"' ERR
 
-## Keep for using JSON for output rather than gh command
-# shas=$(git log dev-v3..main --format=format:%H)
-# echo "${shas}"
-# json='[]'
-# echo "${shas}" | while IFS= read -r sha ; do
-#     pr=$(gh pr list --search "${sha}" --state merged --json number,title,closedAt,url)
-#     json=$(jq --argjson pr "${pr}" '. += $pr | unique' <<< "${json}")
-#     echo "${json}"
-#     echo
-# done
-# echo "FINAL:"
-# echo "${json}"
-
-prs=''
+json='[]'
 endCursor=''
 pageCount=1
 while [[ "${hasNextPage:-}" != "false" ]]; do
-    # echo "pageCount=${pageCount}"
-    # echo "hasNextPage=${hasNextPage:-starting}"
-    # echo "endCursor=${endCursor:-starting}"
-
     # give some indication that things are happening and not just hanging
     echo "Processing page ${pageCount}..."
 
@@ -78,28 +61,25 @@ while [[ "${hasNextPage:-}" != "false" ]]; do
     hasNextPage=$(jq '.data.repository.ref.compare.commits.pageInfo.hasNextPage' <<< "${out}")
     endCursor=$(jq -r '.data.repository.ref.compare.commits.pageInfo.endCursor' <<< "${out}")
 
-    associatedPullRequests=$(jq '.data.repository.ref.compare.commits.nodes[].associatedPullRequests.nodes[].number' <<< "${out}" | uniq)
+    jsonchunks=$(jq '.data.repository.ref.compare.commits.nodes[].associatedPullRequests.nodes[]' <<< "${out}")
+    jsonarray=$(jq --slurp <<< "${jsonchunks}")
 
-    if [[ -n "${prs}" ]]; then
-        prs+=$'\n'
-    fi
-    prs+="${associatedPullRequests:-} "
+    before=$(jq '. | map(.number) | length' <<< "${json}")
+    json=$(jq --argjson json "${json}" '. += $json | unique' <<< "${jsonarray}")
+    after=$(jq '. | map(.number) | length' <<< "${json}")
+
+    echo "New PRs added: $((after-before))"
 
     ((pageCount++))
 done
 
-prs=$(echo -n "${prs}" | uniq)
-
 echo
-echo "Final page count: ${pageCount}"
-echo "Final PR count: $(echo "${prs}" | wc -l | bc)"
-prs_string=$(sort -u <<< "${prs}")
-echo "Final PR list: $(tr '\n' ' ' <<< ${prs_string})"
+echo "Total PRs: $(jq '. | map(.number) | length' <<< ${json})"
+echo
+jq -r '["NUMBER", "DATE", "AUTHOR", "TITLE"], (.[] | ["#\(.number)", .mergedAt, .author.login, .title]) | @tsv' <<< ${json} | column -t -s $'\t'
 echo
 
-# gh search prs --repo=helm/helm "${prs}"
-# Error: The search is longer than 256 characters.
-# TODO get json data and print our own table in the end instead
-echo "Outputting PR info in max chunks of 30"
+echo "⚠️  Remember to manually check if each PR was backported to v3."
+echo "   Because there's not a good way to automate that check when commit SHAs differ,"
+echo "   and git diffs will often neccessarily differ between v4 and v3."
 echo
-echo -n "$prs" | xargs -n 30 gh search prs --repo=helm/helm
