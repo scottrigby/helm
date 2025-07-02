@@ -61,7 +61,8 @@ while [[ "${hasNextPage:-}" != "false" ]]; do
     hasNextPage=$(jq '.data.repository.ref.compare.commits.pageInfo.hasNextPage' <<< "${out}")
     endCursor=$(jq -r '.data.repository.ref.compare.commits.pageInfo.endCursor' <<< "${out}")
 
-    jsonchunks=$(jq '.data.repository.ref.compare.commits.nodes[].associatedPullRequests.nodes[]' <<< "${out}")
+    # do not include dependabot-authored PRs
+    jsonchunks=$(jq '.data.repository.ref.compare.commits.nodes[].associatedPullRequests.nodes[] | select(.author.login != "dependabot")' <<< "${out}")
     jsonarray=$(jq --slurp <<< "${jsonchunks}")
 
     before=$(jq '. | map(.number) | length' <<< "${json}")
