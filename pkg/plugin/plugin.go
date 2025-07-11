@@ -56,6 +56,9 @@ type Metadata struct {
 	// Name is the name of the plugin
 	Name string `json:"name"`
 
+	// Type of plugin (eg, subcommand, downloader, postrender)
+	Type string `json:"type"`
+
 	// Version is a SemVer 2 version of the plugin.
 	Version string `json:"version"`
 
@@ -325,7 +328,7 @@ func LoadDir(dirname string) (*Plugin, error) {
 // LoadAll loads all plugins found beneath the base directory.
 //
 // This scans only one directory level.
-func LoadAll(basedir string) ([]*Plugin, error) {
+func LoadAll(basedir, pluginType string) ([]*Plugin, error) {
 	plugins := []*Plugin{}
 	// We want basedir/*/plugin.yaml
 	scanpath := filepath.Join(basedir, "*", PluginFileName)
@@ -344,17 +347,19 @@ func LoadAll(basedir string) ([]*Plugin, error) {
 		if err != nil {
 			return plugins, err
 		}
-		plugins = append(plugins, p)
+		if pluginType == "" || p.Metadata.Type == pluginType {
+			plugins = append(plugins, p)
+		}
 	}
 	return plugins, detectDuplicates(plugins)
 }
 
 // FindPlugins returns a list of YAML files that describe plugins.
-func FindPlugins(plugdirs string) ([]*Plugin, error) {
+func FindPlugins(plugdirs string, pluginType string) ([]*Plugin, error) {
 	found := []*Plugin{}
 	// Let's get all UNIXy and allow path separators
 	for _, p := range filepath.SplitList(plugdirs) {
-		matches, err := LoadAll(p)
+		matches, err := LoadAll(p, pluginType)
 		if err != nil {
 			return matches, err
 		}

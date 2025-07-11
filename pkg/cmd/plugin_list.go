@@ -28,6 +28,7 @@ import (
 )
 
 func newPluginListCmd(out io.Writer) *cobra.Command {
+	var pluginType string
 	cmd := &cobra.Command{
 		Use:               "list",
 		Aliases:           []string{"ls"},
@@ -35,20 +36,24 @@ func newPluginListCmd(out io.Writer) *cobra.Command {
 		ValidArgsFunction: noMoreArgsCompFunc,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			slog.Debug("pluginDirs", "directory", settings.PluginsDirectory)
-			plugins, err := plugin.FindPlugins(settings.PluginsDirectory)
+			plugins, err := plugin.FindPlugins(settings.PluginsDirectory, pluginType)
 			if err != nil {
 				return err
 			}
 
 			table := uitable.New()
-			table.AddRow("NAME", "VERSION", "DESCRIPTION")
+			table.AddRow("NAME", "VERSION", "TYPE", "DESCRIPTION")
 			for _, p := range plugins {
-				table.AddRow(p.Metadata.Name, p.Metadata.Version, p.Metadata.Description)
+				table.AddRow(p.Metadata.Name, p.Metadata.Version, p.Metadata.Type, p.Metadata.Description)
 			}
 			fmt.Fprintln(out, table)
 			return nil
 		},
 	}
+
+	f := cmd.Flags()
+	f.StringVar(&pluginType, "type", "", "Plugin type")
+
 	return cmd
 }
 
@@ -73,7 +78,7 @@ func filterPlugins(plugins []*plugin.Plugin, ignoredPluginNames []string) []*plu
 // Provide dynamic auto-completion for plugin names
 func compListPlugins(_ string, ignoredPluginNames []string) []string {
 	var pNames []string
-	plugins, err := plugin.FindPlugins(settings.PluginsDirectory)
+	plugins, err := plugin.FindPlugins(settings.PluginsDirectory, "cli")
 	if err == nil && len(plugins) > 0 {
 		filteredPlugins := filterPlugins(plugins, ignoredPluginNames)
 		for _, p := range filteredPlugins {

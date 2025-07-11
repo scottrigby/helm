@@ -30,7 +30,7 @@ import (
 // collectPlugins scans for getter plugins.
 // This will load plugins according to the cli.
 func collectPlugins(settings *cli.EnvSettings) (Providers, error) {
-	plugins, err := plugin.FindPlugins(settings.PluginsDirectory)
+	plugins, err := plugin.FindPlugins(settings.PluginsDirectory, "download")
 	if err != nil {
 		return nil, err
 	}

@@ -90,7 +90,7 @@ func TestLoadPlugins(t *testing.T) {
 		out bytes.Buffer
 		cmd cobra.Command
 	)
-	loadPlugins(&cmd, &out)
+	loadPlugins(&cmd, &out, "")
 
 	envs := strings.Join([]string{
 		"fullenv",
@@ -169,7 +169,7 @@ func TestLoadPluginsWithSpace(t *testing.T) {
 		out bytes.Buffer
 		cmd cobra.Command
 	)
-	loadPlugins(&cmd, &out)
+	loadPlugins(&cmd, &out, "")
 
 	envs := strings.Join([]string{
 		"fullenv",
@@ -251,7 +251,7 @@ func TestLoadPluginsForCompletion(t *testing.T) {
 		Use: "completion",
 	}
 
-	loadPlugins(cmd, &out)
+	loadPlugins(cmd, &out, "")
 
 	tests := []staticCompletionDetails{
 		{"args", []string{}, []string{}, []staticCompletionDetails{}},
@@ -366,7 +366,7 @@ func TestLoadPlugins_HelmNoPlugins(t *testing.T) {
 
 	out := bytes.NewBuffer(nil)
 	cmd := &cobra.Command{}
-	loadPlugins(cmd, out)
+	loadPlugins(cmd, out, "")
 	plugins := cmd.Commands()
 
 	if len(plugins) != 0 {

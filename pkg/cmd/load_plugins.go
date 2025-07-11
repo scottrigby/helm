@@ -49,13 +49,13 @@ type PluginError struct {
 // This follows a different pattern than the other commands because it has
 // to inspect its environment and then add commands to the base command
 // as it finds them.
-func loadPlugins(baseCmd *cobra.Command, out io.Writer) {
+func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 	// If HELM_NO_PLUGINS is set to 1, do not load plugins.
 	if os.Getenv("HELM_NO_PLUGINS") == "1" {
 		return
 	}
 
-	found, err := plugin.FindPlugins(settings.PluginsDirectory)
+	found, err := plugin.FindPlugins(settings.PluginsDirectory, pluginType)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to load plugins: %s\n", err)
 		return
