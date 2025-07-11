@@ -24,6 +24,9 @@ import (
 	"path/filepath"
 )
 
+// TODO this should be a plugin name instead of binary path
+// should we still allow postrender args? If so, how would that work with a postrender Wasm plugin?
+// for now, pre-Wasm work, we could still draw the command from the plugin's plugin.yaml file with minimal changes here
 type execRender struct {
 	binaryPath string
 	args       []string
