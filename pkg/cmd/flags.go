@@ -35,7 +35,7 @@ import (
 	"helm.sh/helm/v4/pkg/cli/values"
 	"helm.sh/helm/v4/pkg/helmpath"
 	"helm.sh/helm/v4/pkg/kube"
-	"helm.sh/helm/v4/pkg/postrender"
+	"helm.sh/helm/v4/pkg/plugin"
 	"helm.sh/helm/v4/pkg/repo"
 )
 
@@ -165,14 +165,14 @@ func (o *outputValue) Set(s string) error {
 }
 
 // TODO there is probably a better way to pass cobra settings than as a param
-func bindPostRenderFlag(cmd *cobra.Command, varRef *postrender.PostRenderer, settings *cli.EnvSettings) {
+func bindPostRenderFlag(cmd *cobra.Command, varRef *plugin.PostRenderer, settings *cli.EnvSettings) {
 	p := &postRendererOptions{varRef, "", []string{}, settings}
 	cmd.Flags().Var(&postRendererString{p}, postRenderFlag, "the name of a postrender type plugin to be used for post rendering. If it exists, the plugin will be used")
 	cmd.Flags().Var(&postRendererArgsSlice{p}, postRenderArgsFlag, "an argument to the post-renderer (can specify multiple)")
 }
 
 type postRendererOptions struct {
-	renderer   *postrender.PostRenderer
+	renderer   *plugin.PostRenderer
 	pluginName string
 	args       []string
 	settings   *cli.EnvSettings
@@ -198,7 +198,7 @@ func (p *postRendererString) Set(val string) error {
 		return fmt.Errorf("cannot specify --post-renderer flag more than once")
 	}
 	p.options.pluginName = val
-	pr, err := postrender.NewExec(settings, p.options.pluginName, p.options.args...)
+	pr, err := plugin.NewExec(settings, p.options.pluginName, p.options.args...)
 	if err != nil {
 		return err
 	}
@@ -227,7 +227,7 @@ func (p *postRendererArgsSlice) Set(val string) error {
 		return nil
 	}
 	// overwrite if already create PostRenderer by `post-renderer` flags
-	pr, err := postrender.NewExec(p.options.settings, p.options.pluginName, p.options.args...)
+	pr, err := plugin.NewExec(p.options.settings, p.options.pluginName, p.options.args...)
 	if err != nil {
 		return err
 	}
