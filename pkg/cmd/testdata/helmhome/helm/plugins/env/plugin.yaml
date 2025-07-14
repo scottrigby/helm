@@ -1,4 +1,5 @@
 name: env
+type: cli
 usage: "env stuff"
 description: "show the env"
 command: "echo $HELM_PLUGIN_NAME"

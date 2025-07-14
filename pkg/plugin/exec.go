@@ -14,13 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package postrender
+package plugin
 
 import (
 	"bytes"
 	"fmt"
 	"helm.sh/helm/v4/pkg/cli"
-	"helm.sh/helm/v4/pkg/plugin"
 	"io"
 	"os"
 	"os/exec"
@@ -30,7 +29,7 @@ import (
 // should we still allow postrender args? If so, how would that work with a postrender Wasm plugin?
 // for now, pre-Wasm work, we could still draw the command from the plugin's plugin.yaml file with minimal changes here
 type execRender struct {
-	plugin   *plugin.Plugin
+	plugin   *Plugin
 	args     []string
 	settings *cli.EnvSettings
 }
@@ -38,7 +37,7 @@ type execRender struct {
 // NewExec returns a PostRenderer implementation that calls the provided postrender type plugin.
 // It returns an error if the plugin cannot be found.
 func NewExec(settings *cli.EnvSettings, pluginName string, args ...string) (PostRenderer, error) {
-	p, err := plugin.FindPlugin(pluginName, settings.PluginsDirectory, "postrender")
+	p, err := FindPlugin(pluginName, settings.PluginsDirectory, "postrender")
 	if err != nil {
 		return nil, err
 	}
@@ -49,14 +48,14 @@ func NewExec(settings *cli.EnvSettings, pluginName string, args ...string) (Post
 func (p *execRender) Run(renderedManifests *bytes.Buffer) (*bytes.Buffer, error) {
 	// this part from [cmd.loadPlugins]
 	// needed to get the correct args, which can be defined both in plugin.yaml and additional CLI command args
-	plugin.SetupPluginEnv(p.settings, p.plugin.Metadata.Name, p.plugin.Dir)
+	SetupPluginEnv(p.settings, p.plugin.Metadata.Name, p.plugin.Dir)
 	main, argv, err := p.plugin.PrepareCommand(p.args)
 	if err != nil {
 		os.Stderr.WriteString(err.Error())
 		return nil, fmt.Errorf("plugin %q exited with error", p.plugin.Metadata.Name)
 	}
 
-	// this part modified from [plugin.CallPluginExec]
+	// this part modified from [CallPluginExec]
 	env := os.Environ()
 	for k, v := range p.settings.EnvVars() {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))

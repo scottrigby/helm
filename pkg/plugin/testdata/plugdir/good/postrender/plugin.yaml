@@ -1,0 +1,7 @@
+name: "postrender"
+version: "1.2.3"
+type: postrender
+usage: usage
+description: test postrender plugin type
+platformCommand:
+  - command: "${HELM_PLUGIN_DIR}/sed-test.sh"

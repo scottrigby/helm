@@ -16,7 +16,10 @@ limitations under the License.
 package plugin // import "helm.sh/helm/v4/pkg/plugin"
 
 import (
+	"bytes"
 	"fmt"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -65,6 +68,7 @@ func TestPrepareCommandExtraArgs(t *testing.T) {
 		Dir: "/tmp", // Unused
 		Metadata: &Metadata{
 			Name:    "test",
+			Type:    "cli",
 			Command: "echo \"error\"",
 			PlatformCommand: []PlatformCommand{
 				{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
@@ -98,6 +102,7 @@ func TestPrepareCommandExtraArgsIgnored(t *testing.T) {
 		Dir: "/tmp", // Unused
 		Metadata: &Metadata{
 			Name:    "test",
+			Type:    "cli",
 			Command: "echo \"error\"",
 			PlatformCommand: []PlatformCommand{
 				{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
@@ -290,6 +295,7 @@ func TestLoadDir(t *testing.T) {
 	expect := &Metadata{
 		Name:        "hello",
 		Version:     "0.1.0",
+		Type:        "cli",
 		Usage:       "usage",
 		Description: "description",
 		PlatformCommand: []PlatformCommand{
@@ -331,6 +337,7 @@ func TestDownloader(t *testing.T) {
 	expect := &Metadata{
 		Name:        "downloader",
 		Version:     "1.2.3",
+		Type:        "download",
 		Usage:       "usage",
 		Description: "download something",
 		Command:     "echo Hello",
@@ -347,6 +354,94 @@ func TestDownloader(t *testing.T) {
 	}
 }
 
+func TestPostRenderer(t *testing.T) {
+	dirname := "testdata/plugdir/good/postrender"
+	plug, err := LoadDir(dirname)
+	if err != nil {
+		t.Fatalf("error loading postrender plugin: %s", err)
+	}
+
+	if plug.Dir != dirname {
+		t.Fatalf("Expected dir %q, got %q", dirname, plug.Dir)
+	}
+
+	expect := &Metadata{
+		Name:        "postrender",
+		Version:     "1.2.3",
+		Type:        "postrender",
+		Usage:       "usage",
+		Description: "test postrender plugin type",
+		PlatformCommand: []PlatformCommand{
+			{
+				Command: "${HELM_PLUGIN_DIR}/sed-test.sh",
+			},
+		},
+	}
+
+	if !reflect.DeepEqual(expect, plug.Metadata) {
+		t.Fatalf("Expected metadata %v, got %v", expect, plug.Metadata)
+	}
+}
+
+func TestNewExecRunWithNoOutput(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// the actual Run test uses a basic sed example, so skip this test on windows
+		t.Skip("skipping on windows")
+	}
+	is := assert.New(t)
+	s := cli.New()
+	s.PluginsDirectory = "testdata/plugdir/good"
+	name := "postrender"
+	base := filepath.Join(s.PluginsDirectory, name)
+	SetupPluginEnv(s, name, base)
+
+	renderer, err := NewExec(s, name, "")
+	require.NoError(t, err)
+
+	_, err = renderer.Run(bytes.NewBufferString(""))
+	is.Error(err)
+}
+
+func TestNewExecWithOneArgsRun(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// the actual Run test uses a basic sed example, so skip this test on windows
+		t.Skip("skipping on windows")
+	}
+	is := assert.New(t)
+	s := cli.New()
+	s.PluginsDirectory = "testdata/plugdir/good"
+	name := "postrender"
+	base := filepath.Join(s.PluginsDirectory, name)
+	SetupPluginEnv(s, name, base)
+
+	renderer, err := NewExec(s, name, "ARG1")
+	require.NoError(t, err)
+
+	output, err := renderer.Run(bytes.NewBufferString("FOOTEST"))
+	is.NoError(err)
+	is.Contains(output.String(), "ARG1")
+}
+
+func TestNewExecWithTwoArgsRun(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// the actual Run test uses a basic sed example, so skip this test on windows
+		t.Skip("skipping on windows")
+	}
+	is := assert.New(t)
+	s := cli.New()
+	s.PluginsDirectory = "testdata/plugdir/good"
+	name := "postrender"
+	base := filepath.Join(s.PluginsDirectory, name)
+	SetupPluginEnv(s, name, base)
+
+	renderer, err := NewExec(s, name, "ARG1", "ARG2")
+	require.NoError(t, err)
+
+	output, err := renderer.Run(bytes.NewBufferString("FOOTEST"))
+	is.NoError(err)
+	is.Contains(output.String(), "ARG1 ARG2")
+}
+
 func TestLoadAll(t *testing.T) {
 	// Verify that empty dir loads:
 	if plugs, err := LoadAll("testdata", ""); err != nil {
@@ -361,18 +456,21 @@ func TestLoadAll(t *testing.T) {
 		t.Fatalf("Could not load %q: %s", basedir, err)
 	}
 
-	if l := len(plugs); l != 3 {
-		t.Fatalf("expected 3 plugins, found %d", l)
+	if l := len(plugs); l != 4 {
+		t.Fatalf("expected 4 plugins, found %d", l)
 	}
 
 	if plugs[0].Metadata.Name != "downloader" {
-		t.Errorf("Expected first plugin to be echo, got %q", plugs[0].Metadata.Name)
+		t.Errorf("Expected first plugin to be downloader, got %q", plugs[0].Metadata.Name)
 	}
 	if plugs[1].Metadata.Name != "echo" {
-		t.Errorf("Expected first plugin to be echo, got %q", plugs[0].Metadata.Name)
+		t.Errorf("Expected first plugin to be echo, got %q", plugs[1].Metadata.Name)
 	}
 	if plugs[2].Metadata.Name != "hello" {
-		t.Errorf("Expected second plugin to be hello, got %q", plugs[1].Metadata.Name)
+		t.Errorf("Expected second plugin to be hello, got %q", plugs[2].Metadata.Name)
+	}
+	if plugs[3].Metadata.Name != "postrender" {
+		t.Errorf("Expected second plugin to be postrender, got %q", plugs[3].Metadata.Name)
 	}
 }
 
@@ -400,7 +498,7 @@ func TestFindPlugins(t *testing.T) {
 		{
 			name:     "normal",
 			plugdirs: "./testdata/plugdir/good",
-			expected: 3,
+			expected: 4,
 		},
 	}
 	for _, c := range cases {
@@ -527,6 +625,7 @@ func mockPlugin(name string) *Plugin {
 		Metadata: &Metadata{
 			Name:        name,
 			Version:     "v0.1.2",
+			Type:        "cli",
 			Usage:       "Mock plugin",
 			Description: "Mock plugin for testing",
 			PlatformCommand: []PlatformCommand{

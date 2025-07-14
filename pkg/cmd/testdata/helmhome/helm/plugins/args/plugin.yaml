@@ -1,4 +1,5 @@
 name: args
+type: cli
 usage: "echo args"
 description: "This echos args"
 command: "$HELM_PLUGIN_DIR/args.sh"

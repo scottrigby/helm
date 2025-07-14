@@ -1,4 +1,5 @@
 name: testplugin
+type: cli
 usage: "echo test"
 description: "This echos test"
 command: "echo test"

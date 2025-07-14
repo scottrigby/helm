@@ -17,7 +17,7 @@ limitations under the License.
 // Package postrender contains an interface that can be implemented for custom
 // post-renderers and an exec implementation that can be used for arbitrary
 // binaries and scripts
-package postrender
+package plugin
 
 import "bytes"
 

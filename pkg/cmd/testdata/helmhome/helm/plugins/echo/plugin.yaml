@@ -1,4 +1,5 @@
 name: echo
+type: cli
 usage: "echo stuff"
 description: "This echos stuff"
 command: "echo hello"
