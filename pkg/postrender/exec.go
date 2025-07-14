@@ -19,7 +19,10 @@ package postrender
 import (
 	"bytes"
 	"fmt"
+	"helm.sh/helm/v4/pkg/cli"
+	"helm.sh/helm/v4/pkg/plugin"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 )
@@ -28,25 +31,43 @@ import (
 // should we still allow postrender args? If so, how would that work with a postrender Wasm plugin?
 // for now, pre-Wasm work, we could still draw the command from the plugin's plugin.yaml file with minimal changes here
 type execRender struct {
-	binaryPath string
-	args       []string
+	plugin   *plugin.Plugin
+	args     []string
+	settings *cli.EnvSettings
 }
 
-// NewExec returns a PostRenderer implementation that calls the provided binary.
-// It returns an error if the binary cannot be found. If the path does not
-// contain any separators, it will search in $PATH, otherwise it will resolve
-// any relative paths to a fully qualified path
-func NewExec(binaryPath string, args ...string) (PostRenderer, error) {
-	fullPath, err := getFullPath(binaryPath)
+// NewExec returns a PostRenderer implementation that calls the provided postrender type plugin.
+// It returns an error if the plugin cannot be found.
+func NewExec(settings *cli.EnvSettings, pluginName string, args ...string) (PostRenderer, error) {
+	p, err := plugin.FindPlugin(pluginName, settings.PluginsDirectory, "postrender")
 	if err != nil {
 		return nil, err
 	}
-	return &execRender{fullPath, args}, nil
+	return &execRender{p, args, settings}, nil
 }
 
 // Run the configured binary for the post render
 func (p *execRender) Run(renderedManifests *bytes.Buffer) (*bytes.Buffer, error) {
-	cmd := exec.Command(p.binaryPath, p.args...)
+	// this part from [cmd.loadPlugins]
+	// needed to get the correct args, which can be defined both in plugin.yaml and additional CLI command args
+	plugin.SetupPluginEnv(p.settings, p.plugin.Metadata.Name, p.plugin.Dir)
+	main, argv, err := p.plugin.PrepareCommand(p.args)
+	if err != nil {
+		os.Stderr.WriteString(err.Error())
+		return nil, fmt.Errorf("plugin %q exited with error", p.plugin.Metadata.Name)
+	}
+
+	// this part modified from [plugin.CallPluginExec]
+	env := os.Environ()
+	for k, v := range p.settings.EnvVars() {
+		env = append(env, fmt.Sprintf("%s=%s", k, v))
+	}
+	mainCmdExp := os.ExpandEnv(main)
+	cmd := exec.Command(mainCmdExp, argv...)
+	cmd.Env = env
+
+	// slightly modified original below
+	//cmd := exec.Command(p.binaryPath, p.args...)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -63,13 +84,13 @@ func (p *execRender) Run(renderedManifests *bytes.Buffer) (*bytes.Buffer, error)
 	}()
 	err = cmd.Run()
 	if err != nil {
-		return nil, fmt.Errorf("error while running command %s. error output:\n%s: %w", p.binaryPath, stderr.String(), err)
+		return nil, fmt.Errorf("error while running command %s. error output:\n%s: %w", p.plugin.Metadata.Name, stderr.String(), err)
 	}
 
 	// If the binary returned almost nothing, it's likely that it didn't
 	// successfully render anything
 	if len(bytes.TrimSpace(postRendered.Bytes())) == 0 {
-		return nil, fmt.Errorf("post-renderer %q produced empty output", p.binaryPath)
+		return nil, fmt.Errorf("post-renderer %q produced empty output", p.plugin.Metadata.Name)
 	}
 
 	return postRendered, nil

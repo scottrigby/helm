@@ -368,6 +368,20 @@ func FindPlugins(plugdirs string, pluginType string) ([]*Plugin, error) {
 	return found, nil
 }
 
+// FindPlugin returns a plugin by name and optionally by type
+// pluginType can be an empty string for any type
+// TODO disambiguate from [cmd.findPlugin] or merge with this public func?
+func FindPlugin(name, plugdirs, pluginType string) (*Plugin, error) {
+	plugins, err := FindPlugins(plugdirs, pluginType)
+	for _, p := range plugins {
+		if p.Metadata.Name == name {
+			return p, nil
+		}
+	}
+	err = fmt.Errorf("plugin: %s not found", name)
+	return nil, err
+}
+
 // SetupPluginEnv prepares os.Env for plugins. It operates on os.Env because
 // the plugin subsystem itself needs access to the environment variables
 // created here.
