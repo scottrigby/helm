@@ -270,6 +270,7 @@ func TestLoadPluginsForCompletion(t *testing.T) {
 				{"more", []string{"one", "two"}, []string{"b", "ball"}, []staticCompletionDetails{}},
 			}},
 		}},
+		{"postrender", []string{}, []string{}, []staticCompletionDetails{}},
 	}
 	checkCommand(t, cmd.Commands(), tests)
 }
