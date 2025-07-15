@@ -19,10 +19,11 @@ package plugin
 import (
 	"bytes"
 	"fmt"
-	"helm.sh/helm/v4/pkg/cli"
 	"io"
 	"os"
 	"os/exec"
+
+	"helm.sh/helm/v4/pkg/cli"
 )
 
 // TODO this should be a plugin name instead of binary path

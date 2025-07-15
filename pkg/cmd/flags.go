@@ -19,7 +19,6 @@ package cmd
 import (
 	"flag"
 	"fmt"
-	"helm.sh/helm/v4/pkg/cli"
 	"log"
 	"log/slog"
 	"path/filepath"
@@ -31,6 +30,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"helm.sh/helm/v4/pkg/action"
+	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/cli/output"
 	"helm.sh/helm/v4/pkg/cli/values"
 	"helm.sh/helm/v4/pkg/helmpath"
