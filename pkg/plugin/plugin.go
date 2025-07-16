@@ -319,7 +319,7 @@ func LoadDir(dirname string) (*Plugin, error) {
 	}
 
 	plug := &Plugin{Dir: dirname}
-	if err := yaml.UnmarshalStrict(data, &plug.Metadata); err != nil {
+	if err := yaml.Unmarshal(data, &plug.Metadata); err != nil {
 		return nil, fmt.Errorf("failed to load plugin at %q: %w", pluginfile, err)
 	}
 	return plug, validatePluginData(plug, pluginfile)
@@ -346,6 +346,9 @@ func LoadAll(basedir, pluginType string) ([]*Plugin, error) {
 		p, err := LoadDir(dir)
 		if err != nil {
 			return plugins, err
+		}
+		if p.Metadata.Type == "" {
+			p.Metadata.Type = "legacy"
 		}
 		if pluginType == "" || p.Metadata.Type == pluginType {
 			plugins = append(plugins, p)

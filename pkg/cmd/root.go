@@ -255,6 +255,7 @@ func newRootCmdWithConfig(actionConfig *action.Configuration, out io.Writer, arg
 
 	// Find and add CLI plugins
 	loadPlugins(cmd, out, "cli")
+	loadPlugins(cmd, out, "legacy")
 
 	// Check for expired repositories
 	checkForExpiredRepos(settings.RepositoryConfig)
