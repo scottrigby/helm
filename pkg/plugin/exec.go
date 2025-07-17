@@ -30,7 +30,7 @@ import (
 // should we still allow postrender args? If so, how would that work with a postrender Wasm plugin?
 // for now, pre-Wasm work, we could still draw the command from the plugin's plugin.yaml file with minimal changes here
 type execRender struct {
-	plugin   *Plugin
+	plugin   Plugin
 	args     []string
 	settings *cli.EnvSettings
 }
@@ -49,11 +49,11 @@ func NewExec(settings *cli.EnvSettings, pluginName string, args ...string) (Post
 func (p *execRender) Run(renderedManifests *bytes.Buffer) (*bytes.Buffer, error) {
 	// this part from [cmd.loadPlugins]
 	// needed to get the correct args, which can be defined both in plugin.yaml and additional CLI command args
-	SetupPluginEnv(p.settings, p.plugin.Metadata.Name, p.plugin.Dir)
+	SetupPluginEnv(p.settings, p.plugin.GetName(), p.plugin.GetDir())
 	main, argv, err := p.plugin.PrepareCommand(p.args)
 	if err != nil {
 		os.Stderr.WriteString(err.Error())
-		return nil, fmt.Errorf("plugin %q exited with error", p.plugin.Metadata.Name)
+		return nil, fmt.Errorf("plugin %q exited with error", p.plugin.GetName())
 	}
 
 	// this part modified from [CallPluginExec]
@@ -83,13 +83,13 @@ func (p *execRender) Run(renderedManifests *bytes.Buffer) (*bytes.Buffer, error)
 	}()
 	err = cmd.Run()
 	if err != nil {
-		return nil, fmt.Errorf("error while running command %s. error output:\n%s: %w", p.plugin.Metadata.Name, stderr.String(), err)
+		return nil, fmt.Errorf("error while running command %s. error output:\n%s: %w", p.plugin.GetName(), stderr.String(), err)
 	}
 
 	// If the binary returned almost nothing, it's likely that it didn't
 	// successfully render anything
 	if len(bytes.TrimSpace(postRendered.Bytes())) == 0 {
-		return nil, fmt.Errorf("post-renderer %q produced empty output", p.plugin.Metadata.Name)
+		return nil, fmt.Errorf("post-renderer %q produced empty output", p.plugin.GetName())
 	}
 
 	return postRendered, nil

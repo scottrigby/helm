@@ -44,7 +44,17 @@ func newPluginListCmd(out io.Writer) *cobra.Command {
 			table := uitable.New()
 			table.AddRow("NAME", "VERSION", "TYPE", "DESCRIPTION")
 			for _, p := range plugins {
-				table.AddRow(p.Metadata.Name, p.Metadata.Version, p.Metadata.Type, p.Metadata.Description)
+				metadata := p.GetMetadata()
+				var version, description string
+				switch m := metadata.(type) {
+				case *plugin.MetadataV1:
+					version = m.Version
+					description = m.Description
+				case *plugin.MetadataLegacy:
+					version = m.Version
+					description = m.Description
+				}
+				table.AddRow(p.GetName(), version, p.GetType(), description)
 			}
 			fmt.Fprintln(out, table)
 			return nil
@@ -58,15 +68,15 @@ func newPluginListCmd(out io.Writer) *cobra.Command {
 }
 
 // Returns all plugins from plugins, except those with names matching ignoredPluginNames
-func filterPlugins(plugins []*plugin.Plugin, ignoredPluginNames []string) []*plugin.Plugin {
-	// if ignoredPluginNames is nil, just return plugins
-	if ignoredPluginNames == nil {
+func filterPlugins(plugins []plugin.Plugin, ignoredPluginNames []string) []plugin.Plugin {
+	// if ignoredPluginNames is nil or empty, just return plugins
+	if len(ignoredPluginNames) == 0 {
 		return plugins
 	}
 
-	var filteredPlugins []*plugin.Plugin
+	var filteredPlugins []plugin.Plugin
 	for _, plugin := range plugins {
-		found := slices.Contains(ignoredPluginNames, plugin.Metadata.Name)
+		found := slices.Contains(ignoredPluginNames, plugin.GetName())
 		if !found {
 			filteredPlugins = append(filteredPlugins, plugin)
 		}
@@ -82,7 +92,15 @@ func compListPlugins(_ string, ignoredPluginNames []string) []string {
 	if err == nil && len(plugins) > 0 {
 		filteredPlugins := filterPlugins(plugins, ignoredPluginNames)
 		for _, p := range filteredPlugins {
-			pNames = append(pNames, fmt.Sprintf("%s\t%s", p.Metadata.Name, p.Metadata.Usage))
+			metadata := p.GetMetadata()
+			var usage string
+			switch m := metadata.(type) {
+			case *plugin.MetadataV1:
+				usage = m.Usage
+			case *plugin.MetadataLegacy:
+				usage = m.Usage
+			}
+			pNames = append(pNames, fmt.Sprintf("%s\t%s", p.GetName(), usage))
 		}
 	}
 	return pNames

@@ -17,7 +17,6 @@ package plugin // import "helm.sh/helm/v4/pkg/plugin"
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -34,9 +33,9 @@ func TestPrepareCommand(t *testing.T) {
 	cmdMain := "sh"
 	cmdArgs := []string{"-c", "echo \"test\""}
 
-	p := &Plugin{
+	p := &PluginV1{
 		Dir: "/tmp", // Unused
-		Metadata: &Metadata{
+		MetadataV1: &MetadataV1{
 			Name:    "test",
 			Command: "echo \"error\"",
 			PlatformCommand: []PlatformCommand{
@@ -65,9 +64,9 @@ func TestPrepareCommandExtraArgs(t *testing.T) {
 	cmdArgs := []string{"-c", "echo \"test\""}
 	extraArgs := []string{"--debug", "--foo", "bar"}
 
-	p := &Plugin{
+	p := &PluginV1{
 		Dir: "/tmp", // Unused
-		Metadata: &Metadata{
+		MetadataV1: &MetadataV1{
 			Name:    "test",
 			Type:    "cli",
 			Command: "echo \"error\"",
@@ -99,9 +98,9 @@ func TestPrepareCommandExtraArgsIgnored(t *testing.T) {
 	cmdArgs := []string{"-c", "echo \"test\""}
 	extraArgs := []string{"--debug", "--foo", "bar"}
 
-	p := &Plugin{
+	p := &PluginV1{
 		Dir: "/tmp", // Unused
-		Metadata: &Metadata{
+		MetadataV1: &MetadataV1{
 			Name:    "test",
 			Type:    "cli",
 			Command: "echo \"error\"",
@@ -289,11 +288,11 @@ func TestLoadDir(t *testing.T) {
 		t.Fatalf("error loading Hello plugin: %s", err)
 	}
 
-	if plug.Dir != dirname {
-		t.Fatalf("Expected dir %q, got %q", dirname, plug.Dir)
+	if plug.GetDir() != dirname {
+		t.Fatalf("Expected dir %q, got %q", dirname, plug.GetDir())
 	}
 
-	expect := &Metadata{
+	expect := &MetadataV1{
 		Name:        "hello",
 		Version:     "0.1.0",
 		Type:        "cli",
@@ -312,8 +311,8 @@ func TestLoadDir(t *testing.T) {
 		},
 	}
 
-	if !reflect.DeepEqual(expect, plug.Metadata) {
-		t.Fatalf("Expected plugin metadata %v, got %v", expect, plug.Metadata)
+	if !reflect.DeepEqual(expect, plug.GetMetadata()) {
+		t.Fatalf("Expected plugin metadata %v, got %v", expect, plug.GetMetadata())
 	}
 }
 
@@ -331,11 +330,11 @@ func TestDownloader(t *testing.T) {
 		t.Fatalf("error loading Hello plugin: %s", err)
 	}
 
-	if plug.Dir != dirname {
-		t.Fatalf("Expected dir %q, got %q", dirname, plug.Dir)
+	if plug.GetDir() != dirname {
+		t.Fatalf("Expected dir %q, got %q", dirname, plug.GetDir())
 	}
 
-	expect := &Metadata{
+	expect := &MetadataV1{
 		Name:        "downloader",
 		Version:     "1.2.3",
 		Type:        "download",
@@ -350,8 +349,8 @@ func TestDownloader(t *testing.T) {
 		},
 	}
 
-	if !reflect.DeepEqual(expect, plug.Metadata) {
-		t.Fatalf("Expected metadata %v, got %v", expect, plug.Metadata)
+	if !reflect.DeepEqual(expect, plug.GetMetadata()) {
+		t.Fatalf("Expected metadata %v, got %v", expect, plug.GetMetadata())
 	}
 }
 
@@ -362,11 +361,11 @@ func TestPostRenderer(t *testing.T) {
 		t.Fatalf("error loading postrender plugin: %s", err)
 	}
 
-	if plug.Dir != dirname {
-		t.Fatalf("Expected dir %q, got %q", dirname, plug.Dir)
+	if plug.GetDir() != dirname {
+		t.Fatalf("Expected dir %q, got %q", dirname, plug.GetDir())
 	}
 
-	expect := &Metadata{
+	expect := &MetadataV1{
 		Name:        "postrender",
 		Version:     "1.2.3",
 		Type:        "postrender",
@@ -379,8 +378,8 @@ func TestPostRenderer(t *testing.T) {
 		},
 	}
 
-	if !reflect.DeepEqual(expect, plug.Metadata) {
-		t.Fatalf("Expected metadata %v, got %v", expect, plug.Metadata)
+	if !reflect.DeepEqual(expect, plug.GetMetadata()) {
+		t.Fatalf("Expected metadata %v, got %v", expect, plug.GetMetadata())
 	}
 }
 
@@ -461,17 +460,17 @@ func TestLoadAll(t *testing.T) {
 		t.Fatalf("expected 4 plugins, found %d", l)
 	}
 
-	if plugs[0].Metadata.Name != "downloader" {
-		t.Errorf("Expected first plugin to be downloader, got %q", plugs[0].Metadata.Name)
+	if plugs[0].GetName() != "downloader" {
+		t.Errorf("Expected first plugin to be downloader, got %q", plugs[0].GetName())
 	}
-	if plugs[1].Metadata.Name != "echo" {
-		t.Errorf("Expected first plugin to be echo, got %q", plugs[1].Metadata.Name)
+	if plugs[1].GetName() != "echo" {
+		t.Errorf("Expected first plugin to be echo, got %q", plugs[1].GetName())
 	}
-	if plugs[2].Metadata.Name != "hello" {
-		t.Errorf("Expected second plugin to be hello, got %q", plugs[2].Metadata.Name)
+	if plugs[2].GetName() != "hello" {
+		t.Errorf("Expected second plugin to be hello, got %q", plugs[2].GetName())
 	}
-	if plugs[3].Metadata.Name != "postrender" {
-		t.Errorf("Expected second plugin to be postrender, got %q", plugs[3].Metadata.Name)
+	if plugs[3].GetName() != "postrender" {
+		t.Errorf("Expected second plugin to be postrender, got %q", plugs[3].GetName())
 	}
 }
 
@@ -554,37 +553,37 @@ func TestSetupEnvWithSpace(t *testing.T) {
 
 func TestValidatePluginData(t *testing.T) {
 	// A mock plugin missing any metadata.
-	mockMissingMeta := &Plugin{
+	mockMissingMeta := &PluginV1{
 		Dir: "no-such-dir",
 	}
 
 	// A mock plugin with no commands
 	mockNoCommand := mockPlugin("foo")
-	mockNoCommand.Metadata.PlatformCommand = []PlatformCommand{}
-	mockNoCommand.Metadata.PlatformHooks = map[string][]PlatformCommand{}
+	mockNoCommand.MetadataV1.PlatformCommand = []PlatformCommand{}
+	mockNoCommand.MetadataV1.PlatformHooks = map[string][]PlatformCommand{}
 
 	// A mock plugin with legacy commands
 	mockLegacyCommand := mockPlugin("foo")
-	mockLegacyCommand.Metadata.PlatformCommand = []PlatformCommand{}
-	mockLegacyCommand.Metadata.Command = "echo \"mock plugin\""
-	mockLegacyCommand.Metadata.PlatformHooks = map[string][]PlatformCommand{}
-	mockLegacyCommand.Metadata.Hooks = map[string]string{
+	mockLegacyCommand.MetadataV1.PlatformCommand = []PlatformCommand{}
+	mockLegacyCommand.MetadataV1.Command = "echo \"mock plugin\""
+	mockLegacyCommand.MetadataV1.PlatformHooks = map[string][]PlatformCommand{}
+	mockLegacyCommand.MetadataV1.Hooks = map[string]string{
 		Install: "echo installing...",
 	}
 
 	// A mock plugin with a command also set
 	mockWithCommand := mockPlugin("foo")
-	mockWithCommand.Metadata.Command = "echo \"mock plugin\""
+	mockWithCommand.MetadataV1.Command = "echo \"mock plugin\""
 
 	// A mock plugin with a hooks also set
 	mockWithHooks := mockPlugin("foo")
-	mockWithHooks.Metadata.Hooks = map[string]string{
+	mockWithHooks.MetadataV1.Hooks = map[string]string{
 		Install: "echo installing...",
 	}
 
 	for i, item := range []struct {
 		pass bool
-		plug *Plugin
+		plug *PluginV1
 	}{
 		{true, mockPlugin("abcdefghijklmnopqrstuvwxyz0123456789_-ABC")},
 		{true, mockPlugin("foo-bar-FOO-BAR_1234")},
@@ -598,7 +597,7 @@ func TestValidatePluginData(t *testing.T) {
 		{false, mockWithCommand},         // Test platformCommand and command both set fails
 		{false, mockWithHooks},           // Test platformHooks and hooks both set fails
 	} {
-		err := validatePluginData(item.plug, fmt.Sprintf("test-%d", i))
+		err := item.plug.Validate()
 		if item.pass && err != nil {
 			t.Errorf("failed to validate case %d: %s", i, err)
 		} else if !item.pass && err == nil {
@@ -608,7 +607,7 @@ func TestValidatePluginData(t *testing.T) {
 }
 
 func TestDetectDuplicates(t *testing.T) {
-	plugs := []*Plugin{
+	plugs := []Plugin{
 		mockPlugin("foo"),
 		mockPlugin("bar"),
 	}
@@ -621,9 +620,9 @@ func TestDetectDuplicates(t *testing.T) {
 	}
 }
 
-func mockPlugin(name string) *Plugin {
-	return &Plugin{
-		Metadata: &Metadata{
+func mockPlugin(name string) *PluginV1 {
+	return &PluginV1{
+		MetadataV1: &MetadataV1{
 			Name:        name,
 			Version:     "v0.1.2",
 			Type:        "cli",

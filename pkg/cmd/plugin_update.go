@@ -86,8 +86,8 @@ func (o *pluginUpdateOptions) run(out io.Writer) error {
 	return nil
 }
 
-func updatePlugin(p *plugin.Plugin) error {
-	exactLocation, err := filepath.EvalSymlinks(p.Dir)
+func updatePlugin(p plugin.Plugin) error {
+	exactLocation, err := filepath.EvalSymlinks(p.GetDir())
 	if err != nil {
 		return err
 	}

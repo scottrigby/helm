@@ -49,10 +49,62 @@ type PlatformCommand struct {
 	Args            []string `json:"args"`
 }
 
-// Metadata describes a plugin.
-//
-// This is the plugin equivalent of a chart.Metadata.
-type Metadata struct {
+// Plugin interface defines the common methods that all plugin versions must implement
+type Plugin interface {
+	GetDir() string
+	GetName() string
+	GetType() string
+	GetAPIVersion() string
+	GetMetadata() interface{}
+	Validate() error
+	PrepareCommand(extraArgs []string) (string, []string, error)
+}
+
+// MetadataLegacy describes a legacy plugin (no APIVersion field)
+type MetadataLegacy struct {
+	// Name is the name of the plugin
+	Name string `json:"name"`
+
+	// Version is a SemVer 2 version of the plugin.
+	Version string `json:"version"`
+
+	// Usage is the single-line usage text shown in help
+	Usage string `json:"usage"`
+
+	// Description is a long description shown in places like `helm help`
+	Description string `json:"description"`
+
+	// PlatformCommand is the plugin command, with a platform selector and support for args.
+	PlatformCommand []PlatformCommand `json:"platformCommand"`
+
+	// Command is the plugin command, as a single string.
+	// DEPRECATED: Use PlatformCommand instead. Remove in Helm 4.
+	Command string `json:"command"`
+
+	// IgnoreFlags ignores any flags passed in from Helm
+	IgnoreFlags bool `json:"ignoreFlags"`
+
+	// PlatformHooks are commands that will run on plugin events, with a platform selector and support for args.
+	PlatformHooks PlatformHooks `json:"platformHooks"`
+
+	// Hooks are commands that will run on plugin events, as a single string.
+	// DEPRECATED: Use PlatformHooks instead. Remove in Helm 4.
+	Hooks Hooks
+
+	// Downloaders field is used if the plugin supply downloader mechanism
+	// for special protocols.
+	Downloaders []Downloaders `json:"downloaders"`
+
+	// UseTunnelDeprecated indicates that this command needs a tunnel.
+	// DEPRECATED and unused, but retained for backwards compatibility with Helm 2 plugins. Remove in Helm 4
+	UseTunnelDeprecated bool `json:"useTunnel,omitempty"`
+}
+
+// MetadataV1 describes a V1 plugin (APIVersion: v1)
+type MetadataV1 struct {
+	// APIVersion specifies the plugin API version
+	APIVersion string `json:"apiVersion"`
+
 	// Name is the name of the plugin
 	Name string `json:"name"`
 
@@ -69,66 +121,19 @@ type Metadata struct {
 	Description string `json:"description"`
 
 	// PlatformCommand is the plugin command, with a platform selector and support for args.
-	//
-	// The command and args will be passed through environment expansion, so env vars can
-	// be present in this command. Unless IgnoreFlags is set, this will
-	// also merge the flags passed from Helm.
-	//
-	// Note that the command is not executed in a shell. To do so, we suggest
-	// pointing the command to a shell script.
-	//
-	// The following rules will apply to processing platform commands:
-	// - If PlatformCommand is present, it will be used
-	// - If both OS and Arch match the current platform, search will stop and the command will be executed
-	// - If OS matches and Arch is empty, the command will be executed
-	// - If no OS/Arch match is found, the default command will be executed
-	// - If no matches are found in platformCommand, Helm will exit with an error
 	PlatformCommand []PlatformCommand `json:"platformCommand"`
 
 	// Command is the plugin command, as a single string.
-	// Providing a command will result in an error if PlatformCommand is also set.
-	//
-	// The command will be passed through environment expansion, so env vars can
-	// be present in this command. Unless IgnoreFlags is set, this will
-	// also merge the flags passed from Helm.
-	//
-	// Note that command is not executed in a shell. To do so, we suggest
-	// pointing the command to a shell script.
-	//
 	// DEPRECATED: Use PlatformCommand instead. Remove in Helm 4.
 	Command string `json:"command"`
 
 	// IgnoreFlags ignores any flags passed in from Helm
-	//
-	// For example, if the plugin is invoked as `helm --debug myplugin`, if this
-	// is false, `--debug` will be appended to `--command`. If this is true,
-	// the `--debug` flag will be discarded.
 	IgnoreFlags bool `json:"ignoreFlags"`
 
 	// PlatformHooks are commands that will run on plugin events, with a platform selector and support for args.
-	//
-	// The command and args will be passed through environment expansion, so env vars can
-	// be present in the command.
-	//
-	// Note that the command is not executed in a shell. To do so, we suggest
-	// pointing the command to a shell script.
-	//
-	// The following rules will apply to processing platform hooks:
-	// - If PlatformHooks is present, it will be used
-	// - If both OS and Arch match the current platform, search will stop and the command will be executed
-	// - If OS matches and Arch is empty, the command will be executed
-	// - If no OS/Arch match is found, the default command will be executed
-	// - If no matches are found in platformHooks, Helm will skip the event
 	PlatformHooks PlatformHooks `json:"platformHooks"`
 
 	// Hooks are commands that will run on plugin events, as a single string.
-	// Providing a hooks will result in an error if PlatformHooks is also set.
-	//
-	// The command will be passed through environment expansion, so env vars can
-	// be present in this command.
-	//
-	// Note that the command is executed in the sh shell.
-	//
 	// DEPRECATED: Use PlatformHooks instead. Remove in Helm 4.
 	Hooks Hooks
 
@@ -137,18 +142,80 @@ type Metadata struct {
 	Downloaders []Downloaders `json:"downloaders"`
 
 	// UseTunnelDeprecated indicates that this command needs a tunnel.
-	// Setting this will cause a number of side effects, such as the
-	// automatic setting of HELM_HOST.
 	// DEPRECATED and unused, but retained for backwards compatibility with Helm 2 plugins. Remove in Helm 4
 	UseTunnelDeprecated bool `json:"useTunnel,omitempty"`
 }
 
-// Plugin represents a plugin.
-type Plugin struct {
-	// Metadata is a parsed representation of a plugin.yaml
-	Metadata *Metadata
+// PluginLegacy represents a legacy plugin
+type PluginLegacy struct {
+	// MetadataLegacy is a parsed representation of a plugin.yaml
+	MetadataLegacy *MetadataLegacy
 	// Dir is the string path to the directory that holds the plugin.
 	Dir string
+}
+
+// PluginV1 represents a V1 plugin
+type PluginV1 struct {
+	// MetadataV1 is a parsed representation of a plugin.yaml
+	MetadataV1 *MetadataV1
+	// Dir is the string path to the directory that holds the plugin.
+	Dir string
+}
+
+// Interface implementations for PluginLegacy
+func (p *PluginLegacy) GetDir() string  { return p.Dir }
+func (p *PluginLegacy) GetName() string { return p.MetadataLegacy.Name }
+
+// Legacy plugins can be either a downloader or a legacy-CLI plugin (we label them as legacy)
+func (p *PluginLegacy) GetType() string {
+	if len(p.MetadataLegacy.Downloaders) > 0 {
+		return "download"
+	}
+	return "legacy"
+}
+func (p *PluginLegacy) GetAPIVersion() string    { return "legacy" }
+func (p *PluginLegacy) GetMetadata() interface{} { return p.MetadataLegacy }
+
+func (p *PluginLegacy) PrepareCommand(extraArgs []string) (string, []string, error) {
+	var extraArgsIn []string
+
+	if !p.MetadataLegacy.IgnoreFlags {
+		extraArgsIn = extraArgs
+	}
+
+	cmds := p.MetadataLegacy.PlatformCommand
+	if len(cmds) == 0 && len(p.MetadataLegacy.Command) > 0 {
+		cmds = []PlatformCommand{{Command: p.MetadataLegacy.Command}}
+	}
+
+	return PrepareCommands(cmds, true, extraArgsIn)
+}
+
+// Interface implementations for PluginV1
+func (p *PluginV1) GetDir() string           { return p.Dir }
+func (p *PluginV1) GetName() string          { return p.MetadataV1.Name }
+func (p *PluginV1) GetType() string          { return p.MetadataV1.Type }
+func (p *PluginV1) GetAPIVersion() string    { return p.MetadataV1.APIVersion }
+func (p *PluginV1) GetMetadata() interface{} { return p.MetadataV1 }
+
+func (p *PluginV1) PrepareCommand(extraArgs []string) (string, []string, error) {
+	var extraArgsIn []string
+
+	if !p.MetadataV1.IgnoreFlags {
+		extraArgsIn = extraArgs
+	}
+
+	cmds := p.MetadataV1.PlatformCommand
+	if len(cmds) == 0 && len(p.MetadataV1.Command) > 0 {
+		cmds = []PlatformCommand{{Command: p.MetadataV1.Command}}
+	}
+
+	return PrepareCommands(cmds, true, extraArgsIn)
+}
+
+func (p *PluginV1) Validate() error {
+	// TODO: Implement V1-specific validation
+	return nil
 }
 
 // Returns command and args strings based on the following rules in priority order:
@@ -231,51 +298,43 @@ func PrepareCommands(cmds []PlatformCommand, expandArgs bool, extraArgs []string
 	return main, baseArgs, nil
 }
 
-// PrepareCommand gets the correct command and arguments for a plugin.
-//
-// It merges extraArgs into any arguments supplied in the plugin. It returns the name of the command and an args array.
-//
-// The result is suitable to pass to exec.Command.
-func (p *Plugin) PrepareCommand(extraArgs []string) (string, []string, error) {
-	var extraArgsIn []string
-
-	if !p.Metadata.IgnoreFlags {
-		extraArgsIn = extraArgs
-	}
-
-	cmds := p.Metadata.PlatformCommand
-	if len(cmds) == 0 && len(p.Metadata.Command) > 0 {
-		cmds = []PlatformCommand{{Command: p.Metadata.Command}}
-	}
-
-	return PrepareCommands(cmds, true, extraArgsIn)
-}
-
 // validPluginName is a regular expression that validates plugin names.
 //
 // Plugin names can only contain the ASCII characters a-z, A-Z, 0-9, ​_​ and ​-.
 var validPluginName = regexp.MustCompile("^[A-Za-z0-9_-]+$")
 
-// validatePluginData validates a plugin's YAML data.
-func validatePluginData(plug *Plugin, filepath string) error {
-	// When metadata section missing, initialize with no data
-	if plug.Metadata == nil {
-		plug.Metadata = &Metadata{}
+// Validate validates a legacy plugin's metadata.
+func (p *PluginLegacy) Validate() error {
+	if !validPluginName.MatchString(p.MetadataLegacy.Name) {
+		return fmt.Errorf("invalid plugin name")
 	}
-	if !validPluginName.MatchString(plug.Metadata.Name) {
-		return fmt.Errorf("invalid plugin name at %q", filepath)
-	}
-	plug.Metadata.Usage = sanitizeString(plug.Metadata.Usage)
+	p.MetadataLegacy.Usage = sanitizeString(p.MetadataLegacy.Usage)
 
-	if len(plug.Metadata.PlatformCommand) > 0 && len(plug.Metadata.Command) > 0 {
-		return fmt.Errorf("both platformCommand and command are set in %q", filepath)
+	if len(p.MetadataLegacy.PlatformCommand) > 0 && len(p.MetadataLegacy.Command) > 0 {
+		return fmt.Errorf("both platformCommand and command are set")
 	}
 
-	if len(plug.Metadata.PlatformHooks) > 0 && len(plug.Metadata.Hooks) > 0 {
-		return fmt.Errorf("both platformHooks and hooks are set in %q", filepath)
+	if len(p.MetadataLegacy.PlatformHooks) > 0 && len(p.MetadataLegacy.Hooks) > 0 {
+		return fmt.Errorf("both platformHooks and hooks are set")
 	}
 
-	// We could also validate SemVer, executable, and other fields should we so choose.
+	// Validate downloader plugins
+	if len(p.MetadataLegacy.Downloaders) > 0 {
+		for i, downloader := range p.MetadataLegacy.Downloaders {
+			if downloader.Command == "" {
+				return fmt.Errorf("downloader %d has empty command", i)
+			}
+			if len(downloader.Protocols) == 0 {
+				return fmt.Errorf("downloader %d has no protocols", i)
+			}
+			for j, protocol := range downloader.Protocols {
+				if protocol == "" {
+					return fmt.Errorf("downloader %d has empty protocol at index %d", i, j)
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -292,44 +351,61 @@ func sanitizeString(str string) string {
 	}, str)
 }
 
-func detectDuplicates(plugs []*Plugin) error {
+func detectDuplicates(plugs []Plugin) error {
 	names := map[string]string{}
 
 	for _, plug := range plugs {
-		if oldpath, ok := names[plug.Metadata.Name]; ok {
+		if oldpath, ok := names[plug.GetName()]; ok {
 			return fmt.Errorf(
 				"two plugins claim the name %q at %q and %q",
-				plug.Metadata.Name,
+				plug.GetName(),
 				oldpath,
-				plug.Dir,
+				plug.GetDir(),
 			)
 		}
-		names[plug.Metadata.Name] = plug.Dir
+		names[plug.GetName()] = plug.GetDir()
 	}
 
 	return nil
 }
 
 // LoadDir loads a plugin from the given directory.
-func LoadDir(dirname string) (*Plugin, error) {
+func LoadDir(dirname string) (Plugin, error) {
 	pluginfile := filepath.Join(dirname, PluginFileName)
 	data, err := os.ReadFile(pluginfile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read plugin at %q: %w", pluginfile, err)
 	}
 
-	plug := &Plugin{Dir: dirname}
-	if err := yaml.Unmarshal(data, &plug.Metadata); err != nil {
-		return nil, fmt.Errorf("failed to load plugin at %q: %w", pluginfile, err)
+	// First, try to detect the API version
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("failed to parse plugin at %q: %w", pluginfile, err)
 	}
-	return plug, validatePluginData(plug, pluginfile)
+
+	// Check if APIVersion is present
+	if apiVersion, ok := raw["apiVersion"].(string); ok && apiVersion == "v1" {
+		// Load as V1 plugin
+		plug := &PluginV1{Dir: dirname}
+		if err := yaml.UnmarshalStrict(data, &plug.MetadataV1); err != nil {
+			return nil, fmt.Errorf("failed to load V1 plugin at %q: %w", pluginfile, err)
+		}
+		return plug, plug.Validate()
+	} else {
+		// Load as legacy plugin
+		plug := &PluginLegacy{Dir: dirname}
+		if err := yaml.UnmarshalStrict(data, &plug.MetadataLegacy); err != nil {
+			return nil, fmt.Errorf("failed to load legacy plugin at %q: %w", pluginfile, err)
+		}
+		return plug, plug.Validate()
+	}
 }
 
 // LoadAll loads all plugins found beneath the base directory.
 //
 // This scans only one directory level.
-func LoadAll(basedir, pluginType string) ([]*Plugin, error) {
-	plugins := []*Plugin{}
+func LoadAll(basedir, pluginType string) ([]Plugin, error) {
+	plugins := []Plugin{}
 	// We want basedir/*/plugin.yaml
 	scanpath := filepath.Join(basedir, "*", PluginFileName)
 	matches, err := filepath.Glob(scanpath)
@@ -347,10 +423,7 @@ func LoadAll(basedir, pluginType string) ([]*Plugin, error) {
 		if err != nil {
 			return plugins, err
 		}
-		if p.Metadata.Type == "" {
-			p.Metadata.Type = "legacy"
-		}
-		if pluginType == "" || p.Metadata.Type == pluginType {
+		if pluginType == "" || p.GetType() == pluginType {
 			plugins = append(plugins, p)
 		}
 	}
@@ -358,8 +431,8 @@ func LoadAll(basedir, pluginType string) ([]*Plugin, error) {
 }
 
 // FindPlugins returns a list of YAML files that describe plugins.
-func FindPlugins(plugdirs string, pluginType string) ([]*Plugin, error) {
-	found := []*Plugin{}
+func FindPlugins(plugdirs string, pluginType string) ([]Plugin, error) {
+	found := []Plugin{}
 	// Let's get all UNIXy and allow path separators
 	for _, p := range filepath.SplitList(plugdirs) {
 		matches, err := LoadAll(p, pluginType)
@@ -374,10 +447,10 @@ func FindPlugins(plugdirs string, pluginType string) ([]*Plugin, error) {
 // FindPlugin returns a plugin by name and optionally by type
 // pluginType can be an empty string for any type
 // TODO disambiguate from [cmd.findPlugin] or merge with this public func?
-func FindPlugin(name, plugdirs, pluginType string) (*Plugin, error) {
+func FindPlugin(name, plugdirs, pluginType string) (Plugin, error) {
 	plugins, _ := FindPlugins(plugdirs, pluginType)
 	for _, p := range plugins {
-		if p.Metadata.Name == name {
+		if p.GetName() == name {
 			return p, nil
 		}
 	}

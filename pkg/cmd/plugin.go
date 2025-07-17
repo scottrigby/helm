@@ -47,17 +47,33 @@ func newPluginCmd(out io.Writer) *cobra.Command {
 }
 
 // runHook will execute a plugin hook.
-func runHook(p *plugin.Plugin, event string) error {
-	plugin.SetupPluginEnv(settings, p.Metadata.Name, p.Dir)
+func runHook(p plugin.Plugin, event string) error {
+	plugin.SetupPluginEnv(settings, p.GetName(), p.GetDir())
 
-	cmds := p.Metadata.PlatformHooks[event]
+	var cmds []plugin.PlatformCommand
 	expandArgs := true
-	if len(cmds) == 0 && len(p.Metadata.Hooks) > 0 {
-		cmd := p.Metadata.Hooks[event]
-		if len(cmd) > 0 {
-			cmds = []plugin.PlatformCommand{{Command: "sh", Args: []string{"-c", cmd}}}
-			expandArgs = false
+	metadata := p.GetMetadata()
+	switch meta := metadata.(type) {
+	case *plugin.MetadataLegacy:
+		cmds = meta.PlatformHooks[event]
+		if len(cmds) == 0 && len(meta.Hooks) > 0 {
+			cmd := meta.Hooks[event]
+			if len(cmd) > 0 {
+				cmds = []plugin.PlatformCommand{{Command: "sh", Args: []string{"-c", cmd}}}
+				expandArgs = false
+			}
 		}
+	case *plugin.MetadataV1:
+		cmds = meta.PlatformHooks[event]
+		if len(cmds) == 0 && len(meta.Hooks) > 0 {
+			cmd := meta.Hooks[event]
+			if len(cmd) > 0 {
+				cmds = []plugin.PlatformCommand{{Command: "sh", Args: []string{"-c", cmd}}}
+				expandArgs = false
+			}
+		}
+	default:
+		return fmt.Errorf("unsupported plugin metadata type for hook execution")
 	}
 
 	main, argv, err := plugin.PrepareCommands(cmds, expandArgs, []string{})
@@ -73,7 +89,7 @@ func runHook(p *plugin.Plugin, event string) error {
 	if err := prog.Run(); err != nil {
 		if eerr, ok := err.(*exec.ExitError); ok {
 			os.Stderr.Write(eerr.Stderr)
-			return fmt.Errorf("plugin %s hook for %q exited with error", event, p.Metadata.Name)
+			return fmt.Errorf("plugin %s hook for %q exited with error", event, p.GetName())
 		}
 		return err
 	}

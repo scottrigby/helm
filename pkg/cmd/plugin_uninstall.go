@@ -83,16 +83,16 @@ func (o *pluginUninstallOptions) run(out io.Writer) error {
 	return nil
 }
 
-func uninstallPlugin(p *plugin.Plugin) error {
-	if err := os.RemoveAll(p.Dir); err != nil {
+func uninstallPlugin(p plugin.Plugin) error {
+	if err := os.RemoveAll(p.GetDir()); err != nil {
 		return err
 	}
 	return runHook(p, plugin.Delete)
 }
 
-func findPlugin(plugins []*plugin.Plugin, name string) *plugin.Plugin {
+func findPlugin(plugins []plugin.Plugin, name string) plugin.Plugin {
 	for _, p := range plugins {
-		if p.Metadata.Name == name {
+		if p.GetName() == name {
 			return p
 		}
 	}
