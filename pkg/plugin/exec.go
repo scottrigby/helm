@@ -46,6 +46,7 @@ func NewExec(settings *cli.EnvSettings, pluginName string, args ...string) (Post
 }
 
 // Run the configured binary for the post render
+// TODO: consolidate [getter.Get], [plugin.execRender.Run], [cmd.loadPlugins], [cmd.callPluginExecutable], [getter.pluginGetter.Get]
 func (p *execRender) Run(renderedManifests *bytes.Buffer) (*bytes.Buffer, error) {
 	// this part from [cmd.loadPlugins]
 	// needed to get the correct args, which can be defined both in plugin.yaml and additional CLI command args
@@ -56,7 +57,7 @@ func (p *execRender) Run(renderedManifests *bytes.Buffer) (*bytes.Buffer, error)
 		return nil, fmt.Errorf("plugin %q exited with error", p.plugin.GetName())
 	}
 
-	// this part modified from [CallPluginExec]
+	// this part modified from [cmd.callPluginExecutable]
 	env := os.Environ()
 	for k, v := range p.settings.EnvVars() {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
@@ -66,7 +67,6 @@ func (p *execRender) Run(renderedManifests *bytes.Buffer) (*bytes.Buffer, error)
 	cmd.Env = env
 
 	// slightly modified original below
-	//cmd := exec.Command(p.binaryPath, p.args...)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
