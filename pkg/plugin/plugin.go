@@ -171,7 +171,7 @@ func (p *PluginLegacy) GetType() string {
 	if len(p.MetadataLegacy.Downloaders) > 0 {
 		return "download"
 	}
-	return "legacy"
+	return "cli"
 }
 func (p *PluginLegacy) GetAPIVersion() string    { return "legacy" }
 func (p *PluginLegacy) GetMetadata() interface{} { return p.MetadataLegacy }

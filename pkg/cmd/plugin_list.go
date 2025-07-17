@@ -42,7 +42,7 @@ func newPluginListCmd(out io.Writer) *cobra.Command {
 			}
 
 			table := uitable.New()
-			table.AddRow("NAME", "VERSION", "TYPE", "DESCRIPTION")
+			table.AddRow("NAME", "VERSION", "TYPE", "APIVERSION", "DESCRIPTION")
 			for _, p := range plugins {
 				metadata := p.GetMetadata()
 				var version, description string
@@ -54,7 +54,7 @@ func newPluginListCmd(out io.Writer) *cobra.Command {
 					version = m.Version
 					description = m.Description
 				}
-				table.AddRow(p.GetName(), version, p.GetType(), description)
+				table.AddRow(p.GetName(), version, p.GetType(), p.GetAPIVersion(), description)
 			}
 			fmt.Fprintln(out, table)
 			return nil
