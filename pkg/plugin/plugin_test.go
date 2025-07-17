@@ -29,6 +29,7 @@ import (
 	"helm.sh/helm/v4/pkg/cli"
 )
 
+// TODO add tests for both legacy and v1 plugins
 func TestPrepareCommand(t *testing.T) {
 	cmdMain := "sh"
 	cmdArgs := []string{"-c", "echo \"test\""}
