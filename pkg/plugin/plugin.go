@@ -214,16 +214,28 @@ func (p *PluginV1) PrepareCommand(extraArgs []string) (string, []string, error) 
 }
 
 func (p *PluginV1) Validate() error {
+	if p.MetadataV1 == nil {
+		return fmt.Errorf("plugin metadata is missing")
+	}
+
 	if !validPluginName.MatchString(p.MetadataV1.Name) {
 		return fmt.Errorf("invalid plugin name")
 	}
 
 	if p.MetadataV1.APIVersion != "v1" {
-		return fmt.Errorf("V1 plugin must have apiVersion: v1")
+		return fmt.Errorf("v1 plugin must have apiVersion: v1")
 	}
 
 	if p.MetadataV1.Type == "" {
-		return fmt.Errorf("V1 plugin must have a type field")
+		return fmt.Errorf("v1 plugin must have a type field")
+	}
+
+	if len(p.MetadataV1.PlatformCommand) > 0 && len(p.MetadataV1.Command) > 0 {
+		return fmt.Errorf("both platformCommand and command are set")
+	}
+
+	if len(p.MetadataV1.PlatformHooks) > 0 && len(p.MetadataV1.Hooks) > 0 {
+		return fmt.Errorf("both platformHooks and hooks are set")
 	}
 
 	p.MetadataV1.Usage = sanitizeString(p.MetadataV1.Usage)

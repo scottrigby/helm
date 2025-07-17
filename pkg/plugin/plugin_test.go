@@ -69,6 +69,7 @@ func TestPrepareCommandExtraArgs(t *testing.T) {
 		MetadataV1: &MetadataV1{
 			Name:    "test",
 			Type:    "cli",
+			APIVersion: "v1",
 			Command: "echo \"error\"",
 			PlatformCommand: []PlatformCommand{
 				{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
@@ -103,6 +104,7 @@ func TestPrepareCommandExtraArgsIgnored(t *testing.T) {
 		MetadataV1: &MetadataV1{
 			Name:    "test",
 			Type:    "cli",
+			APIVersion: "v1",
 			Command: "echo \"error\"",
 			PlatformCommand: []PlatformCommand{
 				{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
@@ -296,6 +298,7 @@ func TestLoadDir(t *testing.T) {
 		Name:        "hello",
 		Version:     "0.1.0",
 		Type:        "cli",
+		APIVersion:  "v1",
 		Usage:       "usage",
 		Description: "description",
 		PlatformCommand: []PlatformCommand{
@@ -338,6 +341,7 @@ func TestDownloader(t *testing.T) {
 		Name:        "downloader",
 		Version:     "1.2.3",
 		Type:        "download",
+		APIVersion:  "v1",
 		Usage:       "usage",
 		Description: "download something",
 		Command:     "echo Hello",
@@ -369,6 +373,7 @@ func TestPostRenderer(t *testing.T) {
 		Name:        "postrender",
 		Version:     "1.2.3",
 		Type:        "postrender",
+		APIVersion:  "v1",
 		Usage:       "usage",
 		Description: "test postrender plugin type",
 		PlatformCommand: []PlatformCommand{
@@ -626,6 +631,7 @@ func mockPlugin(name string) *PluginV1 {
 			Name:        name,
 			Version:     "v0.1.2",
 			Type:        "cli",
+			APIVersion:  "v1",
 			Usage:       "Mock plugin",
 			Description: "Mock plugin for testing",
 			PlatformCommand: []PlatformCommand{

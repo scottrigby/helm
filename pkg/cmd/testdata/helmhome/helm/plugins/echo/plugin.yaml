@@ -1,5 +1,6 @@
 name: echo
 type: cli
+apiVersion: v1
 usage: "echo stuff"
 description: "This echos stuff"
 command: "echo hello"

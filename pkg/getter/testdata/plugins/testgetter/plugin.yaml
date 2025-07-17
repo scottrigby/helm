@@ -1,6 +1,7 @@
 name: "testgetter"
 version: "0.1.0"
 type: download
+apiVersion: v1
 usage: "Fetch a package from a test:// source"
 description: |-
   Print the environment that the plugin was given, then exit.

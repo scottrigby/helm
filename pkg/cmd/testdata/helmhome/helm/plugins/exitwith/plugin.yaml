@@ -1,5 +1,6 @@
 name: exitwith
 type: cli
+apiVersion: v1
 usage: "exitwith code"
 description: "This exits with the specified exit code"
 command: "$HELM_PLUGIN_DIR/exitwith.sh"

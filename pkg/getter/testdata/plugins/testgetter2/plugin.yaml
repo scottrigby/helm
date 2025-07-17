@@ -1,6 +1,7 @@
 name: "testgetter2"
 version: "0.1.0"
 type: download
+apiVersion: v1
 usage: "Fetch a different package from a test2:// source"
 description: "Handle test2 scheme"
 command: "$HELM_PLUGIN_DIR/get.sh"

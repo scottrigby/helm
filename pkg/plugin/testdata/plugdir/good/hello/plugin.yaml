@@ -1,6 +1,7 @@
 name: "hello"
 version: "0.1.0"
 type: cli
+apiVersion: v1
 usage: "usage"
 description: |-
   description
