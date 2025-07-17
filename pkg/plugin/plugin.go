@@ -214,7 +214,37 @@ func (p *PluginV1) PrepareCommand(extraArgs []string) (string, []string, error) 
 }
 
 func (p *PluginV1) Validate() error {
-	// TODO: Implement V1-specific validation
+	if !validPluginName.MatchString(p.MetadataV1.Name) {
+		return fmt.Errorf("invalid plugin name")
+	}
+
+	if p.MetadataV1.APIVersion != "v1" {
+		return fmt.Errorf("V1 plugin must have apiVersion: v1")
+	}
+
+	if p.MetadataV1.Type == "" {
+		return fmt.Errorf("V1 plugin must have a type field")
+	}
+
+	p.MetadataV1.Usage = sanitizeString(p.MetadataV1.Usage)
+
+	// Validate downloader plugins
+	if len(p.MetadataV1.Downloaders) > 0 {
+		for i, downloader := range p.MetadataV1.Downloaders {
+			if downloader.Command == "" {
+				return fmt.Errorf("downloader %d has empty command", i)
+			}
+			if len(downloader.Protocols) == 0 {
+				return fmt.Errorf("downloader %d has no protocols", i)
+			}
+			for j, protocol := range downloader.Protocols {
+				if protocol == "" {
+					return fmt.Errorf("downloader %d has empty protocol at index %d", i, j)
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -383,7 +413,7 @@ func LoadDir(dirname string) (Plugin, error) {
 		return nil, fmt.Errorf("failed to parse plugin at %q: %w", pluginfile, err)
 	}
 
-	// Check if APIVersion is present
+	// Check if APIVersion is present and equals "v1"
 	if apiVersion, ok := raw["apiVersion"].(string); ok && apiVersion == "v1" {
 		// Load as V1 plugin
 		plug := &PluginV1{Dir: dirname}
