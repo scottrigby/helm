@@ -135,11 +135,11 @@ func (r *RuntimeConfigWasm) Validate() error {
 
 // RuntimeSubprocess implements the Runtime interface for subprocess execution
 type RuntimeSubprocess struct {
-	config         *RuntimeConfigSubprocess
-	pluginDir      string
-	pluginName     string
-	extraArgs      []string
-	settings       *cli.EnvSettings
+	config     *RuntimeConfigSubprocess
+	pluginDir  string
+	pluginName string
+	extraArgs  []string
+	settings   *cli.EnvSettings
 }
 
 // SetExtraArgs sets the extra arguments for the subprocess runtime
@@ -154,28 +154,28 @@ func (r *RuntimeSubprocess) SetSettings(settings *cli.EnvSettings) {
 
 // RuntimeWasm implements the Runtime interface for WASM execution
 type RuntimeWasm struct {
-	config         *RuntimeConfigWasm
-	pluginDir      string
-	pluginName     string
-	settings       *cli.EnvSettings
+	config     *RuntimeConfigWasm
+	pluginDir  string
+	pluginName string
+	settings   *cli.EnvSettings
 }
 
 // CreateRuntime implementations for RuntimeConfig types
 func (r *RuntimeConfigSubprocess) CreateRuntime(pluginDir string, pluginName string) (Runtime, error) {
 	return &RuntimeSubprocess{
-		config:    r,
-		pluginDir: pluginDir,
+		config:     r,
+		pluginDir:  pluginDir,
 		pluginName: pluginName,
-		settings:  cli.New(),
+		settings:   cli.New(),
 	}, nil
 }
 
 func (r *RuntimeConfigWasm) CreateRuntime(pluginDir string, pluginName string) (Runtime, error) {
 	return &RuntimeWasm{
-		config:    r,
-		pluginDir: pluginDir,
+		config:     r,
+		pluginDir:  pluginDir,
 		pluginName: pluginName,
-		settings:  cli.New(),
+		settings:   cli.New(),
 	}, nil
 }
 
@@ -183,28 +183,28 @@ func (r *RuntimeConfigWasm) CreateRuntime(pluginDir string, pluginName string) (
 func (r *RuntimeSubprocess) Invoke(in *bytes.Buffer, out *bytes.Buffer) error {
 	// Setup plugin environment
 	SetupPluginEnv(r.settings, r.pluginName, r.pluginDir)
-	
+
 	// Prepare command based on runtime configuration
 	// Note: IgnoreFlags is handled at the plugin level, not runtime level
 	extraArgsIn := r.extraArgs
-	
+
 	cmds := r.config.PlatformCommand
 	if len(cmds) == 0 && len(r.config.Command) > 0 {
 		cmds = []PlatformCommand{{Command: r.config.Command}}
 	}
-	
+
 	main, args, err := PrepareCommands(cmds, true, extraArgsIn)
 	if err != nil {
 		return fmt.Errorf("failed to prepare command: %w", err)
 	}
-	
+
 	// Execute the command
 	cmd := exec.Command(main, args...)
 	cmd.Dir = r.pluginDir
 	cmd.Stdin = in
 	cmd.Stdout = out
 	cmd.Stderr = out
-	
+
 	return cmd.Run()
 }
 
@@ -441,23 +441,23 @@ func (p *PluginLegacy) PrepareCommand(extraArgs []string) (string, []string, err
 }
 
 // Interface implementations for PluginV1
-func (p *PluginV1) GetDir() string           { return p.Dir }
-func (p *PluginV1) GetName() string          { return p.MetadataV1.Name }
-func (p *PluginV1) GetType() string          { return p.MetadataV1.Type }
-func (p *PluginV1) GetAPIVersion() string    { return p.MetadataV1.APIVersion }
-func (p *PluginV1) GetRuntime() string       { return p.MetadataV1.Runtime }
-func (p *PluginV1) GetMetadata() interface{} { return p.MetadataV1 }
-func (p *PluginV1) GetConfig() Config        { return p.MetadataV1.Config }
+func (p *PluginV1) GetDir() string                  { return p.Dir }
+func (p *PluginV1) GetName() string                 { return p.MetadataV1.Name }
+func (p *PluginV1) GetType() string                 { return p.MetadataV1.Type }
+func (p *PluginV1) GetAPIVersion() string           { return p.MetadataV1.APIVersion }
+func (p *PluginV1) GetRuntime() string              { return p.MetadataV1.Runtime }
+func (p *PluginV1) GetMetadata() interface{}        { return p.MetadataV1 }
+func (p *PluginV1) GetConfig() Config               { return p.MetadataV1.Config }
 func (p *PluginV1) GetRuntimeConfig() RuntimeConfig { return p.MetadataV1.RuntimeConfig }
 
 func (p *PluginV1) PrepareCommand(extraArgs []string) (string, []string, error) {
 	config := p.GetConfig()
 	runtimeConfig := p.GetRuntimeConfig()
-	
+
 	// Only subprocess runtime uses PrepareCommand
 	if subprocessConfig, ok := runtimeConfig.(*RuntimeConfigSubprocess); ok {
 		var extraArgsIn []string
-		
+
 		// For CLI plugins, check ignore flags
 		if config.GetType() == "cli" {
 			if cliConfig, ok := config.(*ConfigCLI); ok && cliConfig.IgnoreFlags {
@@ -468,15 +468,15 @@ func (p *PluginV1) PrepareCommand(extraArgs []string) (string, []string, error) 
 		} else {
 			extraArgsIn = extraArgs
 		}
-		
+
 		cmds := subprocessConfig.PlatformCommand
 		if len(cmds) == 0 && len(subprocessConfig.Command) > 0 {
 			cmds = []PlatformCommand{{Command: subprocessConfig.Command}}
 		}
-		
+
 		return PrepareCommands(cmds, true, extraArgsIn)
 	}
-	
+
 	return "", nil, fmt.Errorf("PrepareCommand only supported for subprocess runtime")
 }
 
@@ -721,6 +721,11 @@ func LoadDir(dirname string) (Plugin, error) {
 				tempMeta.Runtime = "subprocess"
 			}
 
+			// Default type to cli if not specified
+			if tempMeta.Type == "" {
+				tempMeta.Type = "cli"
+			}
+
 			// Create the MetadataV1 struct with base fields
 			plug.MetadataV1 = &MetadataV1{
 				APIVersion: tempMeta.APIVersion,
@@ -752,25 +757,18 @@ func LoadDir(dirname string) (Plugin, error) {
 
 				plug.MetadataV1.Config = config
 			} else {
-				// Backward compatibility: create config from legacy fields
+				// Create default config based on plugin type
 				var config Config
-				var err error
-
 				switch tempMeta.Type {
 				case "cli":
-					config, err = createConfigCLIFromLegacy(raw)
+					config = &ConfigCLI{}
 				case "download":
-					config, err = createConfigDownloadFromLegacy(raw)
+					config = &ConfigDownload{}
 				case "postrender":
-					config, err = createConfigPostrenderFromLegacy(raw)
+					config = &ConfigPostrender{}
 				default:
 					return nil, fmt.Errorf("unsupported plugin type: %s", tempMeta.Type)
 				}
-
-				if err != nil {
-					return nil, fmt.Errorf("failed to create config from legacy fields for %s plugin at %q: %w", tempMeta.Type, pluginfile, err)
-				}
-
 				plug.MetadataV1.Config = config
 			}
 
@@ -794,23 +792,16 @@ func LoadDir(dirname string) (Plugin, error) {
 
 				plug.MetadataV1.RuntimeConfig = runtimeConfig
 			} else {
-				// Backward compatibility: create runtimeConfig from legacy fields
+				// Create default runtimeConfig based on runtime type
 				var runtimeConfig RuntimeConfig
-				var err error
-
 				switch tempMeta.Runtime {
 				case "subprocess":
-					runtimeConfig, err = createRuntimeConfigSubprocessFromLegacy(raw)
+					runtimeConfig = &RuntimeConfigSubprocess{}
 				case "wasm":
-					return nil, fmt.Errorf("WASM runtime not supported in legacy format")
+					runtimeConfig = &RuntimeConfigWasm{}
 				default:
 					return nil, fmt.Errorf("unsupported runtime type: %s", tempMeta.Runtime)
 				}
-
-				if err != nil {
-					return nil, fmt.Errorf("failed to create runtimeConfig from legacy fields for %s runtime at %q: %w", tempMeta.Runtime, pluginfile, err)
-				}
-
 				plug.MetadataV1.RuntimeConfig = runtimeConfig
 			}
 
@@ -907,7 +898,7 @@ func unmarshalConfigPostrender(configData map[string]interface{}) (*ConfigPostre
 // createConfigCLIFromLegacy creates a ConfigCLI from legacy plugin fields
 func createConfigCLIFromLegacy(raw map[string]interface{}) (*ConfigCLI, error) {
 	config := &ConfigCLI{}
-	
+
 	if usage, ok := raw["usage"].(string); ok {
 		config.Usage = usage
 	}
@@ -924,7 +915,7 @@ func createConfigCLIFromLegacy(raw map[string]interface{}) (*ConfigCLI, error) {
 // createConfigDownloadFromLegacy creates a ConfigDownload from legacy plugin fields
 func createConfigDownloadFromLegacy(raw map[string]interface{}) (*ConfigDownload, error) {
 	config := &ConfigDownload{}
-	
+
 	// Create downloaders
 	if downloadersRaw, ok := raw["downloaders"]; ok {
 		downloadersData, err := yaml.Marshal(downloadersRaw)
@@ -942,7 +933,7 @@ func createConfigDownloadFromLegacy(raw map[string]interface{}) (*ConfigDownload
 // createConfigPostrenderFromLegacy creates a ConfigPostrender from legacy plugin fields
 func createConfigPostrenderFromLegacy(raw map[string]interface{}) (*ConfigPostrender, error) {
 	config := &ConfigPostrender{}
-	
+
 	// No specific fields to extract from legacy for postrender
 	return config, nil
 }

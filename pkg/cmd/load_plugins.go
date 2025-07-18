@@ -64,19 +64,11 @@ func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 	// Now we create commands for all of these.
 	for _, plug := range found {
 		plug := plug
-		metadata := plug.GetMetadata()
+		config := plug.GetConfig()
 		var usage, description string
-		switch meta := metadata.(type) {
-		case *plugin.MetadataLegacy:
-			usage = meta.Usage
-			description = meta.Description
-		case *plugin.MetadataV1:
-			if config, ok := meta.Config.(*plugin.ConfigCLI); ok {
-				usage = config.Usage
-				description = config.Description
-			}
-		default:
-			continue // Skip unsupported plugin types
+		if cliConfig, ok := config.(*plugin.ConfigCLI); ok {
+			usage = cliConfig.Usage
+			description = cliConfig.Description
 		}
 		if usage == "" {
 			usage = fmt.Sprintf("the %q plugin", plug.GetName())
@@ -331,20 +323,10 @@ func loadFile(path string) (*pluginCommand, error) {
 // to obtain the dynamic completion choices.  It must pass all the flags and sub-commands
 // specified in the command-line to the plugin.complete executable (except helm's global flags)
 func pluginDynamicComp(plug plugin.Plugin, cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	metadata := plug.GetMetadata()
+	config := plug.GetConfig()
 	var ignoreFlags bool
-	switch meta := metadata.(type) {
-	case *plugin.MetadataLegacy:
-		ignoreFlags = meta.IgnoreFlags
-	case *plugin.MetadataV1:
-		if config, ok := meta.Config.(*plugin.ConfigCLI); ok {
-			ignoreFlags = config.IgnoreFlags
-		}
-	default:
-		// This case should ideally not be reached if loadPlugins correctly filters plugins
-		// but as a fallback, we can return an error or a default directive.
-		// For now, we'll return a default directive.
-		return nil, cobra.ShellCompDirectiveDefault
+	if cliConfig, ok := config.(*plugin.ConfigCLI); ok {
+		ignoreFlags = cliConfig.IgnoreFlags
 	}
 
 	u, err := processParent(cmd, args)
