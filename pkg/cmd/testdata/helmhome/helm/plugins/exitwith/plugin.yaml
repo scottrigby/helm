@@ -1,6 +1,10 @@
 name: exitwith
 type: cli
 apiVersion: v1
-usage: "exitwith code"
-description: "This exits with the specified exit code"
-command: "$HELM_PLUGIN_DIR/exitwith.sh"
+runtime: subprocess
+config:
+  usage: "exitwith code"
+  description: "This exits with the specified exit code"
+  ignoreFlags: false
+runtimeConfig:
+  command: "$HELM_PLUGIN_DIR/exitwith.sh"

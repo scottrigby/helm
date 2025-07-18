@@ -1,6 +1,10 @@
 name: args
 type: cli
 apiVersion: v1
-usage: "echo args"
-description: "This echos args"
-command: "$HELM_PLUGIN_DIR/args.sh"
+runtime: subprocess
+config:
+  usage: "echo args"
+  description: "This echos args"
+  ignoreFlags: false
+runtimeConfig:
+  command: "$HELM_PLUGIN_DIR/args.sh"

@@ -1,6 +1,10 @@
 name: env
 type: cli
 apiVersion: v1
-usage: "env stuff"
-description: "show the env"
-command: "echo $HELM_PLUGIN_NAME"
+runtime: subprocess
+config:
+  usage: "env stuff"
+  description: "show the env"
+  ignoreFlags: false
+runtimeConfig:
+  command: "echo $HELM_PLUGIN_NAME"

@@ -1,6 +1,10 @@
 name: echo
 type: cli
 apiVersion: v1
-usage: "echo stuff"
-description: "This echos stuff"
-command: "echo hello"
+runtime: subprocess
+config:
+  usage: "echo stuff"
+  description: "This echos stuff"
+  ignoreFlags: false
+runtimeConfig:
+  command: "echo hello"

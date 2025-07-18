@@ -114,10 +114,6 @@ func (r *RuntimeConfigSubprocess) Validate() error {
 	if len(r.PlatformHooks) > 0 && len(r.Hooks) > 0 {
 		return fmt.Errorf("both platformHooks and hooks are set")
 	}
-	// At least one command must be specified
-	if len(r.PlatformCommand) == 0 && len(r.Command) == 0 {
-		return fmt.Errorf("either platformCommand or command must be specified")
-	}
 	return nil
 }
 
@@ -189,12 +185,8 @@ func (r *RuntimeSubprocess) Invoke(in *bytes.Buffer, out *bytes.Buffer) error {
 	SetupPluginEnv(r.settings, r.pluginName, r.pluginDir)
 	
 	// Prepare command based on runtime configuration
-	var extraArgsIn []string
-	if r.config.IgnoreFlags {
-		extraArgsIn = []string{}
-	} else {
-		extraArgsIn = r.extraArgs
-	}
+	// Note: IgnoreFlags is handled at the plugin level, not runtime level
+	extraArgsIn := r.extraArgs
 	
 	cmds := r.config.PlatformCommand
 	if len(cmds) == 0 && len(r.config.Command) > 0 {
@@ -701,7 +693,7 @@ func LoadDir(dirname string) (Plugin, error) {
 
 	// First, try to detect the API version
 	var raw map[string]interface{}
-	if err := yaml.Unmarshal(data, &raw); err != nil {
+	if err := yaml.UnmarshalStrict(data, &raw); err != nil {
 		return nil, fmt.Errorf("failed to parse plugin at %q: %w", pluginfile, err)
 	}
 
@@ -719,7 +711,7 @@ func LoadDir(dirname string) (Plugin, error) {
 			Version    string `json:"version"`
 		}{}
 
-		if err := yaml.UnmarshalStrict(data, tempMeta); err != nil {
+		if err := yaml.Unmarshal(data, tempMeta); err != nil {
 			return nil, fmt.Errorf("failed to load V1 plugin metadata at %q: %w", pluginfile, err)
 		}
 

@@ -2,7 +2,9 @@ name: "postrender"
 version: "1.2.3"
 type: postrender
 apiVersion: v1
-usage: usage
-description: test postrender plugin type
-platformCommand:
-  - command: "${HELM_PLUGIN_DIR}/sed-test.sh"
+runtime: subprocess
+config:
+  postrenderArgs: []
+runtimeConfig:
+  platformCommand:
+    - command: "${HELM_PLUGIN_DIR}/sed-test.sh"

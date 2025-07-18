@@ -1,6 +1,10 @@
 name: fullenv
 type: cli
 apiVersion: v1
-usage: "show env vars"
-description: "show all env vars"
-command: "$HELM_PLUGIN_DIR/fullenv.sh"
+runtime: subprocess
+config:
+  usage: "show env vars"
+  description: "show all env vars"
+  ignoreFlags: false
+runtimeConfig:
+  command: "$HELM_PLUGIN_DIR/fullenv.sh"

@@ -2,12 +2,15 @@ name: "duplicate-entries"
 version: "0.1.0"
 type: cli
 apiVersion: v1
-usage: "usage"
-description: |-
-  description
-command: "echo hello"
-ignoreFlags: true
-hooks:
-  install: "echo installing..."
-hooks:
-  install: "echo installing something different"
+runtime: subprocess
+config:
+  usage: "usage"
+  description: |-
+    description
+  ignoreFlags: true
+runtimeConfig:
+  command: "echo hello"
+  hooks:
+    install: "echo installing..."
+  hooks:
+    install: "echo installing something different"

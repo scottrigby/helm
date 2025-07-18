@@ -2,11 +2,11 @@ name: "testgetter2"
 version: "0.1.0"
 type: download
 apiVersion: v1
-usage: "Fetch a different package from a test2:// source"
-description: "Handle test2 scheme"
-command: "$HELM_PLUGIN_DIR/get.sh"
-ignoreFlags: true
-downloaders:
-- command: "echo"
-  protocols:
-    - "test2"
+runtime: subprocess
+config:
+  downloaders:
+    - command: "echo"
+      protocols:
+        - "test2"
+runtimeConfig:
+  command: "$HELM_PLUGIN_DIR/get.sh"
