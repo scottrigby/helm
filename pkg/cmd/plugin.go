@@ -65,9 +65,8 @@ func runHook(p plugin.Plugin, event string) error {
 		}
 	case *plugin.MetadataV1:
 		// V1 plugins store hooks in runtime config, not directly in metadata
-		config := p.GetConfig()
-		if config != nil {
-			runtimeConfig := config.GetRuntimeConfig()
+		runtimeConfig := p.GetRuntimeConfig()
+		if runtimeConfig != nil {
 			if subprocessConfig, ok := runtimeConfig.(*plugin.RuntimeConfigSubprocess); ok {
 				cmds = subprocessConfig.PlatformHooks[event]
 				if len(cmds) == 0 && len(subprocessConfig.Hooks) > 0 {

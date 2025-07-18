@@ -2,9 +2,13 @@ name: "echo"
 version: "1.2.3"
 type: cli
 apiVersion: v1
-usage: "echo something"
-description: |-
-  This is a testing fixture.
-command: "echo Hello"
-hooks:
-  install: "echo Installing"
+runtime: subprocess
+config:
+  usage: "echo something"
+  description: |-
+    This is a testing fixture.
+  ignoreFlags: false
+runtimeConfig:
+  command: "echo Hello"
+  hooks:
+    install: "echo Installing"

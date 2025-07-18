@@ -2,26 +2,29 @@ name: "hello"
 version: "0.1.0"
 type: cli
 apiVersion: v1
-usage: "usage"
-description: |-
-  description
-platformCommand:
-  - os: linux
-    arch:
-    command: "sh"
-    args: ["-c", "${HELM_PLUGIN_DIR}/hello.sh"]
-  - os: windows
-    arch:
-    command: "pwsh"
-    args: ["-c", "${HELM_PLUGIN_DIR}/hello.ps1"]
-ignoreFlags: true
-platformHooks:
-  install:
+runtime: subprocess
+config:
+  usage: "usage"
+  description: |-
+    description
+  ignoreFlags: true
+runtimeConfig:
+  platformCommand:
     - os: linux
-      arch: ""
+      arch:
       command: "sh"
-      args: ["-c", 'echo "installing..."']
+      args: ["-c", "${HELM_PLUGIN_DIR}/hello.sh"]
     - os: windows
-      arch: ""
+      arch:
       command: "pwsh"
-      args: ["-c", 'echo "installing..."']
+      args: ["-c", "${HELM_PLUGIN_DIR}/hello.ps1"]
+  platformHooks:
+    install:
+      - os: linux
+        arch: ""
+        command: "sh"
+        args: ["-c", 'echo "installing..."']
+      - os: windows
+        arch: ""
+        command: "pwsh"
+        args: ["-c", 'echo "installing..."']
