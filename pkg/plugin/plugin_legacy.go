@@ -63,14 +63,16 @@ func (p *PluginLegacy) GetConfig() Config {
 	case "cli":
 		return &ConfigCLI{
 			Usage:       p.MetadataLegacy.Usage,
-			Description: p.MetadataLegacy.Description,
+			ShortHelp:   p.MetadataLegacy.Usage, // Map legacy usage to shortHelp
+			LongHelp:    p.MetadataLegacy.Description, // Map legacy description to longHelp
 			IgnoreFlags: p.MetadataLegacy.IgnoreFlags,
 		}
 	default:
 		// Return a basic CLI config as fallback
 		return &ConfigCLI{
 			Usage:       p.MetadataLegacy.Usage,
-			Description: p.MetadataLegacy.Description,
+			ShortHelp:   p.MetadataLegacy.Usage, // Map legacy usage to shortHelp
+			LongHelp:    p.MetadataLegacy.Description, // Map legacy description to longHelp
 			IgnoreFlags: p.MetadataLegacy.IgnoreFlags,
 		}
 	}

@@ -65,18 +65,26 @@ func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 	for _, plug := range found {
 		plug := plug
 		config := plug.GetConfig()
-		var usage, description string
+		var use, short, long string
 		if cliConfig, ok := config.(*plugin.ConfigCLI); ok {
-			usage = cliConfig.Usage
-			description = cliConfig.Description
+			use = cliConfig.Usage
+			short = cliConfig.ShortHelp
+			long = cliConfig.LongHelp
 		}
-		if usage == "" {
-			usage = fmt.Sprintf("the %q plugin", plug.GetName())
+
+		// Set defaults
+		if use == "" {
+			use = plug.GetName()
 		}
+		if short == "" {
+			short = fmt.Sprintf("the %q plugin", plug.GetName())
+		}
+		// long has no default, empty is ok
+
 		c := &cobra.Command{
-			Use:   plug.GetName(),
-			Short: usage,
-			Long:  description,
+			Use:   use,
+			Short: short,
+			Long:  long,
 			RunE: func(cmd *cobra.Command, args []string) error {
 				u, err := processParent(cmd, args)
 				if err != nil {

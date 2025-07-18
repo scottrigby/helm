@@ -30,9 +30,13 @@ type Config interface {
 // ConfigCLI represents the configuration for CLI plugins
 type ConfigCLI struct {
 	// Usage is the single-line usage text shown in help
+	// For recommended syntax, see [spf13/cobra.command.Command] Use field comment:
+	// https://pkg.go.dev/github.com/spf13/cobra#Command
 	Usage string `json:"usage"`
-	// Description is a long description shown in places like `helm help`
-	Description string `json:"description"`
+	// ShortHelp is the short description shown in the 'helm help' output
+	ShortHelp string `json:"shortHelp"`
+	// LongHelp is the long message shown in the 'helm help <this-command>' output
+	LongHelp string `json:"longHelp"`
 	// IgnoreFlags ignores any flags passed in from Helm
 	IgnoreFlags bool `json:"ignoreFlags"`
 }

@@ -42,27 +42,23 @@ func newPluginListCmd(out io.Writer) *cobra.Command {
 			}
 
 			table := uitable.New()
-			table.AddRow("NAME", "VERSION", "TYPE", "APIVERSION", "DESCRIPTION", "SOURCE")
+			table.AddRow("NAME", "VERSION", "TYPE", "APIVERSION", "SOURCE")
 			for _, p := range plugins {
 				metadata := p.GetMetadata()
-				var version, description, sourceURL string
+				var version, sourceURL string
 				switch m := metadata.(type) {
 				case *plugin.MetadataV1:
 					version = m.Version
 					sourceURL = m.SourceURL
-					if config, ok := m.Config.(*plugin.ConfigCLI); ok {
-						description = config.Description
-					}
 				case *plugin.MetadataLegacy:
 					version = m.Version
-					description = m.Description
 					// Legacy plugins don't have sourceURL field
 				}
 				// Set sourceURL to "unknown" if empty
 				if sourceURL == "" {
 					sourceURL = "unknown"
 				}
-				table.AddRow(p.GetName(), version, p.GetType(), p.GetAPIVersion(), description, sourceURL)
+				table.AddRow(p.GetName(), version, p.GetType(), p.GetAPIVersion(), sourceURL)
 			}
 			fmt.Fprintln(out, table)
 			return nil
