@@ -72,6 +72,9 @@ type MetadataV1 struct {
 	// Version is a SemVer 2 version of the plugin.
 	Version string `json:"version"`
 
+	// SourceURL is the URL where this plugin can be found
+	SourceURL string `json:"sourceURL,omitempty"`
+
 	// Config contains the type-specific configuration for this plugin
 	Config Config `json:"config"`
 

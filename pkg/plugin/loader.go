@@ -52,6 +52,7 @@ func LoadDir(dirname string) (Plugin, error) {
 				Type       string `json:"type"`
 				Runtime    string `json:"runtime"`
 				Version    string `json:"version"`
+				SourceURL  string `json:"sourceURL,omitempty"`
 			}{}
 
 			if err := yaml.Unmarshal(data, tempMeta); err != nil {
@@ -75,6 +76,7 @@ func LoadDir(dirname string) (Plugin, error) {
 				Type:       tempMeta.Type,
 				Runtime:    tempMeta.Runtime,
 				Version:    tempMeta.Version,
+				SourceURL:  tempMeta.SourceURL,
 			}
 
 			// Extract the config section based on plugin type
