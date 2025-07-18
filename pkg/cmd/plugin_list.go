@@ -97,16 +97,16 @@ func compListPlugins(_ string, ignoredPluginNames []string) []string {
 		filteredPlugins := filterPlugins(plugins, ignoredPluginNames)
 		for _, p := range filteredPlugins {
 			metadata := p.GetMetadata()
-			var usage string
+			var shortHelp string
 			switch m := metadata.(type) {
 			case *plugin.MetadataV1:
 				if config, ok := m.Config.(*plugin.ConfigCLI); ok {
-					usage = config.Usage
+					shortHelp = config.ShortHelp
 				}
 			case *plugin.MetadataLegacy:
-				usage = m.Usage
+				shortHelp = m.Usage
 			}
-			pNames = append(pNames, fmt.Sprintf("%s\t%s", p.GetName(), usage))
+			pNames = append(pNames, fmt.Sprintf("%s\t%s", p.GetName(), shortHelp))
 		}
 	}
 	return pNames

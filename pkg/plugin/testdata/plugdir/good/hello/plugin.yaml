@@ -4,8 +4,9 @@ type: cli
 apiVersion: v1
 runtime: subprocess
 config:
-  usage: "usage"
-  description: |-
+  usage: hello [params]...
+  shortHelp: "echo hello message"
+  longHelp: |-
     description
   ignoreFlags: true
 runtimeConfig:

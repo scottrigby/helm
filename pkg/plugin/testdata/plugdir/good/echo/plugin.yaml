@@ -4,8 +4,8 @@ type: cli
 apiVersion: v1
 runtime: subprocess
 config:
-  usage: "echo something"
-  description: |-
+  shortHelp: "echo something"
+  longHelp: |-
     This is a testing fixture.
   ignoreFlags: false
 runtimeConfig:

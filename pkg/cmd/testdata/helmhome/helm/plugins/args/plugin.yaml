@@ -3,8 +3,8 @@ type: cli
 apiVersion: v1
 runtime: subprocess
 config:
-  usage: "echo args"
-  description: "This echos args"
+  shortHelp: "echo args"
+  longHelp: "This echos args"
   ignoreFlags: false
 runtimeConfig:
   command: "$HELM_PLUGIN_DIR/args.sh"

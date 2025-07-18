@@ -321,8 +321,9 @@ func TestLoadDir(t *testing.T) {
 		APIVersion: "v1",
 		Runtime:    "subprocess",
 		Config: &ConfigCLI{
-			Usage:       "usage",
-			Description: "description",
+			Usage:       "hello [params]...",
+			ShortHelp:   "echo hello message",
+			LongHelp:    "description",
 			IgnoreFlags: true,
 		},
 		RuntimeConfig: &RuntimeConfigSubprocess{
@@ -686,7 +687,8 @@ func mockPlugin(name string) *PluginV1 {
 			Runtime:    "subprocess",
 			Config: &ConfigCLI{
 				Usage:       "Mock plugin",
-				Description: "Mock plugin for testing",
+				ShortHelp:   "Mock plugin",
+				LongHelp:    "Mock plugin for testing",
 				IgnoreFlags: false,
 			},
 			RuntimeConfig: &RuntimeConfigSubprocess{

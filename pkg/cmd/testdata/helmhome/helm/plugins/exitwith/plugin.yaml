@@ -3,8 +3,8 @@ type: cli
 apiVersion: v1
 runtime: subprocess
 config:
-  usage: "exitwith code"
-  description: "This exits with the specified exit code"
+  shortHelp: "exitwith code"
+  longHelp: "This exits with the specified exit code"
   ignoreFlags: false
 runtimeConfig:
   command: "$HELM_PLUGIN_DIR/exitwith.sh"

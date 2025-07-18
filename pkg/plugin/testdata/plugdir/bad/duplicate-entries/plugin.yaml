@@ -4,8 +4,8 @@ type: cli
 apiVersion: v1
 runtime: subprocess
 config:
-  usage: "usage"
-  description: |-
+  shortHelp: "test duplicate entries"
+  longHelp: |-
     description
   ignoreFlags: true
 runtimeConfig:

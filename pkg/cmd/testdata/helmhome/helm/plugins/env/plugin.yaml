@@ -3,8 +3,8 @@ type: cli
 apiVersion: v1
 runtime: subprocess
 config:
-  usage: "env stuff"
-  description: "show the env"
+  shortHelp: "env stuff"
+  longHelp: "show the env"
   ignoreFlags: false
 runtimeConfig:
   command: "echo $HELM_PLUGIN_NAME"

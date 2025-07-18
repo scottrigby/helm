@@ -3,8 +3,8 @@ type: cli
 apiVersion: v1
 runtime: subprocess
 config:
-  usage: "show env vars"
-  description: "show all env vars"
+  shortHelp: "show env vars"
+  longHelp: "show all env vars"
   ignoreFlags: false
 runtimeConfig:
   command: "$HELM_PLUGIN_DIR/fullenv.sh"

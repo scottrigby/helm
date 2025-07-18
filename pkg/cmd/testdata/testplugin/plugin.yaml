@@ -3,8 +3,8 @@ type: cli
 apiVersion: v1
 runtime: subprocess
 config:
-  usage: "echo test"
-  description: "This echos test"
+  shortHelp: "echo test"
+  longHelp: "This echos test"
   ignoreFlags: false
 runtimeConfig:
   command: "echo test"
