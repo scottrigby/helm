@@ -49,6 +49,94 @@ type PlatformCommand struct {
 	Args            []string `json:"args"`
 }
 
+// Config interface defines the methods that all plugin type configurations must implement
+type Config interface {
+	GetType() string
+	Validate() error
+}
+
+// ConfigCLI represents the configuration for CLI plugins
+type ConfigCLI struct {
+	// PlatformCommand is the plugin command, with a platform selector and support for args.
+	PlatformCommand []PlatformCommand `json:"platformCommand"`
+	// Command is the plugin command, as a single string.
+	// DEPRECATED: Use PlatformCommand instead. Remove in Helm 4.
+	Command string `json:"command"`
+	// IgnoreFlags ignores any flags passed in from Helm
+	IgnoreFlags bool `json:"ignoreFlags"`
+	// PlatformHooks are commands that will run on plugin events, with a platform selector and support for args.
+	PlatformHooks PlatformHooks `json:"platformHooks"`
+	// Hooks are commands that will run on plugin events, as a single string.
+	// DEPRECATED: Use PlatformHooks instead. Remove in Helm 4.
+	Hooks Hooks `json:"hooks"`
+}
+
+// ConfigDownload represents the configuration for download plugins
+type ConfigDownload struct {
+	// Downloaders field is used if the plugin supply downloader mechanism
+	// for special protocols.
+	Downloaders []Downloaders `json:"downloaders"`
+	// PlatformCommand is the plugin command for installation, with a platform selector and support for args.
+	PlatformCommand []PlatformCommand `json:"platformCommand"`
+	// Command is the plugin command for installation, as a single string.
+	// DEPRECATED: Use PlatformCommand instead. Remove in Helm 4.
+	Command string `json:"command"`
+}
+
+// ConfigPostrender represents the configuration for postrender plugins
+type ConfigPostrender struct {
+	// PlatformCommand is the plugin command, with a platform selector and support for args.
+	PlatformCommand []PlatformCommand `json:"platformCommand"`
+	// Command is the plugin command, as a single string.
+	// DEPRECATED: Use PlatformCommand instead. Remove in Helm 4.
+	Command string `json:"command"`
+}
+
+// GetType implementations for Config types
+func (c *ConfigCLI) GetType() string        { return "cli" }
+func (c *ConfigDownload) GetType() string   { return "download" }
+func (c *ConfigPostrender) GetType() string { return "postrender" }
+
+// Validate implementations for Config types
+func (c *ConfigCLI) Validate() error {
+	if len(c.PlatformCommand) > 0 && len(c.Command) > 0 {
+		return fmt.Errorf("both platformCommand and command are set")
+	}
+	if len(c.PlatformHooks) > 0 && len(c.Hooks) > 0 {
+		return fmt.Errorf("both platformHooks and hooks are set")
+	}
+	return nil
+}
+
+func (c *ConfigDownload) Validate() error {
+	if len(c.PlatformCommand) > 0 && len(c.Command) > 0 {
+		return fmt.Errorf("both platformCommand and command are set")
+	}
+	if len(c.Downloaders) > 0 {
+		for i, downloader := range c.Downloaders {
+			if downloader.Command == "" {
+				return fmt.Errorf("downloader %d has empty command", i)
+			}
+			if len(downloader.Protocols) == 0 {
+				return fmt.Errorf("downloader %d has no protocols", i)
+			}
+			for j, protocol := range downloader.Protocols {
+				if protocol == "" {
+					return fmt.Errorf("downloader %d has empty protocol at index %d", i, j)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (c *ConfigPostrender) Validate() error {
+	if len(c.PlatformCommand) > 0 && len(c.Command) > 0 {
+		return fmt.Errorf("both platformCommand and command are set")
+	}
+	return nil
+}
+
 // Plugin interface defines the common methods that all plugin versions must implement
 type Plugin interface {
 	GetDir() string
@@ -56,6 +144,7 @@ type Plugin interface {
 	GetType() string
 	GetAPIVersion() string
 	GetMetadata() interface{}
+	GetConfig() Config
 	Validate() error
 	PrepareCommand(extraArgs []string) (string, []string, error)
 }
@@ -108,7 +197,7 @@ type MetadataV1 struct {
 	// Name is the name of the plugin
 	Name string `json:"name"`
 
-	// Type of plugin (eg, subcommand, downloader, postrender)
+	// Type of plugin (eg, cli, download, postrender)
 	Type string `json:"type"`
 
 	// Version is a SemVer 2 version of the plugin.
@@ -120,26 +209,8 @@ type MetadataV1 struct {
 	// Description is a long description shown in places like `helm help`
 	Description string `json:"description"`
 
-	// PlatformCommand is the plugin command, with a platform selector and support for args.
-	PlatformCommand []PlatformCommand `json:"platformCommand"`
-
-	// Command is the plugin command, as a single string.
-	// DEPRECATED: Use PlatformCommand instead. Remove in Helm 4.
-	Command string `json:"command"`
-
-	// IgnoreFlags ignores any flags passed in from Helm
-	IgnoreFlags bool `json:"ignoreFlags"`
-
-	// PlatformHooks are commands that will run on plugin events, with a platform selector and support for args.
-	PlatformHooks PlatformHooks `json:"platformHooks"`
-
-	// Hooks are commands that will run on plugin events, as a single string.
-	// DEPRECATED: Use PlatformHooks instead. Remove in Helm 4.
-	Hooks Hooks
-
-	// Downloaders field is used if the plugin supply downloader mechanism
-	// for special protocols.
-	Downloaders []Downloaders `json:"downloaders"`
+	// Config contains the type-specific configuration for this plugin
+	Config Config `json:"config"`
 
 	// UseTunnelDeprecated indicates that this command needs a tunnel.
 	// DEPRECATED and unused, but retained for backwards compatibility with Helm 2 plugins. Remove in Helm 4
@@ -176,6 +247,34 @@ func (p *PluginLegacy) GetType() string {
 func (p *PluginLegacy) GetAPIVersion() string    { return "legacy" }
 func (p *PluginLegacy) GetMetadata() interface{} { return p.MetadataLegacy }
 
+func (p *PluginLegacy) GetConfig() Config {
+	switch p.GetType() {
+	case "download":
+		return &ConfigDownload{
+			Downloaders:     p.MetadataLegacy.Downloaders,
+			PlatformCommand: p.MetadataLegacy.PlatformCommand,
+			Command:         p.MetadataLegacy.Command,
+		}
+	case "cli":
+		return &ConfigCLI{
+			PlatformCommand: p.MetadataLegacy.PlatformCommand,
+			Command:         p.MetadataLegacy.Command,
+			IgnoreFlags:     p.MetadataLegacy.IgnoreFlags,
+			PlatformHooks:   p.MetadataLegacy.PlatformHooks,
+			Hooks:           p.MetadataLegacy.Hooks,
+		}
+	default:
+		// Return a basic CLI config as fallback
+		return &ConfigCLI{
+			PlatformCommand: p.MetadataLegacy.PlatformCommand,
+			Command:         p.MetadataLegacy.Command,
+			IgnoreFlags:     p.MetadataLegacy.IgnoreFlags,
+			PlatformHooks:   p.MetadataLegacy.PlatformHooks,
+			Hooks:           p.MetadataLegacy.Hooks,
+		}
+	}
+}
+
 func (p *PluginLegacy) PrepareCommand(extraArgs []string) (string, []string, error) {
 	var extraArgsIn []string
 
@@ -197,17 +296,34 @@ func (p *PluginV1) GetName() string          { return p.MetadataV1.Name }
 func (p *PluginV1) GetType() string          { return p.MetadataV1.Type }
 func (p *PluginV1) GetAPIVersion() string    { return p.MetadataV1.APIVersion }
 func (p *PluginV1) GetMetadata() interface{} { return p.MetadataV1 }
+func (p *PluginV1) GetConfig() Config        { return p.MetadataV1.Config }
 
 func (p *PluginV1) PrepareCommand(extraArgs []string) (string, []string, error) {
+	config := p.GetConfig()
 	var extraArgsIn []string
+	var cmds []PlatformCommand
+	var command string
 
-	if !p.MetadataV1.IgnoreFlags {
-		extraArgsIn = extraArgs
+	// Type-specific logic for preparing commands
+	switch cfg := config.(type) {
+	case *ConfigCLI:
+		if !cfg.IgnoreFlags {
+			extraArgsIn = extraArgs
+		}
+		cmds = cfg.PlatformCommand
+		command = cfg.Command
+	case *ConfigDownload:
+		cmds = cfg.PlatformCommand
+		command = cfg.Command
+	case *ConfigPostrender:
+		cmds = cfg.PlatformCommand
+		command = cfg.Command
+	default:
+		return "", nil, fmt.Errorf("unsupported plugin config type")
 	}
 
-	cmds := p.MetadataV1.PlatformCommand
-	if len(cmds) == 0 && len(p.MetadataV1.Command) > 0 {
-		cmds = []PlatformCommand{{Command: p.MetadataV1.Command}}
+	if len(cmds) == 0 && len(command) > 0 {
+		cmds = []PlatformCommand{{Command: command}}
 	}
 
 	return PrepareCommands(cmds, true, extraArgsIn)
@@ -230,32 +346,21 @@ func (p *PluginV1) Validate() error {
 		return fmt.Errorf("v1 plugin must have a type field")
 	}
 
-	if len(p.MetadataV1.PlatformCommand) > 0 && len(p.MetadataV1.Command) > 0 {
-		return fmt.Errorf("both platformCommand and command are set")
+	if p.MetadataV1.Config == nil {
+		return fmt.Errorf("v1 plugin must have a config field")
 	}
 
-	if len(p.MetadataV1.PlatformHooks) > 0 && len(p.MetadataV1.Hooks) > 0 {
-		return fmt.Errorf("both platformHooks and hooks are set")
+	// Validate that config type matches plugin type
+	if p.MetadataV1.Config.GetType() != p.MetadataV1.Type {
+		return fmt.Errorf("config type %s does not match plugin type %s", p.MetadataV1.Config.GetType(), p.MetadataV1.Type)
+	}
+
+	// Validate the config itself
+	if err := p.MetadataV1.Config.Validate(); err != nil {
+		return fmt.Errorf("config validation failed: %w", err)
 	}
 
 	p.MetadataV1.Usage = sanitizeString(p.MetadataV1.Usage)
-
-	// Validate downloader plugins
-	if len(p.MetadataV1.Downloaders) > 0 {
-		for i, downloader := range p.MetadataV1.Downloaders {
-			if downloader.Command == "" {
-				return fmt.Errorf("downloader %d has empty command", i)
-			}
-			if len(downloader.Protocols) == 0 {
-				return fmt.Errorf("downloader %d has no protocols", i)
-			}
-			for j, protocol := range downloader.Protocols {
-				if protocol == "" {
-					return fmt.Errorf("downloader %d has empty protocol at index %d", i, j)
-				}
-			}
-		}
-	}
 
 	return nil
 }
@@ -427,11 +532,79 @@ func LoadDir(dirname string) (Plugin, error) {
 
 	// Check if APIVersion is present and equals "v1"
 	if apiVersion, ok := raw["apiVersion"].(string); ok && apiVersion == "v1" {
-		// Load as V1 plugin
+		// Load as V1 plugin with type-specific config unmarshalling
 		plug := &PluginV1{Dir: dirname}
-		if err := yaml.UnmarshalStrict(data, &plug.MetadataV1); err != nil {
-			return nil, fmt.Errorf("failed to load V1 plugin at %q: %w", pluginfile, err)
+
+		// First, unmarshal the base metadata without the config field
+		tempMeta := &struct {
+			APIVersion          string `json:"apiVersion"`
+			Name                string `json:"name"`
+			Type                string `json:"type"`
+			Version             string `json:"version"`
+			Usage               string `json:"usage"`
+			Description         string `json:"description"`
+			UseTunnelDeprecated bool   `json:"useTunnel,omitempty"`
+		}{}
+
+		if err := yaml.UnmarshalStrict(data, tempMeta); err != nil {
+			return nil, fmt.Errorf("failed to load V1 plugin metadata at %q: %w", pluginfile, err)
 		}
+
+		// Create the MetadataV1 struct with base fields
+		plug.MetadataV1 = &MetadataV1{
+			APIVersion:          tempMeta.APIVersion,
+			Name:                tempMeta.Name,
+			Type:                tempMeta.Type,
+			Version:             tempMeta.Version,
+			Usage:               tempMeta.Usage,
+			Description:         tempMeta.Description,
+			UseTunnelDeprecated: tempMeta.UseTunnelDeprecated,
+		}
+
+		// Extract the config section based on plugin type
+		if configData, ok := raw["config"].(map[string]interface{}); ok {
+			var config Config
+			var err error
+
+			switch tempMeta.Type {
+			case "cli":
+				config, err = unmarshalConfigCLI(configData)
+			case "download":
+				config, err = unmarshalConfigDownload(configData)
+			case "postrender":
+				config, err = unmarshalConfigPostrender(configData)
+			default:
+				return nil, fmt.Errorf("unsupported plugin type: %s", tempMeta.Type)
+			}
+
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal config for %s plugin at %q: %w", tempMeta.Type, pluginfile, err)
+			}
+
+			plug.MetadataV1.Config = config
+		} else {
+			// Backward compatibility: create config from legacy fields
+			var config Config
+			var err error
+
+			switch tempMeta.Type {
+			case "cli":
+				config, err = createConfigCLIFromLegacy(raw)
+			case "download":
+				config, err = createConfigDownloadFromLegacy(raw)
+			case "postrender":
+				config, err = createConfigPostrenderFromLegacy(raw)
+			default:
+				return nil, fmt.Errorf("unsupported plugin type: %s", tempMeta.Type)
+			}
+
+			if err != nil {
+				return nil, fmt.Errorf("failed to create config from legacy fields for %s plugin at %q: %w", tempMeta.Type, pluginfile, err)
+			}
+
+			plug.MetadataV1.Config = config
+		}
+
 		return plug, plug.Validate()
 	} else {
 		// Load as legacy plugin
@@ -441,6 +614,115 @@ func LoadDir(dirname string) (Plugin, error) {
 		}
 		return plug, plug.Validate()
 	}
+}
+
+// unmarshalConfigCLI unmarshals a config map into a ConfigCLI struct
+func unmarshalConfigCLI(configData map[string]interface{}) (*ConfigCLI, error) {
+	data, err := yaml.Marshal(configData)
+	if err != nil {
+		return nil, err
+	}
+
+	var config ConfigCLI
+	if err := yaml.UnmarshalStrict(data, &config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
+// unmarshalConfigDownload unmarshals a config map into a ConfigDownload struct
+func unmarshalConfigDownload(configData map[string]interface{}) (*ConfigDownload, error) {
+	data, err := yaml.Marshal(configData)
+	if err != nil {
+		return nil, err
+	}
+
+	var config ConfigDownload
+	if err := yaml.UnmarshalStrict(data, &config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
+// unmarshalConfigPostrender unmarshals a config map into a ConfigPostrender struct
+func unmarshalConfigPostrender(configData map[string]interface{}) (*ConfigPostrender, error) {
+	data, err := yaml.Marshal(configData)
+	if err != nil {
+		return nil, err
+	}
+
+	var config ConfigPostrender
+	if err := yaml.UnmarshalStrict(data, &config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
+// createConfigCLIFromLegacy creates a ConfigCLI from legacy plugin fields
+func createConfigCLIFromLegacy(raw map[string]interface{}) (*ConfigCLI, error) {
+	legacyFields := map[string]interface{}{
+		"platformCommand": raw["platformCommand"],
+		"command":         raw["command"],
+		"ignoreFlags":     raw["ignoreFlags"],
+		"platformHooks":   raw["platformHooks"],
+		"hooks":           raw["hooks"],
+	}
+
+	data, err := yaml.Marshal(legacyFields)
+	if err != nil {
+		return nil, err
+	}
+
+	var config ConfigCLI
+	if err := yaml.UnmarshalStrict(data, &config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
+// createConfigDownloadFromLegacy creates a ConfigDownload from legacy plugin fields
+func createConfigDownloadFromLegacy(raw map[string]interface{}) (*ConfigDownload, error) {
+	legacyFields := map[string]interface{}{
+		"downloaders":     raw["downloaders"],
+		"platformCommand": raw["platformCommand"],
+		"command":         raw["command"],
+	}
+
+	data, err := yaml.Marshal(legacyFields)
+	if err != nil {
+		return nil, err
+	}
+
+	var config ConfigDownload
+	if err := yaml.UnmarshalStrict(data, &config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
+// createConfigPostrenderFromLegacy creates a ConfigPostrender from legacy plugin fields
+func createConfigPostrenderFromLegacy(raw map[string]interface{}) (*ConfigPostrender, error) {
+	legacyFields := map[string]interface{}{
+		"platformCommand": raw["platformCommand"],
+		"command":         raw["command"],
+	}
+
+	data, err := yaml.Marshal(legacyFields)
+	if err != nil {
+		return nil, err
+	}
+
+	var config ConfigPostrender
+	if err := yaml.UnmarshalStrict(data, &config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
 }
 
 // LoadAll loads all plugins found beneath the base directory.
