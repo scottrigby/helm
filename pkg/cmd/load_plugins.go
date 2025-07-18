@@ -71,8 +71,10 @@ func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 			usage = meta.Usage
 			description = meta.Description
 		case *plugin.MetadataV1:
-			usage = meta.Usage
-			description = meta.Description
+			if config, ok := meta.Config.(*plugin.ConfigCLI); ok {
+				usage = config.Usage
+				description = config.Description
+			}
 		default:
 			continue // Skip unsupported plugin types
 		}
@@ -335,7 +337,9 @@ func pluginDynamicComp(plug plugin.Plugin, cmd *cobra.Command, args []string, to
 	case *plugin.MetadataLegacy:
 		ignoreFlags = meta.IgnoreFlags
 	case *plugin.MetadataV1:
-		ignoreFlags = meta.IgnoreFlags
+		if config, ok := meta.Config.(*plugin.ConfigCLI); ok {
+			ignoreFlags = config.IgnoreFlags
+		}
 	default:
 		// This case should ideally not be reached if loadPlugins correctly filters plugins
 		// but as a fallback, we can return an error or a default directive.

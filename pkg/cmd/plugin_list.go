@@ -49,7 +49,9 @@ func newPluginListCmd(out io.Writer) *cobra.Command {
 				switch m := metadata.(type) {
 				case *plugin.MetadataV1:
 					version = m.Version
-					description = m.Description
+					if config, ok := m.Config.(*plugin.ConfigCLI); ok {
+						description = config.Description
+					}
 				case *plugin.MetadataLegacy:
 					version = m.Version
 					description = m.Description
@@ -96,7 +98,9 @@ func compListPlugins(_ string, ignoredPluginNames []string) []string {
 			var usage string
 			switch m := metadata.(type) {
 			case *plugin.MetadataV1:
-				usage = m.Usage
+				if config, ok := m.Config.(*plugin.ConfigCLI); ok {
+					usage = config.Usage
+				}
 			case *plugin.MetadataLegacy:
 				usage = m.Usage
 			}

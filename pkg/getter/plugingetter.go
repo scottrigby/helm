@@ -45,7 +45,9 @@ func collectPlugins(settings *cli.EnvSettings) (Providers, error) {
 			}
 		case "v1":
 			if metadata, ok := p.GetMetadata().(*plugin.MetadataV1); ok {
-				downloaders = metadata.Downloaders
+				if config, ok := metadata.Config.(*plugin.ConfigDownload); ok {
+					downloaders = config.Downloaders
+				}
 			}
 		}
 

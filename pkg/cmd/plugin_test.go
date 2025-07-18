@@ -115,7 +115,7 @@ func TestLoadPlugins(t *testing.T) {
 		{"env", "env stuff", "show the env", "env\n", []string{}, 0},
 		{"exitwith", "exitwith code", "This exits with the specified exit code", "", []string{"2"}, 2},
 		{"fullenv", "show env vars", "show all env vars", envs + "\n", []string{}, 0},
-		{"postrender", "usage", "test postrender plugin type", "", []string{}, 0},
+		{"postrender", "the \"postrender\" plugin", "", "", []string{}, 0},
 	}
 
 	plugins := cmd.Commands()
