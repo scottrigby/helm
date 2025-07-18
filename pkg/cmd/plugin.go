@@ -82,6 +82,11 @@ func runHook(p plugin.Plugin, event string) error {
 		return fmt.Errorf("unsupported plugin metadata type for hook execution")
 	}
 
+	// If no hook commands are defined, just return successfully
+	if len(cmds) == 0 {
+		return nil
+	}
+
 	main, argv, err := plugin.PrepareCommands(cmds, expandArgs, []string{})
 	if err != nil {
 		return err
