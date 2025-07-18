@@ -16,8 +16,10 @@ limitations under the License.
 package plugin // import "helm.sh/helm/v4/pkg/plugin"
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -49,20 +51,26 @@ type PlatformCommand struct {
 	Args            []string `json:"args"`
 }
 
-// Config interface defines the methods that all plugin type configurations must implement
-type Config interface {
-	GetType() string
-	Validate() error
+// Runtime interface defines the methods that all plugin runtimes must implement
+type Runtime interface {
+	Invoke(in *bytes.Buffer, out *bytes.Buffer) error
 }
 
-// ConfigCLI represents the configuration for CLI plugins
-type ConfigCLI struct {
+// RuntimeConfig interface defines the methods that all runtime configurations must implement
+type RuntimeConfig interface {
+	GetRuntimeType() string
+	Validate() error
+	CreateRuntime(pluginDir string, pluginName string) (Runtime, error)
+}
+
+// RuntimeConfigSubprocess represents configuration for subprocess runtime
+type RuntimeConfigSubprocess struct {
 	// PlatformCommand is the plugin command, with a platform selector and support for args.
 	PlatformCommand []PlatformCommand `json:"platformCommand"`
 	// Command is the plugin command, as a single string.
 	// DEPRECATED: Use PlatformCommand instead. Remove in Helm 4.
 	Command string `json:"command"`
-	// IgnoreFlags ignores any flags passed in from Helm
+	// IgnoreFlags ignores any flags passed in from Helm (CLI plugins only)
 	IgnoreFlags bool `json:"ignoreFlags"`
 	// PlatformHooks are commands that will run on plugin events, with a platform selector and support for args.
 	PlatformHooks PlatformHooks `json:"platformHooks"`
@@ -71,25 +79,174 @@ type ConfigCLI struct {
 	Hooks Hooks `json:"hooks"`
 }
 
+// RuntimeConfigWasm represents configuration for WASM runtime
+type RuntimeConfigWasm struct {
+	// WasmModule is the path to the WASM module file
+	WasmModule string `json:"wasmModule"`
+	// HostFunctions are the host functions to make available to the WASM module
+	HostFunctions []string `json:"hostFunctions"`
+	// MemorySettings configure WASM memory limits
+	MemorySettings WasmMemorySettings `json:"memorySettings"`
+	// AllowedHosts are the hosts that the WASM module is allowed to connect to
+	AllowedHosts []string `json:"allowedHosts"`
+	// AllowedPaths are the file system paths that the WASM module is allowed to access
+	AllowedPaths []string `json:"allowedPaths"`
+}
+
+// WasmMemorySettings configure WASM memory limits
+type WasmMemorySettings struct {
+	InitialPages int `json:"initialPages"`
+	MaxPages     int `json:"maxPages"`
+}
+
+// GetRuntimeType implementations
+func (r *RuntimeConfigSubprocess) GetRuntimeType() string { return "subprocess" }
+func (r *RuntimeConfigWasm) GetRuntimeType() string       { return "wasm" }
+
+// Validate implementations for RuntimeConfig types
+func (r *RuntimeConfigSubprocess) Validate() error {
+	if len(r.PlatformCommand) > 0 && len(r.Command) > 0 {
+		return fmt.Errorf("both platformCommand and command are set")
+	}
+	if len(r.PlatformHooks) > 0 && len(r.Hooks) > 0 {
+		return fmt.Errorf("both platformHooks and hooks are set")
+	}
+	return nil
+}
+
+func (r *RuntimeConfigWasm) Validate() error {
+	if r.WasmModule == "" {
+		return fmt.Errorf("wasmModule is required for WASM runtime")
+	}
+	if r.MemorySettings.InitialPages < 0 {
+		return fmt.Errorf("initialPages must be non-negative")
+	}
+	if r.MemorySettings.MaxPages < 0 {
+		return fmt.Errorf("maxPages must be non-negative")
+	}
+	if r.MemorySettings.MaxPages > 0 && r.MemorySettings.InitialPages > r.MemorySettings.MaxPages {
+		return fmt.Errorf("initialPages cannot exceed maxPages")
+	}
+	return nil
+}
+
+// RuntimeSubprocess implements the Runtime interface for subprocess execution
+type RuntimeSubprocess struct {
+	config         *RuntimeConfigSubprocess
+	pluginDir      string
+	pluginName     string
+	extraArgs      []string
+	settings       *cli.EnvSettings
+}
+
+// SetExtraArgs sets the extra arguments for the subprocess runtime
+func (r *RuntimeSubprocess) SetExtraArgs(args []string) {
+	r.extraArgs = args
+}
+
+// SetSettings sets the environment settings for the subprocess runtime
+func (r *RuntimeSubprocess) SetSettings(settings *cli.EnvSettings) {
+	r.settings = settings
+}
+
+// RuntimeWasm implements the Runtime interface for WASM execution
+type RuntimeWasm struct {
+	config         *RuntimeConfigWasm
+	pluginDir      string
+	pluginName     string
+	settings       *cli.EnvSettings
+}
+
+// CreateRuntime implementations for RuntimeConfig types
+func (r *RuntimeConfigSubprocess) CreateRuntime(pluginDir string, pluginName string) (Runtime, error) {
+	return &RuntimeSubprocess{
+		config:    r,
+		pluginDir: pluginDir,
+		pluginName: pluginName,
+		settings:  cli.New(),
+	}, nil
+}
+
+func (r *RuntimeConfigWasm) CreateRuntime(pluginDir string, pluginName string) (Runtime, error) {
+	return &RuntimeWasm{
+		config:    r,
+		pluginDir: pluginDir,
+		pluginName: pluginName,
+		settings:  cli.New(),
+	}, nil
+}
+
+// Invoke implementations for Runtime types
+func (r *RuntimeSubprocess) Invoke(in *bytes.Buffer, out *bytes.Buffer) error {
+	// Setup plugin environment
+	SetupPluginEnv(r.settings, r.pluginName, r.pluginDir)
+	
+	// Prepare command based on runtime configuration
+	var extraArgsIn []string
+	if r.config.IgnoreFlags {
+		extraArgsIn = []string{}
+	} else {
+		extraArgsIn = r.extraArgs
+	}
+	
+	cmds := r.config.PlatformCommand
+	if len(cmds) == 0 && len(r.config.Command) > 0 {
+		cmds = []PlatformCommand{{Command: r.config.Command}}
+	}
+	
+	main, args, err := PrepareCommands(cmds, true, extraArgsIn)
+	if err != nil {
+		return fmt.Errorf("failed to prepare command: %w", err)
+	}
+	
+	// Execute the command
+	cmd := exec.Command(main, args...)
+	cmd.Dir = r.pluginDir
+	cmd.Stdin = in
+	cmd.Stdout = out
+	cmd.Stderr = out
+	
+	return cmd.Run()
+}
+
+func (r *RuntimeWasm) Invoke(in *bytes.Buffer, out *bytes.Buffer) error {
+	// TODO: Implement WASM runtime execution
+	// This will include:
+	// - Loading the WASM module from r.config.WasmModule
+	// - Setting up host functions from r.config.HostFunctions
+	// - Configuring memory settings from r.config.MemorySettings
+	// - Applying security constraints (AllowedHosts, AllowedPaths)
+	// - Executing the WASM module with input from 'in' buffer
+	// - Writing output to 'out' buffer
+	return fmt.Errorf("WASM runtime not yet implemented")
+}
+
+// Config interface defines the methods that all plugin type configurations must implement
+type Config interface {
+	GetType() string
+	GetRuntimeConfig() RuntimeConfig
+	Validate() error
+}
+
+// ConfigCLI represents the configuration for CLI plugins
+type ConfigCLI struct {
+	// RuntimeConfig contains the runtime-specific configuration
+	RuntimeConfig RuntimeConfig `json:"runtime"`
+}
+
 // ConfigDownload represents the configuration for download plugins
 type ConfigDownload struct {
 	// Downloaders field is used if the plugin supply downloader mechanism
 	// for special protocols.
 	Downloaders []Downloaders `json:"downloaders"`
-	// PlatformCommand is the plugin command for installation, with a platform selector and support for args.
-	PlatformCommand []PlatformCommand `json:"platformCommand"`
-	// Command is the plugin command for installation, as a single string.
-	// DEPRECATED: Use PlatformCommand instead. Remove in Helm 4.
-	Command string `json:"command"`
+	// RuntimeConfig contains the runtime-specific configuration
+	RuntimeConfig RuntimeConfig `json:"runtime"`
 }
 
 // ConfigPostrender represents the configuration for postrender plugins
 type ConfigPostrender struct {
-	// PlatformCommand is the plugin command, with a platform selector and support for args.
-	PlatformCommand []PlatformCommand `json:"platformCommand"`
-	// Command is the plugin command, as a single string.
-	// DEPRECATED: Use PlatformCommand instead. Remove in Helm 4.
-	Command string `json:"command"`
+	// RuntimeConfig contains the runtime-specific configuration
+	RuntimeConfig RuntimeConfig `json:"runtime"`
 }
 
 // GetType implementations for Config types
@@ -97,20 +254,22 @@ func (c *ConfigCLI) GetType() string        { return "cli" }
 func (c *ConfigDownload) GetType() string   { return "download" }
 func (c *ConfigPostrender) GetType() string { return "postrender" }
 
+// GetRuntimeConfig implementations for Config types
+func (c *ConfigCLI) GetRuntimeConfig() RuntimeConfig        { return c.RuntimeConfig }
+func (c *ConfigDownload) GetRuntimeConfig() RuntimeConfig   { return c.RuntimeConfig }
+func (c *ConfigPostrender) GetRuntimeConfig() RuntimeConfig { return c.RuntimeConfig }
+
 // Validate implementations for Config types
 func (c *ConfigCLI) Validate() error {
-	if len(c.PlatformCommand) > 0 && len(c.Command) > 0 {
-		return fmt.Errorf("both platformCommand and command are set")
+	if c.RuntimeConfig == nil {
+		return fmt.Errorf("runtime configuration is required")
 	}
-	if len(c.PlatformHooks) > 0 && len(c.Hooks) > 0 {
-		return fmt.Errorf("both platformHooks and hooks are set")
-	}
-	return nil
+	return c.RuntimeConfig.Validate()
 }
 
 func (c *ConfigDownload) Validate() error {
-	if len(c.PlatformCommand) > 0 && len(c.Command) > 0 {
-		return fmt.Errorf("both platformCommand and command are set")
+	if c.RuntimeConfig == nil {
+		return fmt.Errorf("runtime configuration is required")
 	}
 	if len(c.Downloaders) > 0 {
 		for i, downloader := range c.Downloaders {
@@ -127,14 +286,14 @@ func (c *ConfigDownload) Validate() error {
 			}
 		}
 	}
-	return nil
+	return c.RuntimeConfig.Validate()
 }
 
 func (c *ConfigPostrender) Validate() error {
-	if len(c.PlatformCommand) > 0 && len(c.Command) > 0 {
-		return fmt.Errorf("both platformCommand and command are set")
+	if c.RuntimeConfig == nil {
+		return fmt.Errorf("runtime configuration is required")
 	}
-	return nil
+	return c.RuntimeConfig.Validate()
 }
 
 // Plugin interface defines the common methods that all plugin versions must implement
@@ -178,7 +337,7 @@ type MetadataLegacy struct {
 
 	// Hooks are commands that will run on plugin events, as a single string.
 	// DEPRECATED: Use PlatformHooks instead. Remove in Helm 4.
-	Hooks Hooks
+	Hooks Hooks `json:"hooks"`
 
 	// Downloaders field is used if the plugin supply downloader mechanism
 	// for special protocols.
@@ -251,26 +410,32 @@ func (p *PluginLegacy) GetConfig() Config {
 	switch p.GetType() {
 	case "download":
 		return &ConfigDownload{
-			Downloaders:     p.MetadataLegacy.Downloaders,
-			PlatformCommand: p.MetadataLegacy.PlatformCommand,
-			Command:         p.MetadataLegacy.Command,
+			Downloaders: p.MetadataLegacy.Downloaders,
+			RuntimeConfig: &RuntimeConfigSubprocess{
+				PlatformCommand: p.MetadataLegacy.PlatformCommand,
+				Command:         p.MetadataLegacy.Command,
+			},
 		}
 	case "cli":
 		return &ConfigCLI{
-			PlatformCommand: p.MetadataLegacy.PlatformCommand,
-			Command:         p.MetadataLegacy.Command,
-			IgnoreFlags:     p.MetadataLegacy.IgnoreFlags,
-			PlatformHooks:   p.MetadataLegacy.PlatformHooks,
-			Hooks:           p.MetadataLegacy.Hooks,
+			RuntimeConfig: &RuntimeConfigSubprocess{
+				PlatformCommand: p.MetadataLegacy.PlatformCommand,
+				Command:         p.MetadataLegacy.Command,
+				IgnoreFlags:     p.MetadataLegacy.IgnoreFlags,
+				PlatformHooks:   p.MetadataLegacy.PlatformHooks,
+				Hooks:           p.MetadataLegacy.Hooks,
+			},
 		}
 	default:
 		// Return a basic CLI config as fallback
 		return &ConfigCLI{
-			PlatformCommand: p.MetadataLegacy.PlatformCommand,
-			Command:         p.MetadataLegacy.Command,
-			IgnoreFlags:     p.MetadataLegacy.IgnoreFlags,
-			PlatformHooks:   p.MetadataLegacy.PlatformHooks,
-			Hooks:           p.MetadataLegacy.Hooks,
+			RuntimeConfig: &RuntimeConfigSubprocess{
+				PlatformCommand: p.MetadataLegacy.PlatformCommand,
+				Command:         p.MetadataLegacy.Command,
+				IgnoreFlags:     p.MetadataLegacy.IgnoreFlags,
+				PlatformHooks:   p.MetadataLegacy.PlatformHooks,
+				Hooks:           p.MetadataLegacy.Hooks,
+			},
 		}
 	}
 }
@@ -300,33 +465,28 @@ func (p *PluginV1) GetConfig() Config        { return p.MetadataV1.Config }
 
 func (p *PluginV1) PrepareCommand(extraArgs []string) (string, []string, error) {
 	config := p.GetConfig()
-	var extraArgsIn []string
-	var cmds []PlatformCommand
-	var command string
-
-	// Type-specific logic for preparing commands
-	switch cfg := config.(type) {
-	case *ConfigCLI:
-		if !cfg.IgnoreFlags {
+	runtimeConfig := config.GetRuntimeConfig()
+	
+	// Only subprocess runtime uses PrepareCommand
+	if subprocessConfig, ok := runtimeConfig.(*RuntimeConfigSubprocess); ok {
+		var extraArgsIn []string
+		
+		// For CLI plugins, check ignore flags
+		if config.GetType() == "cli" && subprocessConfig.IgnoreFlags {
+			extraArgsIn = []string{}
+		} else {
 			extraArgsIn = extraArgs
 		}
-		cmds = cfg.PlatformCommand
-		command = cfg.Command
-	case *ConfigDownload:
-		cmds = cfg.PlatformCommand
-		command = cfg.Command
-	case *ConfigPostrender:
-		cmds = cfg.PlatformCommand
-		command = cfg.Command
-	default:
-		return "", nil, fmt.Errorf("unsupported plugin config type")
+		
+		cmds := subprocessConfig.PlatformCommand
+		if len(cmds) == 0 && len(subprocessConfig.Command) > 0 {
+			cmds = []PlatformCommand{{Command: subprocessConfig.Command}}
+		}
+		
+		return PrepareCommands(cmds, true, extraArgsIn)
 	}
-
-	if len(cmds) == 0 && len(command) > 0 {
-		cmds = []PlatformCommand{{Command: command}}
-	}
-
-	return PrepareCommands(cmds, true, extraArgsIn)
+	
+	return "", nil, fmt.Errorf("PrepareCommand only supported for subprocess runtime")
 }
 
 func (p *PluginV1) Validate() error {
@@ -618,12 +778,62 @@ func LoadDir(dirname string) (Plugin, error) {
 
 // unmarshalConfigCLI unmarshals a config map into a ConfigCLI struct
 func unmarshalConfigCLI(configData map[string]interface{}) (*ConfigCLI, error) {
-	data, err := yaml.Marshal(configData)
+	// Extract runtime config
+	runtimeData, ok := configData["runtime"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("runtime configuration is required")
+	}
+
+	// Determine runtime type (default to subprocess for backward compatibility)
+	runtimeType := "subprocess"
+	if rt, ok := runtimeData["type"].(string); ok {
+		runtimeType = rt
+	}
+
+	var runtimeConfig RuntimeConfig
+	var err error
+
+	switch runtimeType {
+	case "subprocess":
+		runtimeConfig, err = unmarshalRuntimeConfigSubprocess(runtimeData)
+	case "wasm":
+		runtimeConfig, err = unmarshalRuntimeConfigWasm(runtimeData)
+	default:
+		return nil, fmt.Errorf("unsupported runtime type: %s", runtimeType)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal runtime config: %w", err)
+	}
+
+	return &ConfigCLI{
+		RuntimeConfig: runtimeConfig,
+	}, nil
+}
+
+// unmarshalRuntimeConfigSubprocess unmarshals a runtime config map into a RuntimeConfigSubprocess struct
+func unmarshalRuntimeConfigSubprocess(runtimeData map[string]interface{}) (*RuntimeConfigSubprocess, error) {
+	data, err := yaml.Marshal(runtimeData)
 	if err != nil {
 		return nil, err
 	}
 
-	var config ConfigCLI
+	var config RuntimeConfigSubprocess
+	if err := yaml.UnmarshalStrict(data, &config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
+// unmarshalRuntimeConfigWasm unmarshals a runtime config map into a RuntimeConfigWasm struct
+func unmarshalRuntimeConfigWasm(runtimeData map[string]interface{}) (*RuntimeConfigWasm, error) {
+	data, err := yaml.Marshal(runtimeData)
+	if err != nil {
+		return nil, err
+	}
+
+	var config RuntimeConfigWasm
 	if err := yaml.UnmarshalStrict(data, &config); err != nil {
 		return nil, err
 	}
@@ -633,32 +843,85 @@ func unmarshalConfigCLI(configData map[string]interface{}) (*ConfigCLI, error) {
 
 // unmarshalConfigDownload unmarshals a config map into a ConfigDownload struct
 func unmarshalConfigDownload(configData map[string]interface{}) (*ConfigDownload, error) {
-	data, err := yaml.Marshal(configData)
+	// Extract runtime config
+	runtimeData, ok := configData["runtime"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("runtime configuration is required")
+	}
+
+	// Determine runtime type (default to subprocess for backward compatibility)
+	runtimeType := "subprocess"
+	if rt, ok := runtimeData["type"].(string); ok {
+		runtimeType = rt
+	}
+
+	var runtimeConfig RuntimeConfig
+	var err error
+
+	switch runtimeType {
+	case "subprocess":
+		runtimeConfig, err = unmarshalRuntimeConfigSubprocess(runtimeData)
+	case "wasm":
+		runtimeConfig, err = unmarshalRuntimeConfigWasm(runtimeData)
+	default:
+		return nil, fmt.Errorf("unsupported runtime type: %s", runtimeType)
+	}
+
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to unmarshal runtime config: %w", err)
 	}
 
-	var config ConfigDownload
-	if err := yaml.UnmarshalStrict(data, &config); err != nil {
-		return nil, err
+	// Extract downloaders
+	var downloaders []Downloaders
+	if downloadersRaw, ok := configData["downloaders"]; ok {
+		downloadersData, err := yaml.Marshal(downloadersRaw)
+		if err != nil {
+			return nil, err
+		}
+		if err := yaml.UnmarshalStrict(downloadersData, &downloaders); err != nil {
+			return nil, err
+		}
 	}
 
-	return &config, nil
+	return &ConfigDownload{
+		Downloaders:   downloaders,
+		RuntimeConfig: runtimeConfig,
+	}, nil
 }
 
 // unmarshalConfigPostrender unmarshals a config map into a ConfigPostrender struct
 func unmarshalConfigPostrender(configData map[string]interface{}) (*ConfigPostrender, error) {
-	data, err := yaml.Marshal(configData)
+	// Extract runtime config
+	runtimeData, ok := configData["runtime"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("runtime configuration is required")
+	}
+
+	// Determine runtime type (default to subprocess for backward compatibility)
+	runtimeType := "subprocess"
+	if rt, ok := runtimeData["type"].(string); ok {
+		runtimeType = rt
+	}
+
+	var runtimeConfig RuntimeConfig
+	var err error
+
+	switch runtimeType {
+	case "subprocess":
+		runtimeConfig, err = unmarshalRuntimeConfigSubprocess(runtimeData)
+	case "wasm":
+		runtimeConfig, err = unmarshalRuntimeConfigWasm(runtimeData)
+	default:
+		return nil, fmt.Errorf("unsupported runtime type: %s", runtimeType)
+	}
+
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to unmarshal runtime config: %w", err)
 	}
 
-	var config ConfigPostrender
-	if err := yaml.UnmarshalStrict(data, &config); err != nil {
-		return nil, err
-	}
-
-	return &config, nil
+	return &ConfigPostrender{
+		RuntimeConfig: runtimeConfig,
+	}, nil
 }
 
 // createConfigCLIFromLegacy creates a ConfigCLI from legacy plugin fields
@@ -676,33 +939,50 @@ func createConfigCLIFromLegacy(raw map[string]interface{}) (*ConfigCLI, error) {
 		return nil, err
 	}
 
-	var config ConfigCLI
-	if err := yaml.UnmarshalStrict(data, &config); err != nil {
+	var runtimeConfig RuntimeConfigSubprocess
+	if err := yaml.UnmarshalStrict(data, &runtimeConfig); err != nil {
 		return nil, err
 	}
 
-	return &config, nil
+	return &ConfigCLI{
+		RuntimeConfig: &runtimeConfig,
+	}, nil
 }
 
 // createConfigDownloadFromLegacy creates a ConfigDownload from legacy plugin fields
 func createConfigDownloadFromLegacy(raw map[string]interface{}) (*ConfigDownload, error) {
-	legacyFields := map[string]interface{}{
-		"downloaders":     raw["downloaders"],
+	// Create runtime config from legacy fields
+	runtimeFields := map[string]interface{}{
 		"platformCommand": raw["platformCommand"],
 		"command":         raw["command"],
 	}
 
-	data, err := yaml.Marshal(legacyFields)
+	runtimeData, err := yaml.Marshal(runtimeFields)
 	if err != nil {
 		return nil, err
 	}
 
-	var config ConfigDownload
-	if err := yaml.UnmarshalStrict(data, &config); err != nil {
+	var runtimeConfig RuntimeConfigSubprocess
+	if err := yaml.UnmarshalStrict(runtimeData, &runtimeConfig); err != nil {
 		return nil, err
 	}
 
-	return &config, nil
+	// Create downloaders
+	var downloaders []Downloaders
+	if downloadersRaw, ok := raw["downloaders"]; ok {
+		downloadersData, err := yaml.Marshal(downloadersRaw)
+		if err != nil {
+			return nil, err
+		}
+		if err := yaml.UnmarshalStrict(downloadersData, &downloaders); err != nil {
+			return nil, err
+		}
+	}
+
+	return &ConfigDownload{
+		Downloaders:   downloaders,
+		RuntimeConfig: &runtimeConfig,
+	}, nil
 }
 
 // createConfigPostrenderFromLegacy creates a ConfigPostrender from legacy plugin fields
@@ -717,12 +997,14 @@ func createConfigPostrenderFromLegacy(raw map[string]interface{}) (*ConfigPostre
 		return nil, err
 	}
 
-	var config ConfigPostrender
-	if err := yaml.UnmarshalStrict(data, &config); err != nil {
+	var runtimeConfig RuntimeConfigSubprocess
+	if err := yaml.UnmarshalStrict(data, &runtimeConfig); err != nil {
 		return nil, err
 	}
 
-	return &config, nil
+	return &ConfigPostrender{
+		RuntimeConfig: &runtimeConfig,
+	}, nil
 }
 
 // LoadAll loads all plugins found beneath the base directory.

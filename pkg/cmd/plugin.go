@@ -64,12 +64,19 @@ func runHook(p plugin.Plugin, event string) error {
 			}
 		}
 	case *plugin.MetadataV1:
-		cmds = meta.PlatformHooks[event]
-		if len(cmds) == 0 && len(meta.Hooks) > 0 {
-			cmd := meta.Hooks[event]
-			if len(cmd) > 0 {
-				cmds = []plugin.PlatformCommand{{Command: "sh", Args: []string{"-c", cmd}}}
-				expandArgs = false
+		// V1 plugins store hooks in runtime config, not directly in metadata
+		config := p.GetConfig()
+		if config != nil {
+			runtimeConfig := config.GetRuntimeConfig()
+			if subprocessConfig, ok := runtimeConfig.(*plugin.RuntimeConfigSubprocess); ok {
+				cmds = subprocessConfig.PlatformHooks[event]
+				if len(cmds) == 0 && len(subprocessConfig.Hooks) > 0 {
+					cmd := subprocessConfig.Hooks[event]
+					if len(cmd) > 0 {
+						cmds = []plugin.PlatformCommand{{Command: "sh", Args: []string{"-c", cmd}}}
+						expandArgs = false
+					}
+				}
 			}
 		}
 	default:
@@ -78,7 +85,7 @@ func runHook(p plugin.Plugin, event string) error {
 
 	main, argv, err := plugin.PrepareCommands(cmds, expandArgs, []string{})
 	if err != nil {
-		return nil
+		return err
 	}
 
 	prog := exec.Command(main, argv...)

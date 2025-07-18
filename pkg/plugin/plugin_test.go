@@ -41,12 +41,14 @@ func TestPrepareCommand(t *testing.T) {
 			Type:    "cli",
 			APIVersion: "v1",
 			Config: &ConfigCLI{
-				Command: "echo \"error\"",
-				PlatformCommand: []PlatformCommand{
-					{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
-					{OperatingSystem: runtime.GOOS, Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
-					{OperatingSystem: runtime.GOOS, Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
-					{OperatingSystem: runtime.GOOS, Architecture: runtime.GOARCH, Command: cmdMain, Args: cmdArgs},
+				RuntimeConfig: &RuntimeConfigSubprocess{
+					Command: "echo \"error\"",
+					PlatformCommand: []PlatformCommand{
+						{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+						{OperatingSystem: runtime.GOOS, Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+						{OperatingSystem: runtime.GOOS, Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+						{OperatingSystem: runtime.GOOS, Architecture: runtime.GOARCH, Command: cmdMain, Args: cmdArgs},
+					},
 				},
 			},
 		},
@@ -76,12 +78,14 @@ func TestPrepareCommandExtraArgs(t *testing.T) {
 			Type:    "cli",
 			APIVersion: "v1",
 			Config: &ConfigCLI{
-				Command: "echo \"error\"",
-				PlatformCommand: []PlatformCommand{
-					{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
-					{OperatingSystem: runtime.GOOS, Architecture: runtime.GOARCH, Command: cmdMain, Args: cmdArgs},
-					{OperatingSystem: runtime.GOOS, Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
-					{OperatingSystem: runtime.GOOS, Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+				RuntimeConfig: &RuntimeConfigSubprocess{
+					Command: "echo \"error\"",
+					PlatformCommand: []PlatformCommand{
+						{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+						{OperatingSystem: runtime.GOOS, Architecture: runtime.GOARCH, Command: cmdMain, Args: cmdArgs},
+						{OperatingSystem: runtime.GOOS, Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+						{OperatingSystem: runtime.GOOS, Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+					},
 				},
 			},
 		},
@@ -113,14 +117,16 @@ func TestPrepareCommandExtraArgsIgnored(t *testing.T) {
 			Type:    "cli",
 			APIVersion: "v1",
 			Config: &ConfigCLI{
-				Command: "echo \"error\"",
-				PlatformCommand: []PlatformCommand{
-					{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
-					{OperatingSystem: runtime.GOOS, Architecture: runtime.GOARCH, Command: cmdMain, Args: cmdArgs},
-					{OperatingSystem: runtime.GOOS, Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
-					{OperatingSystem: runtime.GOOS, Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+				RuntimeConfig: &RuntimeConfigSubprocess{
+					Command: "echo \"error\"",
+					PlatformCommand: []PlatformCommand{
+						{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+						{OperatingSystem: runtime.GOOS, Architecture: runtime.GOARCH, Command: cmdMain, Args: cmdArgs},
+						{OperatingSystem: runtime.GOOS, Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+						{OperatingSystem: runtime.GOOS, Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+					},
+					IgnoreFlags: true,
 				},
-				IgnoreFlags: true,
 			},
 		},
 	}
@@ -311,15 +317,17 @@ func TestLoadDir(t *testing.T) {
 		Usage:       "usage",
 		Description: "description",
 		Config: &ConfigCLI{
-			PlatformCommand: []PlatformCommand{
-				{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "${HELM_PLUGIN_DIR}/hello.sh"}},
-				{OperatingSystem: "windows", Architecture: "", Command: "pwsh", Args: []string{"-c", "${HELM_PLUGIN_DIR}/hello.ps1"}},
-			},
-			IgnoreFlags: true,
-			PlatformHooks: map[string][]PlatformCommand{
-				Install: {
-					{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"installing...\""}},
-					{OperatingSystem: "windows", Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"installing...\""}},
+			RuntimeConfig: &RuntimeConfigSubprocess{
+				PlatformCommand: []PlatformCommand{
+					{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "${HELM_PLUGIN_DIR}/hello.sh"}},
+					{OperatingSystem: "windows", Architecture: "", Command: "pwsh", Args: []string{"-c", "${HELM_PLUGIN_DIR}/hello.ps1"}},
+				},
+				IgnoreFlags: true,
+				PlatformHooks: map[string][]PlatformCommand{
+					Install: {
+						{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"installing...\""}},
+						{OperatingSystem: "windows", Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"installing...\""}},
+					},
 				},
 			},
 		},
@@ -356,12 +364,14 @@ func TestDownloader(t *testing.T) {
 		Usage:       "usage",
 		Description: "download something",
 		Config: &ConfigDownload{
-			Command: "echo Hello",
 			Downloaders: []Downloaders{
 				{
 					Protocols: []string{"myprotocol", "myprotocols"},
 					Command:   "echo Download",
 				},
+			},
+			RuntimeConfig: &RuntimeConfigSubprocess{
+				Command: "echo Hello",
 			},
 		},
 	}
@@ -390,9 +400,11 @@ func TestPostRenderer(t *testing.T) {
 		Usage:       "usage",
 		Description: "test postrender plugin type",
 		Config: &ConfigPostrender{
-			PlatformCommand: []PlatformCommand{
-				{
-					Command: "${HELM_PLUGIN_DIR}/sed-test.sh",
+			RuntimeConfig: &RuntimeConfigSubprocess{
+				PlatformCommand: []PlatformCommand{
+					{
+						Command: "${HELM_PLUGIN_DIR}/sed-test.sh",
+					},
 				},
 			},
 		},
@@ -580,43 +592,51 @@ func TestValidatePluginData(t *testing.T) {
 	// A mock plugin with no commands
 	mockNoCommand := mockPlugin("foo")
 	mockNoCommand.MetadataV1.Config = &ConfigCLI{
-		PlatformCommand: []PlatformCommand{},
-		PlatformHooks:   map[string][]PlatformCommand{},
+		RuntimeConfig: &RuntimeConfigSubprocess{
+			PlatformCommand: []PlatformCommand{},
+			PlatformHooks:   map[string][]PlatformCommand{},
+		},
 	}
 
 	// A mock plugin with legacy commands
 	mockLegacyCommand := mockPlugin("foo")
 	mockLegacyCommand.MetadataV1.Config = &ConfigCLI{
-		PlatformCommand: []PlatformCommand{},
-		Command:         "echo \"mock plugin\"",
-		PlatformHooks:   map[string][]PlatformCommand{},
-		Hooks: map[string]string{
-			Install: "echo installing...",
+		RuntimeConfig: &RuntimeConfigSubprocess{
+			PlatformCommand: []PlatformCommand{},
+			Command:         "echo \"mock plugin\"",
+			PlatformHooks:   map[string][]PlatformCommand{},
+			Hooks: map[string]string{
+				Install: "echo installing...",
+			},
 		},
 	}
 
 	// A mock plugin with a command also set
 	mockWithCommand := mockPlugin("foo")
 	mockWithCommand.MetadataV1.Config = &ConfigCLI{
-		PlatformCommand: []PlatformCommand{
-			{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"mock plugin\""}},
+		RuntimeConfig: &RuntimeConfigSubprocess{
+			PlatformCommand: []PlatformCommand{
+				{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"mock plugin\""}},
+			},
+			Command: "echo \"mock plugin\"",
 		},
-		Command: "echo \"mock plugin\"",
 	}
 
 	// A mock plugin with a hooks also set
 	mockWithHooks := mockPlugin("foo")
 	mockWithHooks.MetadataV1.Config = &ConfigCLI{
-		PlatformCommand: []PlatformCommand{
-			{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"mock plugin\""}},
-		},
-		PlatformHooks: map[string][]PlatformCommand{
-			Install: {
-				{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"installing...\""}},
+		RuntimeConfig: &RuntimeConfigSubprocess{
+			PlatformCommand: []PlatformCommand{
+				{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"mock plugin\""}},
 			},
-		},
-		Hooks: map[string]string{
-			Install: "echo installing...",
+			PlatformHooks: map[string][]PlatformCommand{
+				Install: {
+					{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"installing...\""}},
+				},
+			},
+			Hooks: map[string]string{
+				Install: "echo installing...",
+			},
 		},
 	}
 
@@ -669,14 +689,16 @@ func mockPlugin(name string) *PluginV1 {
 			Usage:       "Mock plugin",
 			Description: "Mock plugin for testing",
 			Config: &ConfigCLI{
-				PlatformCommand: []PlatformCommand{
-					{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"mock plugin\""}},
-					{OperatingSystem: "windows", Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"mock plugin\""}},
-				},
-				PlatformHooks: map[string][]PlatformCommand{
-					Install: {
-						{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"installing...\""}},
-						{OperatingSystem: "windows", Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"installing...\""}},
+				RuntimeConfig: &RuntimeConfigSubprocess{
+					PlatformCommand: []PlatformCommand{
+						{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"mock plugin\""}},
+						{OperatingSystem: "windows", Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"mock plugin\""}},
+					},
+					PlatformHooks: map[string][]PlatformCommand{
+						Install: {
+							{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"installing...\""}},
+							{OperatingSystem: "windows", Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"installing...\""}},
+						},
 					},
 				},
 			},
