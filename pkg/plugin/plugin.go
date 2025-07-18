@@ -697,123 +697,128 @@ func LoadDir(dirname string) (Plugin, error) {
 		return nil, fmt.Errorf("failed to parse plugin at %q: %w", pluginfile, err)
 	}
 
-	// Check if APIVersion is present and equals "v1"
-	if apiVersion, ok := raw["apiVersion"].(string); ok && apiVersion == "v1" {
-		// Load as V1 plugin with new structure
-		plug := &PluginV1{Dir: dirname}
+	// Check if APIVersion is present
+	if apiVersion, ok := raw["apiVersion"].(string); ok {
+		if apiVersion == "v1" {
+			// Load as V1 plugin with new structure
+			plug := &PluginV1{Dir: dirname}
 
-		// First, unmarshal the base metadata without the config and runtimeConfig fields
-		tempMeta := &struct {
-			APIVersion string `json:"apiVersion"`
-			Name       string `json:"name"`
-			Type       string `json:"type"`
-			Runtime    string `json:"runtime"`
-			Version    string `json:"version"`
-		}{}
+			// First, unmarshal the base metadata without the config and runtimeConfig fields
+			tempMeta := &struct {
+				APIVersion string `json:"apiVersion"`
+				Name       string `json:"name"`
+				Type       string `json:"type"`
+				Runtime    string `json:"runtime"`
+				Version    string `json:"version"`
+			}{}
 
-		if err := yaml.Unmarshal(data, tempMeta); err != nil {
-			return nil, fmt.Errorf("failed to load V1 plugin metadata at %q: %w", pluginfile, err)
-		}
-
-		// Default runtime to subprocess if not specified
-		if tempMeta.Runtime == "" {
-			tempMeta.Runtime = "subprocess"
-		}
-
-		// Create the MetadataV1 struct with base fields
-		plug.MetadataV1 = &MetadataV1{
-			APIVersion: tempMeta.APIVersion,
-			Name:       tempMeta.Name,
-			Type:       tempMeta.Type,
-			Runtime:    tempMeta.Runtime,
-			Version:    tempMeta.Version,
-		}
-
-		// Extract the config section based on plugin type
-		if configData, ok := raw["config"].(map[string]interface{}); ok {
-			var config Config
-			var err error
-
-			switch tempMeta.Type {
-			case "cli":
-				config, err = unmarshalConfigCLI(configData)
-			case "download":
-				config, err = unmarshalConfigDownload(configData)
-			case "postrender":
-				config, err = unmarshalConfigPostrender(configData)
-			default:
-				return nil, fmt.Errorf("unsupported plugin type: %s", tempMeta.Type)
+			if err := yaml.Unmarshal(data, tempMeta); err != nil {
+				return nil, fmt.Errorf("failed to load V1 plugin metadata at %q: %w", pluginfile, err)
 			}
 
-			if err != nil {
-				return nil, fmt.Errorf("failed to unmarshal config for %s plugin at %q: %w", tempMeta.Type, pluginfile, err)
+			// Default runtime to subprocess if not specified
+			if tempMeta.Runtime == "" {
+				tempMeta.Runtime = "subprocess"
 			}
 
-			plug.MetadataV1.Config = config
+			// Create the MetadataV1 struct with base fields
+			plug.MetadataV1 = &MetadataV1{
+				APIVersion: tempMeta.APIVersion,
+				Name:       tempMeta.Name,
+				Type:       tempMeta.Type,
+				Runtime:    tempMeta.Runtime,
+				Version:    tempMeta.Version,
+			}
+
+			// Extract the config section based on plugin type
+			if configData, ok := raw["config"].(map[string]interface{}); ok {
+				var config Config
+				var err error
+
+				switch tempMeta.Type {
+				case "cli":
+					config, err = unmarshalConfigCLI(configData)
+				case "download":
+					config, err = unmarshalConfigDownload(configData)
+				case "postrender":
+					config, err = unmarshalConfigPostrender(configData)
+				default:
+					return nil, fmt.Errorf("unsupported plugin type: %s", tempMeta.Type)
+				}
+
+				if err != nil {
+					return nil, fmt.Errorf("failed to unmarshal config for %s plugin at %q: %w", tempMeta.Type, pluginfile, err)
+				}
+
+				plug.MetadataV1.Config = config
+			} else {
+				// Backward compatibility: create config from legacy fields
+				var config Config
+				var err error
+
+				switch tempMeta.Type {
+				case "cli":
+					config, err = createConfigCLIFromLegacy(raw)
+				case "download":
+					config, err = createConfigDownloadFromLegacy(raw)
+				case "postrender":
+					config, err = createConfigPostrenderFromLegacy(raw)
+				default:
+					return nil, fmt.Errorf("unsupported plugin type: %s", tempMeta.Type)
+				}
+
+				if err != nil {
+					return nil, fmt.Errorf("failed to create config from legacy fields for %s plugin at %q: %w", tempMeta.Type, pluginfile, err)
+				}
+
+				plug.MetadataV1.Config = config
+			}
+
+			// Extract the runtimeConfig section based on runtime type
+			if runtimeConfigData, ok := raw["runtimeConfig"].(map[string]interface{}); ok {
+				var runtimeConfig RuntimeConfig
+				var err error
+
+				switch tempMeta.Runtime {
+				case "subprocess":
+					runtimeConfig, err = unmarshalRuntimeConfigSubprocess(runtimeConfigData)
+				case "wasm":
+					runtimeConfig, err = unmarshalRuntimeConfigWasm(runtimeConfigData)
+				default:
+					return nil, fmt.Errorf("unsupported runtime type: %s", tempMeta.Runtime)
+				}
+
+				if err != nil {
+					return nil, fmt.Errorf("failed to unmarshal runtimeConfig for %s runtime at %q: %w", tempMeta.Runtime, pluginfile, err)
+				}
+
+				plug.MetadataV1.RuntimeConfig = runtimeConfig
+			} else {
+				// Backward compatibility: create runtimeConfig from legacy fields
+				var runtimeConfig RuntimeConfig
+				var err error
+
+				switch tempMeta.Runtime {
+				case "subprocess":
+					runtimeConfig, err = createRuntimeConfigSubprocessFromLegacy(raw)
+				case "wasm":
+					return nil, fmt.Errorf("WASM runtime not supported in legacy format")
+				default:
+					return nil, fmt.Errorf("unsupported runtime type: %s", tempMeta.Runtime)
+				}
+
+				if err != nil {
+					return nil, fmt.Errorf("failed to create runtimeConfig from legacy fields for %s runtime at %q: %w", tempMeta.Runtime, pluginfile, err)
+				}
+
+				plug.MetadataV1.RuntimeConfig = runtimeConfig
+			}
+
+			return plug, plug.Validate()
 		} else {
-			// Backward compatibility: create config from legacy fields
-			var config Config
-			var err error
-
-			switch tempMeta.Type {
-			case "cli":
-				config, err = createConfigCLIFromLegacy(raw)
-			case "download":
-				config, err = createConfigDownloadFromLegacy(raw)
-			case "postrender":
-				config, err = createConfigPostrenderFromLegacy(raw)
-			default:
-				return nil, fmt.Errorf("unsupported plugin type: %s", tempMeta.Type)
-			}
-
-			if err != nil {
-				return nil, fmt.Errorf("failed to create config from legacy fields for %s plugin at %q: %w", tempMeta.Type, pluginfile, err)
-			}
-
-			plug.MetadataV1.Config = config
+			// Unsupported apiVersion
+			return nil, fmt.Errorf("unsupported apiVersion %q in plugin at %q", apiVersion, pluginfile)
 		}
-
-		// Extract the runtimeConfig section based on runtime type
-		if runtimeConfigData, ok := raw["runtimeConfig"].(map[string]interface{}); ok {
-			var runtimeConfig RuntimeConfig
-			var err error
-
-			switch tempMeta.Runtime {
-			case "subprocess":
-				runtimeConfig, err = unmarshalRuntimeConfigSubprocess(runtimeConfigData)
-			case "wasm":
-				runtimeConfig, err = unmarshalRuntimeConfigWasm(runtimeConfigData)
-			default:
-				return nil, fmt.Errorf("unsupported runtime type: %s", tempMeta.Runtime)
-			}
-
-			if err != nil {
-				return nil, fmt.Errorf("failed to unmarshal runtimeConfig for %s runtime at %q: %w", tempMeta.Runtime, pluginfile, err)
-			}
-
-			plug.MetadataV1.RuntimeConfig = runtimeConfig
-		} else {
-			// Backward compatibility: create runtimeConfig from legacy fields
-			var runtimeConfig RuntimeConfig
-			var err error
-
-			switch tempMeta.Runtime {
-			case "subprocess":
-				runtimeConfig, err = createRuntimeConfigSubprocessFromLegacy(raw)
-			case "wasm":
-				return nil, fmt.Errorf("WASM runtime not supported in legacy format")
-			default:
-				return nil, fmt.Errorf("unsupported runtime type: %s", tempMeta.Runtime)
-			}
-
-			if err != nil {
-				return nil, fmt.Errorf("failed to create runtimeConfig from legacy fields for %s runtime at %q: %w", tempMeta.Runtime, pluginfile, err)
-			}
-
-			plug.MetadataV1.RuntimeConfig = runtimeConfig
-		}
-
-		return plug, plug.Validate()
 	} else {
 		// Load as legacy plugin
 		plug := &PluginLegacy{Dir: dirname}
