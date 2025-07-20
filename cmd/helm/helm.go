@@ -25,6 +25,7 @@ import (
 
 	helmcmd "helm.sh/helm/v4/pkg/cmd"
 	"helm.sh/helm/v4/pkg/kube"
+	"helm.sh/helm/v4/pkg/plugin"
 )
 
 func main() {
@@ -42,7 +43,7 @@ func main() {
 
 	if err := cmd.Execute(); err != nil {
 		switch e := err.(type) {
-		case helmcmd.PluginError:
+		case plugin.PluginError:
 			os.Exit(e.Code)
 		default:
 			os.Exit(1)

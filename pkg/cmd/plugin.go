@@ -16,11 +16,11 @@ limitations under the License.
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
-	"os/exec"
 
 	"github.com/spf13/cobra"
 
@@ -48,8 +48,6 @@ func newPluginCmd(out io.Writer) *cobra.Command {
 
 // runHook will execute a plugin hook.
 func runHook(p plugin.Plugin, event string) error {
-	plugin.SetupPluginEnv(settings, p.GetName(), p.GetDir())
-
 	var cmds []plugin.PlatformCommand
 	expandArgs := true
 	metadata := p.GetMetadata()
@@ -87,22 +85,40 @@ func runHook(p plugin.Plugin, event string) error {
 		return nil
 	}
 
+	// Prepare the command
 	main, argv, err := plugin.PrepareCommands(cmds, expandArgs, []string{})
 	if err != nil {
 		return err
 	}
 
-	prog := exec.Command(main, argv...)
-
-	slog.Debug("running hook", "event", event, "program", prog)
-
-	prog.Stdout, prog.Stderr = os.Stdout, os.Stderr
-	if err := prog.Run(); err != nil {
-		if eerr, ok := err.(*exec.ExitError); ok {
-			os.Stderr.Write(eerr.Stderr)
-			return fmt.Errorf("plugin %s hook for %q exited with error", event, p.GetName())
-		}
-		return err
+	// Create a temporary runtime config for the hook command
+	tempRuntimeConfig := &plugin.RuntimeConfigSubprocess{
+		Command: main,
 	}
+
+	tempRuntime, err := tempRuntimeConfig.CreateRuntime(p.GetDir(), p.GetName())
+	if err != nil {
+		return fmt.Errorf("failed to create runtime for hook: %w", err)
+	}
+
+	if subprocessRuntime, ok := tempRuntime.(*plugin.RuntimeSubprocess); ok {
+		subprocessRuntime.SetSettings(settings)
+		subprocessRuntime.SetExtraArgs(argv)
+	}
+
+	slog.Debug("running hook", "event", event, "command", main, "args", argv)
+
+	// Run the hook with no input
+	in := &bytes.Buffer{}
+	out := &bytes.Buffer{}
+
+	if err := tempRuntime.Invoke(in, out); err != nil {
+		// Write any output to stdout/stderr
+		os.Stdout.Write(out.Bytes())
+		return fmt.Errorf("plugin %s hook for %q exited with error: %w", event, p.GetName(), err)
+	}
+
+	// Write successful output
+	os.Stdout.Write(out.Bytes())
 	return nil
 }

@@ -18,6 +18,7 @@ package cmd
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -26,6 +27,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	"helm.sh/helm/v4/pkg/plugin"
 	release "helm.sh/helm/v4/pkg/release/v1"
 )
 
@@ -82,9 +84,21 @@ func TestManuallyProcessArgs(t *testing.T) {
 }
 
 func TestLoadPlugins(t *testing.T) {
-	settings.PluginsDirectory = "testdata/helmhome/helm/plugins"
-	settings.RepositoryConfig = "testdata/helmhome/helm/repositories.yaml"
-	settings.RepositoryCache = "testdata/helmhome/helm/repository"
+	pluginDir, err := filepath.Abs("testdata/helmhome/helm/plugins")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repoConfig, err := filepath.Abs("testdata/helmhome/helm/repositories.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repoCache, err := filepath.Abs("testdata/helmhome/helm/repository")
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.PluginsDirectory = pluginDir
+	settings.RepositoryConfig = repoConfig
+	settings.RepositoryCache = repoCache
 
 	var (
 		out bytes.Buffer
@@ -94,10 +108,10 @@ func TestLoadPlugins(t *testing.T) {
 
 	envs := strings.Join([]string{
 		"fullenv",
-		"testdata/helmhome/helm/plugins/fullenv",
-		"testdata/helmhome/helm/plugins",
-		"testdata/helmhome/helm/repositories.yaml",
-		"testdata/helmhome/helm/repository",
+		filepath.Join(pluginDir, "fullenv"),
+		pluginDir,
+		repoConfig,
+		repoCache,
 		os.Args[0],
 	}, "\n")
 
@@ -143,7 +157,7 @@ func TestLoadPlugins(t *testing.T) {
 		if runtime.GOOS != "windows" {
 			if err := pp.RunE(pp, tt.args); err != nil {
 				if tt.code > 0 {
-					perr, ok := err.(PluginError)
+					perr, ok := err.(plugin.PluginError)
 					if !ok {
 						t.Errorf("Expected %s to return pluginError: got %v(%T)", tt.use, err, err)
 					}
@@ -162,9 +176,21 @@ func TestLoadPlugins(t *testing.T) {
 }
 
 func TestLoadPluginsWithSpace(t *testing.T) {
-	settings.PluginsDirectory = "testdata/helm home with space/helm/plugins"
-	settings.RepositoryConfig = "testdata/helm home with space/helm/repositories.yaml"
-	settings.RepositoryCache = "testdata/helm home with space/helm/repository"
+	pluginDir, err := filepath.Abs("testdata/helm home with space/helm/plugins")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repoConfig, err := filepath.Abs("testdata/helm home with space/helm/repositories.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repoCache, err := filepath.Abs("testdata/helm home with space/helm/repository")
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.PluginsDirectory = pluginDir
+	settings.RepositoryConfig = repoConfig
+	settings.RepositoryCache = repoCache
 
 	var (
 		out bytes.Buffer
@@ -174,10 +200,10 @@ func TestLoadPluginsWithSpace(t *testing.T) {
 
 	envs := strings.Join([]string{
 		"fullenv",
-		"testdata/helm home with space/helm/plugins/fullenv",
-		"testdata/helm home with space/helm/plugins",
-		"testdata/helm home with space/helm/repositories.yaml",
-		"testdata/helm home with space/helm/repository",
+		filepath.Join(pluginDir, "fullenv"),
+		pluginDir,
+		repoConfig,
+		repoCache,
 		os.Args[0],
 	}, "\n")
 
@@ -218,7 +244,7 @@ func TestLoadPluginsWithSpace(t *testing.T) {
 		if runtime.GOOS != "windows" {
 			if err := pp.RunE(pp, tt.args); err != nil {
 				if tt.code > 0 {
-					perr, ok := err.(PluginError)
+					perr, ok := err.(plugin.PluginError)
 					if !ok {
 						t.Errorf("Expected %s to return pluginError: got %v(%T)", tt.use, err, err)
 					}
@@ -244,7 +270,11 @@ type staticCompletionDetails struct {
 }
 
 func TestLoadPluginsForCompletion(t *testing.T) {
-	settings.PluginsDirectory = "testdata/helmhome/helm/plugins"
+	pluginDir, err := filepath.Abs("testdata/helmhome/helm/plugins")
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.PluginsDirectory = pluginDir
 
 	var out bytes.Buffer
 
@@ -354,8 +384,12 @@ func TestPluginDynamicCompletion(t *testing.T) {
 		golden: "output/plugin_echo_no_directive.txt",
 		rels:   []*release.Release{},
 	}}
+	absPluginDir, err := filepath.Abs("testdata/helmhome/helm/plugins")
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, test := range tests {
-		settings.PluginsDirectory = "testdata/helmhome/helm/plugins"
+		settings.PluginsDirectory = absPluginDir
 		runTestCmd(t, []cmdTestCase{test})
 	}
 }
