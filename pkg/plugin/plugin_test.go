@@ -428,9 +428,7 @@ func TestNewExecRunWithNoOutput(t *testing.T) {
 	}
 	is := assert.New(t)
 	s := cli.New()
-	abs, err := filepath.Abs("testdata/plugdir/good")
-	require.NoError(t, err)
-	s.PluginsDirectory = abs
+	s.PluginsDirectory = "testdata/plugdir/good"
 	name := "postrender"
 	base := filepath.Join(s.PluginsDirectory, name)
 	SetupPluginEnv(s, name, base)
@@ -449,9 +447,7 @@ func TestNewExecWithOneArgsRun(t *testing.T) {
 	}
 	is := assert.New(t)
 	s := cli.New()
-	abs, err := filepath.Abs("testdata/plugdir/good")
-	require.NoError(t, err)
-	s.PluginsDirectory = abs
+	s.PluginsDirectory = "testdata/plugdir/good"
 	name := "postrender"
 	base := filepath.Join(s.PluginsDirectory, name)
 	SetupPluginEnv(s, name, base)
@@ -471,9 +467,7 @@ func TestNewExecWithTwoArgsRun(t *testing.T) {
 	}
 	is := assert.New(t)
 	s := cli.New()
-	abs, err := filepath.Abs("testdata/plugdir/good")
-	require.NoError(t, err)
-	s.PluginsDirectory = abs
+	s.PluginsDirectory = "testdata/plugdir/good"
 	name := "postrender"
 	base := filepath.Join(s.PluginsDirectory, name)
 	SetupPluginEnv(s, name, base)

@@ -21,10 +21,12 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
@@ -36,6 +38,11 @@ const (
 	pluginStaticCompletionFile        = "completion.yaml"
 	pluginDynamicCompletionExecutable = "plugin.complete"
 )
+
+type PluginError struct {
+	error
+	Code int
+}
 
 // loadPlugins loads plugins into the command list.
 //
@@ -83,30 +90,16 @@ func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 				if err != nil {
 					return err
 				}
-
-				// Use the new runtime invoke method
-				in := &bytes.Buffer{}
-				// Copy stdin to the buffer for the plugin
-				if _, err := io.Copy(in, os.Stdin); err != nil {
-					return fmt.Errorf("failed to read stdin: %w", err)
+				// Call setupEnv before PrepareCommand because
+				// PrepareCommand uses os.ExpandEnv and expects the
+				// setupEnv vars.
+				plugin.SetupPluginEnv(settings, plug.GetName(), plug.GetDir())
+				main, argv, prepCmdErr := plug.PrepareCommand(u)
+				if prepCmdErr != nil {
+					os.Stderr.WriteString(prepCmdErr.Error())
+					return fmt.Errorf("plugin %q exited with error", plug.GetName())
 				}
-
-				buf := &bytes.Buffer{}
-				opts := plugin.InvokeOptions{
-					ExtraArgs: u,
-					Settings:  settings,
-				}
-
-				if err := plugin.InvokePluginWithExit(plug, in, buf, opts); err != nil {
-					if perr, ok := err.(plugin.PluginError); ok {
-						out.Write(buf.Bytes())
-						return perr
-					}
-					return err
-				}
-
-				out.Write(buf.Bytes())
-				return nil
+				return callPluginExecutable(plug.GetName(), main, argv, out)
 			},
 			// This passes all the flags to the subcommand.
 			DisableFlagParsing: true,
@@ -136,6 +129,33 @@ func processParent(cmd *cobra.Command, args []string) ([]string, error) {
 	return u, nil
 }
 
+// This function is used to setup the environment for the plugin and then
+// call the executable specified by the parameter 'main'
+func callPluginExecutable(pluginName string, main string, argv []string, out io.Writer) error {
+	env := os.Environ()
+	for k, v := range settings.EnvVars() {
+		env = append(env, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	mainCmdExp := os.ExpandEnv(main)
+	prog := exec.Command(mainCmdExp, argv...)
+	prog.Env = env
+	prog.Stdin = os.Stdin
+	prog.Stdout = out
+	prog.Stderr = os.Stderr
+	if err := prog.Run(); err != nil {
+		if eerr, ok := err.(*exec.ExitError); ok {
+			os.Stderr.Write(eerr.Stderr)
+			status := eerr.Sys().(syscall.WaitStatus)
+			return PluginError{
+				error: fmt.Errorf("plugin %q exited with error", pluginName),
+				Code:  status.ExitStatus(),
+			}
+		}
+		return err
+	}
+	return nil
+}
 
 // manuallyProcessArgs processes an arg array, removing special args.
 //
@@ -333,15 +353,12 @@ func pluginDynamicComp(plug plugin.Plugin, cmd *cobra.Command, args []string, to
 		argv = append(argv, u...)
 		argv = append(argv, toComplete)
 	}
-	// For dynamic completion, we need to execute a specific executable
+	plugin.SetupPluginEnv(settings, plug.GetName(), plug.GetDir())
+
 	cobra.CompDebugln(fmt.Sprintf("calling %s with args %v", main, argv), settings.Debug)
 	buf := new(bytes.Buffer)
-	in := new(bytes.Buffer)
-
-	// Use the special InvokePluginCommand function for dynamic completion
-	if err := plugin.InvokePluginCommand(plug, main, argv, settings, in, buf); err != nil {
+	if err := callPluginExecutable(plug.GetName(), main, argv, buf); err != nil {
 		// The dynamic completion file is optional for a plugin, so this error is ok.
-		cobra.CompDebugln(fmt.Sprintf("error calling plugin.complete: %v", err), settings.Debug)
 		cobra.CompDebugln(fmt.Sprintf("Unable to call %s: %v", main, err.Error()), settings.Debug)
 		return nil, cobra.ShellCompDirectiveDefault
 	}

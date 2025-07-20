@@ -27,8 +27,6 @@ type PluginLegacy struct {
 	MetadataLegacy *MetadataLegacy
 	// Dir is the string path to the directory that holds the plugin.
 	Dir string
-	// runtime is the cached runtime instance
-	runtime Runtime
 }
 
 // Interface implementations for PluginLegacy
@@ -78,22 +76,6 @@ func (p *PluginLegacy) GetConfig() Config {
 			IgnoreFlags: p.MetadataLegacy.IgnoreFlags,
 		}
 	}
-}
-
-func (p *PluginLegacy) GetRuntimeInstance() (Runtime, error) {
-	if p.runtime == nil {
-		if p.Dir == "" {
-			return nil, fmt.Errorf("plugin directory is empty for plugin %q", p.GetName())
-		}
-		// Legacy plugins always use subprocess runtime
-		runtimeConfig := p.GetRuntimeConfig()
-		var err error
-		p.runtime, err = runtimeConfig.CreateRuntime(p.Dir, p.GetName())
-		if err != nil {
-			return nil, fmt.Errorf("failed to create runtime: %w", err)
-		}
-	}
-	return p.runtime, nil
 }
 
 func (p *PluginLegacy) PrepareCommand(extraArgs []string) (string, []string, error) {

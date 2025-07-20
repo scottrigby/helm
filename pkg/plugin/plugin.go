@@ -37,7 +37,6 @@ type Plugin interface {
 	GetMetadata() interface{}
 	GetConfig() Config
 	GetRuntimeConfig() RuntimeConfig
-	GetRuntimeInstance() (Runtime, error)
 	Validate() error
 	PrepareCommand(extraArgs []string) (string, []string, error)
 }

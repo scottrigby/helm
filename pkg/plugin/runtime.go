@@ -18,7 +18,8 @@ package plugin
 import (
 	"bytes"
 	"fmt"
-	"os"
+	"os/exec"
+
 	"sigs.k8s.io/yaml"
 
 	"helm.sh/helm/v4/pkg/cli"
@@ -113,7 +114,6 @@ type RuntimeSubprocess struct {
 	pluginName string
 	extraArgs  []string
 	settings   *cli.EnvSettings
-	envVars    map[string]string
 }
 
 // SetExtraArgs sets the extra arguments for the subprocess runtime
@@ -141,7 +141,6 @@ func (r *RuntimeConfigSubprocess) CreateRuntime(pluginDir string, pluginName str
 		pluginDir:  pluginDir,
 		pluginName: pluginName,
 		settings:   cli.New(),
-		envVars:    make(map[string]string),
 	}, nil
 }
 
@@ -156,15 +155,8 @@ func (r *RuntimeConfigWasm) CreateRuntime(pluginDir string, pluginName string) (
 
 // Invoke implementations for Runtime types
 func (r *RuntimeSubprocess) Invoke(in *bytes.Buffer, out *bytes.Buffer) error {
-	// Temporarily set plugin environment variables for PrepareCommands to expand
-	// We'll save and restore to avoid side effects
-	oldPluginName := os.Getenv("HELM_PLUGIN_NAME")
-	oldPluginDir := os.Getenv("HELM_PLUGIN_DIR")
-
-	// Set the environment variables for PrepareCommands
-	// If pluginDir is empty, PrepareCommands will expand $HELM_PLUGIN_DIR to empty string
-	os.Setenv("HELM_PLUGIN_NAME", r.pluginName)
-	os.Setenv("HELM_PLUGIN_DIR", r.pluginDir)
+	// Setup plugin environment
+	SetupPluginEnv(r.settings, r.pluginName, r.pluginDir)
 
 	// Prepare command based on runtime configuration
 	// Note: IgnoreFlags is handled at the plugin level, not runtime level
@@ -176,26 +168,18 @@ func (r *RuntimeSubprocess) Invoke(in *bytes.Buffer, out *bytes.Buffer) error {
 	}
 
 	main, args, err := PrepareCommands(cmds, true, extraArgsIn)
-
-	// Restore original values
-	if oldPluginName != "" {
-		os.Setenv("HELM_PLUGIN_NAME", oldPluginName)
-	} else {
-		os.Unsetenv("HELM_PLUGIN_NAME")
-	}
-	if oldPluginDir != "" {
-		os.Setenv("HELM_PLUGIN_DIR", oldPluginDir)
-	} else {
-		os.Unsetenv("HELM_PLUGIN_DIR")
-	}
-
 	if err != nil {
 		return fmt.Errorf("failed to prepare command: %w", err)
 	}
 
-	// Use the executeCommand helper defined in runtime_subprocess.go
-	// executeCommand will set up the environment properly
-	return r.executeCommand(main, args, in, out, nil)
+	// Execute the command
+	cmd := exec.Command(main, args...)
+	cmd.Dir = r.pluginDir
+	cmd.Stdin = in
+	cmd.Stdout = out
+	cmd.Stderr = out
+
+	return cmd.Run()
 }
 
 func (r *RuntimeWasm) Invoke(in *bytes.Buffer, out *bytes.Buffer) error {

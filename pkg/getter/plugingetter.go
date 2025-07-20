@@ -18,6 +18,8 @@ package getter
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -74,42 +76,32 @@ type pluginGetter struct {
 	opts     options
 }
 
+func (p *pluginGetter) setupOptionsEnv(env []string) []string {
+	env = append(env, fmt.Sprintf("HELM_PLUGIN_USERNAME=%s", p.opts.username))
+	env = append(env, fmt.Sprintf("HELM_PLUGIN_PASSWORD=%s", p.opts.password))
+	env = append(env, fmt.Sprintf("HELM_PLUGIN_PASS_CREDENTIALS_ALL=%t", p.opts.passCredentialsAll))
+	return env
+}
+
 // Get runs downloader plugin command
 func (p *pluginGetter) Get(href string, options ...Option) (*bytes.Buffer, error) {
 	for _, opt := range options {
 		opt(&p.opts)
 	}
-
-	// Create a temporary runtime config for the downloader command
 	commands := strings.Split(p.command, " ")
 	argv := append(commands[1:], p.opts.certFile, p.opts.keyFile, p.opts.caFile, href)
-
-	tempRuntimeConfig := &plugin.RuntimeConfigSubprocess{
-		Command: filepath.Join(p.base, commands[0]),
-	}
-
-	tempRuntime, err := tempRuntimeConfig.CreateRuntime(p.base, p.name)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create runtime: %w", err)
-	}
-
-	if subprocessRuntime, ok := tempRuntime.(*plugin.RuntimeSubprocess); ok {
-		subprocessRuntime.SetSettings(p.settings)
-		subprocessRuntime.SetExtraArgs(argv)
-
-		// Setup plugin-specific env vars
-		envVars := make(map[string]string)
-		envVars["HELM_PLUGIN_USERNAME"] = p.opts.username
-		envVars["HELM_PLUGIN_PASSWORD"] = p.opts.password
-		envVars["HELM_PLUGIN_PASS_CREDENTIALS_ALL"] = fmt.Sprintf("%t", p.opts.passCredentialsAll)
-		subprocessRuntime.SetEnvVars(envVars)
-	}
-
+	prog := exec.Command(filepath.Join(p.base, commands[0]), argv...)
+	plugin.SetupPluginEnv(p.settings, p.name, p.base)
+	prog.Env = p.setupOptionsEnv(os.Environ())
 	buf := bytes.NewBuffer(nil)
-	in := bytes.NewBuffer(nil)
-
-	if err := tempRuntime.Invoke(in, buf); err != nil {
-		return nil, fmt.Errorf("plugin %q exited with error: %w", p.command, err)
+	prog.Stdout = buf
+	prog.Stderr = os.Stderr
+	if err := prog.Run(); err != nil {
+		if eerr, ok := err.(*exec.ExitError); ok {
+			os.Stderr.Write(eerr.Stderr)
+			return nil, fmt.Errorf("plugin %q exited with error", p.command)
+		}
+		return nil, err
 	}
 	return buf, nil
 }

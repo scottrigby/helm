@@ -27,11 +27,6 @@ import (
 
 // LoadDir loads a plugin from the given directory.
 func LoadDir(dirname string) (Plugin, error) {
-	// Ensure dirname is not empty
-	if dirname == "" {
-		return nil, fmt.Errorf("plugin directory cannot be empty")
-	}
-
 	pluginfile := filepath.Join(dirname, PluginFileName)
 	data, err := os.ReadFile(pluginfile)
 	if err != nil {

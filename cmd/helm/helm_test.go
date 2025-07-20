@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"testing"
 )
@@ -45,23 +44,19 @@ func TestPluginExitCode(t *testing.T) {
 		//
 		// This technique originates from https://talks.golang.org/2014/testing.slide#23.
 		cmd := exec.Command(os.Args[0], "-test.run=TestPluginExitCode")
-		pluginsPath, err := filepath.Abs("../../pkg/cmd/testdata/helmhome/helm/plugins")
-		if err != nil {
-			t.Fatalf("Failed to get absolute path: %v", err)
-		}
 		cmd.Env = append(
 			os.Environ(),
 			"RUN_MAIN_FOR_TESTING=1",
 			// See pkg/cli/environment.go for which envvars can be used for configuring these passes
 			// and also see plugin_test.go for how a plugin env can be set up.
 			// This mimics the "exitwith" test case in TestLoadPlugins using envvars
-			"HELM_PLUGINS="+pluginsPath,
+			"HELM_PLUGINS=../../pkg/cmd/testdata/helmhome/helm/plugins",
 		)
 		stdout := &bytes.Buffer{}
 		stderr := &bytes.Buffer{}
 		cmd.Stdout = stdout
 		cmd.Stderr = stderr
-		err = cmd.Run()
+		err := cmd.Run()
 		exiterr, ok := err.(*exec.ExitError)
 
 		if !ok {

@@ -26,8 +26,6 @@ type PluginV1 struct {
 	MetadataV1 *MetadataV1
 	// Dir is the string path to the directory that holds the plugin.
 	Dir string
-	// runtime is the cached runtime instance
-	runtime Runtime
 }
 
 // Interface implementations for PluginV1
@@ -39,20 +37,6 @@ func (p *PluginV1) GetRuntime() string              { return p.MetadataV1.Runtim
 func (p *PluginV1) GetMetadata() interface{}        { return p.MetadataV1 }
 func (p *PluginV1) GetConfig() Config               { return p.MetadataV1.Config }
 func (p *PluginV1) GetRuntimeConfig() RuntimeConfig { return p.MetadataV1.RuntimeConfig }
-
-func (p *PluginV1) GetRuntimeInstance() (Runtime, error) {
-	if p.runtime == nil {
-		if p.Dir == "" {
-			return nil, fmt.Errorf("plugin directory is empty for plugin %q", p.GetName())
-		}
-		var err error
-		p.runtime, err = p.MetadataV1.RuntimeConfig.CreateRuntime(p.Dir, p.GetName())
-		if err != nil {
-			return nil, fmt.Errorf("failed to create runtime: %w", err)
-		}
-	}
-	return p.runtime, nil
-}
 
 func (p *PluginV1) PrepareCommand(extraArgs []string) (string, []string, error) {
 	config := p.GetConfig()
