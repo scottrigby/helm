@@ -157,7 +157,17 @@ func (r *RuntimeSubprocess) InvokeHook(event string) error {
 		return err
 	}
 
-	return execHook(r.pluginName, event, main, argv)
+	prog := exec.Command(main, argv...)
+	prog.Stdout, prog.Stderr = os.Stdout, os.Stderr
+
+	if err := prog.Run(); err != nil {
+		if eerr, ok := err.(*exec.ExitError); ok {
+			os.Stderr.Write(eerr.Stderr)
+			return fmt.Errorf("plugin %s hook for %q exited with error", event, r.pluginName)
+		}
+		return err
+	}
+	return nil
 }
 
 // Postrender implementation for RuntimeSubprocess
@@ -239,21 +249,6 @@ func unmarshalRuntimeConfigSubprocess(runtimeData map[string]interface{}) (*Runt
 	}
 
 	return &config, nil
-}
-
-// execHook executes a plugin hook command
-func execHook(pluginName string, event string, main string, argv []string) error {
-	prog := exec.Command(main, argv...)
-	prog.Stdout, prog.Stderr = os.Stdout, os.Stderr
-
-	if err := prog.Run(); err != nil {
-		if eerr, ok := err.(*exec.ExitError); ok {
-			os.Stderr.Write(eerr.Stderr)
-			return fmt.Errorf("plugin %s hook for %q exited with error", event, pluginName)
-		}
-		return err
-	}
-	return nil
 }
 
 // ExecDownloader executes a plugin downloader command with custom environment
