@@ -257,7 +257,7 @@ func ExecPluginWithEnv(pluginName string, main string, argv []string, env []stri
 		if eerr, ok := err.(*exec.ExitError); ok {
 			os.Stderr.Write(eerr.Stderr)
 			status := eerr.Sys().(syscall.WaitStatus)
-			return &ExecError{
+			return &Error{
 				Err:        fmt.Errorf("plugin %q exited with error", pluginName),
 				PluginName: pluginName,
 				Code:       status.ExitStatus(),
@@ -266,18 +266,6 @@ func ExecPluginWithEnv(pluginName string, main string, argv []string, env []stri
 		return err
 	}
 	return nil
-}
-
-// ExecError is returned when a plugin exits with a non-zero status code
-type ExecError struct {
-	Err        error
-	PluginName string
-	Code       int
-}
-
-// Error implements the error interface
-func (e *ExecError) Error() string {
-	return e.Err.Error()
 }
 
 // execHook executes a plugin hook command

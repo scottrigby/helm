@@ -117,7 +117,7 @@ func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 
 				// Invoke plugin
 				err = runtime.InvokeWithEnv(os.Stdin, out, os.Stderr, env)
-				if execErr, ok := err.(*plugin.ExecError); ok {
+				if execErr, ok := err.(*plugin.Error); ok {
 					return PluginError{
 						error: execErr.Err,
 						Code:  execErr.Code,

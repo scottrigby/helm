@@ -41,3 +41,15 @@ type Plugin interface {
 	Validate() error
 	PrepareCommand(extraArgs []string) (string, []string, error)
 }
+
+// Error is returned when a plugin exits with a non-zero status code
+type Error struct {
+	Err        error
+	PluginName string
+	Code       int
+}
+
+// Error implements the error interface
+func (e *Error) Error() string {
+	return e.Err.Error()
+}
