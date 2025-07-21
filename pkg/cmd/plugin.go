@@ -19,8 +19,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
-	"os/exec"
 
 	"github.com/spf13/cobra"
 
@@ -92,16 +90,9 @@ func runHook(p plugin.Plugin, event string) error {
 		return err
 	}
 
-	prog := exec.Command(main, argv...)
+	slog.Debug("running hook", "event", event, "command", main, "args", argv)
 
-	slog.Debug("running hook", "event", event, "program", prog)
-
-	prog.Stdout, prog.Stderr = os.Stdout, os.Stderr
-	if err := prog.Run(); err != nil {
-		if eerr, ok := err.(*exec.ExitError); ok {
-			os.Stderr.Write(eerr.Stderr)
-			return fmt.Errorf("plugin %s hook for %q exited with error", event, p.GetName())
-		}
+	if err := plugin.ExecHook(p.GetName(), event, main, argv); err != nil {
 		return err
 	}
 	return nil

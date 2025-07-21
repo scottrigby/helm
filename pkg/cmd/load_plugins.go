@@ -21,12 +21,10 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
@@ -137,24 +135,14 @@ func callPluginExecutable(pluginName string, main string, argv []string, out io.
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
 
-	mainCmdExp := os.ExpandEnv(main)
-	prog := exec.Command(mainCmdExp, argv...)
-	prog.Env = env
-	prog.Stdin = os.Stdin
-	prog.Stdout = out
-	prog.Stderr = os.Stderr
-	if err := prog.Run(); err != nil {
-		if eerr, ok := err.(*exec.ExitError); ok {
-			os.Stderr.Write(eerr.Stderr)
-			status := eerr.Sys().(syscall.WaitStatus)
-			return PluginError{
-				error: fmt.Errorf("plugin %q exited with error", pluginName),
-				Code:  status.ExitStatus(),
-			}
+	err := plugin.ExecPluginWithEnv(pluginName, main, argv, env, os.Stdin, out, os.Stderr)
+	if execErr, ok := err.(*plugin.ExecError); ok {
+		return PluginError{
+			error: execErr.Err,
+			Code:  execErr.Code,
 		}
-		return err
 	}
-	return nil
+	return err
 }
 
 // manuallyProcessArgs processes an arg array, removing special args.

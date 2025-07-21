@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -90,20 +89,11 @@ func (p *pluginGetter) Get(href string, options ...Option) (*bytes.Buffer, error
 	}
 	commands := strings.Split(p.command, " ")
 	argv := append(commands[1:], p.opts.certFile, p.opts.keyFile, p.opts.caFile, href)
-	prog := exec.Command(filepath.Join(p.base, commands[0]), argv...)
+	commandPath := filepath.Join(p.base, commands[0])
 	plugin.SetupPluginEnv(p.settings, p.name, p.base)
-	prog.Env = p.setupOptionsEnv(os.Environ())
-	buf := bytes.NewBuffer(nil)
-	prog.Stdout = buf
-	prog.Stderr = os.Stderr
-	if err := prog.Run(); err != nil {
-		if eerr, ok := err.(*exec.ExitError); ok {
-			os.Stderr.Write(eerr.Stderr)
-			return nil, fmt.Errorf("plugin %q exited with error", p.command)
-		}
-		return nil, err
-	}
-	return buf, nil
+	env := p.setupOptionsEnv(os.Environ())
+
+	return plugin.ExecDownloader(p.base, commandPath, argv, env)
 }
 
 // NewPluginGetter constructs a valid plugin getter
