@@ -110,6 +110,11 @@ func (r *RuntimeWasm) InvokeHook(event string) error {
 	return fmt.Errorf("WASM runtime not yet implemented")
 }
 
+// Postrender implementation for RuntimeWasm
+func (r *RuntimeWasm) Postrender(renderedManifests *bytes.Buffer, args []string) (*bytes.Buffer, error) {
+	return nil, fmt.Errorf("WASM postrender not yet implemented")
+}
+
 // unmarshalRuntimeConfigWasm unmarshals a runtime config map into a RuntimeConfigWasm struct
 func unmarshalRuntimeConfigWasm(runtimeData map[string]interface{}) (*RuntimeConfigWasm, error) {
 	data, err := yaml.Marshal(runtimeData)

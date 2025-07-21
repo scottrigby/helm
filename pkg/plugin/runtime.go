@@ -25,6 +25,9 @@ type Runtime interface {
 	Invoke(in *bytes.Buffer, out *bytes.Buffer) error
 	InvokeWithEnv(stdin io.Reader, stdout, stderr io.Writer, env []string) error
 	InvokeHook(event string) error
+	// Postrender executes the plugin as a post-renderer with rendered manifests
+	// This method should only be called when the plugin type is "postrender"
+	Postrender(renderedManifests *bytes.Buffer, args []string) (*bytes.Buffer, error)
 }
 
 // RuntimeConfig interface defines the methods that all runtime configurations must implement
