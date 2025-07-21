@@ -93,6 +93,7 @@ func (p *pluginGetter) Get(href string, options ...Option) (*bytes.Buffer, error
 	plugin.SetupPluginEnv(p.settings, p.name, p.base)
 	env := p.setupOptionsEnv(os.Environ())
 
+	// TODO: change to use plugin.Runtime.InvokeWithEnv
 	return plugin.ExecDownloader(p.base, commandPath, argv, env)
 }
 

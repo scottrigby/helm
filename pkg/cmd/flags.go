@@ -227,6 +227,7 @@ func (p *postRendererArgsSlice) Set(val string) error {
 		return nil
 	}
 	// overwrite if already create PostRenderer by `post-renderer` flags
+	// TODO: change to use plugin.Runtime.InvokeWithEnv
 	pr, err := plugin.NewExec(p.options.settings, p.options.pluginName, p.options.args...)
 	if err != nil {
 		return err

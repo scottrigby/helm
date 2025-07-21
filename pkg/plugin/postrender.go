@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// TODO: update this description once we finish implementing Runtime invoke methods
 // Package postrender contains an interface that can be implemented for custom
 // post-renderers and an exec implementation that can be used for arbitrary
 // binaries and scripts

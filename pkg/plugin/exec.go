@@ -27,9 +27,8 @@ import (
 	"helm.sh/helm/v4/pkg/cli"
 )
 
-// TODO this should be a plugin name instead of binary path
-// should we still allow postrender args? If so, how would that work with a postrender Wasm plugin?
-// for now, pre-Wasm work, we could still draw the command from the plugin's plugin.yaml file with minimal changes here
+// execRender implements PostRenderer. represents a postrender type plugin and args
+// TODO: rename to PostRendererWithEnv, because this is not subprocess/exec specific, but does contain Helm Client env settings
 type execRender struct {
 	plugin   Plugin
 	args     []string
@@ -38,6 +37,7 @@ type execRender struct {
 
 // NewExec returns a PostRenderer implementation that calls the provided postrender type plugin.
 // It returns an error if the plugin cannot be found.
+// TODO: rename to NewPostRendererWithEnv
 func NewExec(settings *cli.EnvSettings, pluginName string, args ...string) (PostRenderer, error) {
 	p, err := FindPlugin(pluginName, settings.PluginsDirectory, "postrender")
 	if err != nil {
@@ -47,7 +47,7 @@ func NewExec(settings *cli.EnvSettings, pluginName string, args ...string) (Post
 }
 
 // Run the configured binary for the post render
-// TODO: consolidate [getter.Get], [plugin.execRender.Run], [cmd.loadPlugins], [cmd.callPluginExecutable], [getter.pluginGetter.Get]
+// TODO: consolidate with methods in pkg/plugin/runtime_subprocess.go
 func (p *execRender) Run(renderedManifests *bytes.Buffer) (*bytes.Buffer, error) {
 	// this part from [cmd.loadPlugins]
 	// needed to get the correct args, which can be defined both in plugin.yaml and additional CLI command args
