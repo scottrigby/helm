@@ -78,6 +78,11 @@ func (p *PluginLegacy) GetConfig() Config {
 	}
 }
 
+func (p *PluginLegacy) GetRuntimeInstance() (Runtime, error) {
+	runtimeConfig := p.GetRuntimeConfig()
+	return runtimeConfig.CreateRuntime(p.Dir, p.MetadataLegacy.Name)
+}
+
 func (p *PluginLegacy) PrepareCommand(extraArgs []string) (string, []string, error) {
 	var extraArgsIn []string
 

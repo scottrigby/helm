@@ -38,6 +38,13 @@ func (p *PluginV1) GetMetadata() interface{}        { return p.MetadataV1 }
 func (p *PluginV1) GetConfig() Config               { return p.MetadataV1.Config }
 func (p *PluginV1) GetRuntimeConfig() RuntimeConfig { return p.MetadataV1.RuntimeConfig }
 
+func (p *PluginV1) GetRuntimeInstance() (Runtime, error) {
+	if p.MetadataV1.RuntimeConfig == nil {
+		return nil, fmt.Errorf("plugin has no runtime configuration")
+	}
+	return p.MetadataV1.RuntimeConfig.CreateRuntime(p.Dir, p.MetadataV1.Name)
+}
+
 func (p *PluginV1) PrepareCommand(extraArgs []string) (string, []string, error) {
 	config := p.GetConfig()
 	runtimeConfig := p.GetRuntimeConfig()

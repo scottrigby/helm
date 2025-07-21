@@ -18,6 +18,7 @@ package plugin
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os/exec"
 
 	"sigs.k8s.io/yaml"
@@ -28,6 +29,8 @@ import (
 // Runtime interface defines the methods that all plugin runtimes must implement
 type Runtime interface {
 	Invoke(in *bytes.Buffer, out *bytes.Buffer) error
+	InvokeWithEnv(stdin io.Reader, stdout, stderr io.Writer, env []string) error
+	InvokeHook(event string) error
 }
 
 // RuntimeConfig interface defines the methods that all runtime configurations must implement
@@ -191,6 +194,62 @@ func (r *RuntimeWasm) Invoke(in *bytes.Buffer, out *bytes.Buffer) error {
 	// - Applying security constraints (AllowedHosts, AllowedPaths)
 	// - Executing the WASM module with input from 'in' buffer
 	// - Writing output to 'out' buffer
+	return fmt.Errorf("WASM runtime not yet implemented")
+}
+
+// InvokeWithEnv implementation for RuntimeSubprocess
+func (r *RuntimeSubprocess) InvokeWithEnv(stdin io.Reader, stdout, stderr io.Writer, env []string) error {
+	// Prepare command based on runtime configuration
+	cmds := r.config.PlatformCommand
+	if len(cmds) == 0 && len(r.config.Command) > 0 {
+		cmds = []PlatformCommand{{Command: r.config.Command}}
+	}
+
+	main, args, err := PrepareCommands(cmds, true, r.extraArgs)
+	if err != nil {
+		return fmt.Errorf("failed to prepare command: %w", err)
+	}
+
+	// Use the ExecPluginWithEnv function
+	return ExecPluginWithEnv(r.pluginName, main, args, env, stdin, stdout, stderr)
+}
+
+// InvokeHook implementation for RuntimeSubprocess
+func (r *RuntimeSubprocess) InvokeHook(event string) error {
+	// Get hook commands for the event
+	var cmds []PlatformCommand
+	expandArgs := true
+
+	cmds = r.config.PlatformHooks[event]
+	if len(cmds) == 0 && len(r.config.Hooks) > 0 {
+		cmd := r.config.Hooks[event]
+		if len(cmd) > 0 {
+			cmds = []PlatformCommand{{Command: "sh", Args: []string{"-c", cmd}}}
+			expandArgs = false
+		}
+	}
+
+	// If no hook commands are defined, just return successfully
+	if len(cmds) == 0 {
+		return nil
+	}
+
+	main, argv, err := PrepareCommands(cmds, expandArgs, []string{})
+	if err != nil {
+		return err
+	}
+
+	// Use the ExecHook function
+	return ExecHook(r.pluginName, event, main, argv)
+}
+
+// InvokeWithEnv implementation for RuntimeWasm (not yet implemented)
+func (r *RuntimeWasm) InvokeWithEnv(stdin io.Reader, stdout, stderr io.Writer, env []string) error {
+	return fmt.Errorf("WASM runtime not yet implemented")
+}
+
+// InvokeHook implementation for RuntimeWasm (not yet implemented)
+func (r *RuntimeWasm) InvokeHook(event string) error {
 	return fmt.Errorf("WASM runtime not yet implemented")
 }
 

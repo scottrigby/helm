@@ -88,16 +88,36 @@ func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 				if err != nil {
 					return err
 				}
-				// Call setupEnv before PrepareCommand because
-				// PrepareCommand uses os.ExpandEnv and expects the
-				// setupEnv vars.
+				// Setup plugin environment
 				plugin.SetupPluginEnv(settings, plug.GetName(), plug.GetDir())
-				main, argv, prepCmdErr := plug.PrepareCommand(u)
-				if prepCmdErr != nil {
-					os.Stderr.WriteString(prepCmdErr.Error())
-					return fmt.Errorf("plugin %q exited with error", plug.GetName())
+
+				// Get runtime instance
+				runtime, err := plug.GetRuntimeInstance()
+				if err != nil {
+					return fmt.Errorf("failed to get runtime instance: %w", err)
 				}
-				return callPluginExecutable(plug.GetName(), main, argv, out)
+
+				// For subprocess runtime, set extra args and settings
+				if subprocessRuntime, ok := runtime.(*plugin.RuntimeSubprocess); ok {
+					subprocessRuntime.SetExtraArgs(u)
+					subprocessRuntime.SetSettings(settings)
+				}
+
+				// Prepare environment
+				env := os.Environ()
+				for k, v := range settings.EnvVars() {
+					env = append(env, fmt.Sprintf("%s=%s", k, v))
+				}
+
+				// Invoke plugin
+				err = runtime.InvokeWithEnv(os.Stdin, out, os.Stderr, env)
+				if execErr, ok := err.(*plugin.ExecError); ok {
+					return PluginError{
+						error: execErr.Err,
+						Code:  execErr.Code,
+					}
+				}
+				return err
 			},
 			// This passes all the flags to the subcommand.
 			DisableFlagParsing: true,
@@ -125,24 +145,6 @@ func processParent(cmd *cobra.Command, args []string) ([]string, error) {
 		return nil, err
 	}
 	return u, nil
-}
-
-// This function is used to setup the environment for the plugin and then
-// call the executable specified by the parameter 'main'
-func callPluginExecutable(pluginName string, main string, argv []string, out io.Writer) error {
-	env := os.Environ()
-	for k, v := range settings.EnvVars() {
-		env = append(env, fmt.Sprintf("%s=%s", k, v))
-	}
-
-	err := plugin.ExecPluginWithEnv(pluginName, main, argv, env, os.Stdin, out, os.Stderr)
-	if execErr, ok := err.(*plugin.ExecError); ok {
-		return PluginError{
-			error: execErr.Err,
-			Code:  execErr.Code,
-		}
-	}
-	return err
 }
 
 // manuallyProcessArgs processes an arg array, removing special args.
@@ -345,7 +347,15 @@ func pluginDynamicComp(plug plugin.Plugin, cmd *cobra.Command, args []string, to
 
 	cobra.CompDebugln(fmt.Sprintf("calling %s with args %v", main, argv), settings.Debug)
 	buf := new(bytes.Buffer)
-	if err := callPluginExecutable(plug.GetName(), main, argv, buf); err != nil {
+
+	// Prepare environment
+	env := os.Environ()
+	for k, v := range settings.EnvVars() {
+		env = append(env, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	// Use ExecPluginWithEnv directly for dynamic completion
+	if err := plugin.ExecPluginWithEnv(plug.GetName(), main, argv, env, nil, buf, buf); err != nil {
 		// The dynamic completion file is optional for a plugin, so this error is ok.
 		cobra.CompDebugln(fmt.Sprintf("Unable to call %s: %v", main, err.Error()), settings.Debug)
 		return nil, cobra.ShellCompDirectiveDefault
