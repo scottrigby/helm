@@ -132,8 +132,8 @@ func (e *ExecError) Error() string {
 	return e.Err.Error()
 }
 
-// ExecHook executes a plugin hook command
-func ExecHook(pluginName string, event string, main string, argv []string) error {
+// execHook executes a plugin hook command
+func execHook(pluginName string, event string, main string, argv []string) error {
 	prog := exec.Command(main, argv...)
 	prog.Stdout, prog.Stderr = os.Stdout, os.Stderr
 

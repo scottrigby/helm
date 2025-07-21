@@ -131,7 +131,6 @@ func (r *RuntimeSubprocess) InvokeWithEnv(stdin io.Reader, stdout, stderr io.Wri
 		return fmt.Errorf("failed to prepare command: %w", err)
 	}
 
-	// Use the ExecPluginWithEnv function
 	return ExecPluginWithEnv(r.pluginName, main, args, env, stdin, stdout, stderr)
 }
 
@@ -160,8 +159,7 @@ func (r *RuntimeSubprocess) InvokeHook(event string) error {
 		return err
 	}
 
-	// Use the ExecHook function
-	return ExecHook(r.pluginName, event, main, argv)
+	return execHook(r.pluginName, event, main, argv)
 }
 
 // unmarshalRuntimeConfigSubprocess unmarshals a runtime config map into a RuntimeConfigSubprocess struct
