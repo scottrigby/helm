@@ -421,7 +421,7 @@ func TestPostRenderer(t *testing.T) {
 	}
 }
 
-func TestNewExecRunWithNoOutput(t *testing.T) {
+func TestNewPostRendererRunWithNoOutput(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		// the actual Run test uses a basic sed example, so skip this test on windows
 		t.Skip("skipping on windows")
@@ -433,14 +433,14 @@ func TestNewExecRunWithNoOutput(t *testing.T) {
 	base := filepath.Join(s.PluginsDirectory, name)
 	SetupPluginEnv(s, name, base)
 
-	renderer, err := NewExec(s, name, "")
+	renderer, err := NewPostRenderer(s, name, "")
 	require.NoError(t, err)
 
 	_, err = renderer.Run(bytes.NewBufferString(""))
 	is.Error(err)
 }
 
-func TestNewExecWithOneArgsRun(t *testing.T) {
+func TestNewPostRendererWithOneArgsRun(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		// the actual Run test uses a basic sed example, so skip this test on windows
 		t.Skip("skipping on windows")
@@ -452,7 +452,7 @@ func TestNewExecWithOneArgsRun(t *testing.T) {
 	base := filepath.Join(s.PluginsDirectory, name)
 	SetupPluginEnv(s, name, base)
 
-	renderer, err := NewExec(s, name, "ARG1")
+	renderer, err := NewPostRenderer(s, name, "ARG1")
 	require.NoError(t, err)
 
 	output, err := renderer.Run(bytes.NewBufferString("FOOTEST"))
@@ -460,7 +460,7 @@ func TestNewExecWithOneArgsRun(t *testing.T) {
 	is.Contains(output.String(), "ARG1")
 }
 
-func TestNewExecWithTwoArgsRun(t *testing.T) {
+func TestNewPostRendererWithTwoArgsRun(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		// the actual Run test uses a basic sed example, so skip this test on windows
 		t.Skip("skipping on windows")
@@ -472,7 +472,7 @@ func TestNewExecWithTwoArgsRun(t *testing.T) {
 	base := filepath.Join(s.PluginsDirectory, name)
 	SetupPluginEnv(s, name, base)
 
-	renderer, err := NewExec(s, name, "ARG1", "ARG2")
+	renderer, err := NewPostRenderer(s, name, "ARG1", "ARG2")
 	require.NoError(t, err)
 
 	output, err := renderer.Run(bytes.NewBufferString("FOOTEST"))

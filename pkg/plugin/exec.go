@@ -27,27 +27,14 @@ import (
 	"helm.sh/helm/v4/pkg/cli"
 )
 
-// execRender implements PostRenderer. represents a postrender type plugin and args
-// TODO: rename to PostRendererWithEnv, because this is not subprocess/exec specific, but does contain Helm Client env settings
+// execRender implements PostRenderer for subprocess-based plugins
 type execRender struct {
 	plugin   Plugin
 	args     []string
 	settings *cli.EnvSettings
 }
 
-// NewExec returns a PostRenderer implementation that calls the provided postrender type plugin.
-// It returns an error if the plugin cannot be found.
-// TODO: rename to NewPostRendererWithEnv
-func NewExec(settings *cli.EnvSettings, pluginName string, args ...string) (PostRenderer, error) {
-	p, err := FindPlugin(pluginName, settings.PluginsDirectory, "postrender")
-	if err != nil {
-		return nil, err
-	}
-	return &execRender{p, args, settings}, nil
-}
-
-// Run the configured binary for the post render
-// TODO: consolidate with methods in pkg/plugin/runtime_subprocess.go
+// Run executes the subprocess-based postrender plugin
 func (p *execRender) Run(renderedManifests *bytes.Buffer) (*bytes.Buffer, error) {
 	// this part from [cmd.loadPlugins]
 	// needed to get the correct args, which can be defined both in plugin.yaml and additional CLI command args

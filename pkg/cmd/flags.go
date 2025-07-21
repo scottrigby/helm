@@ -198,7 +198,7 @@ func (p *postRendererString) Set(val string) error {
 		return fmt.Errorf("cannot specify --post-renderer flag more than once")
 	}
 	p.options.pluginName = val
-	pr, err := plugin.NewExec(settings, p.options.pluginName, p.options.args...)
+	pr, err := plugin.NewPostRenderer(p.options.settings, p.options.pluginName, p.options.args...)
 	if err != nil {
 		return err
 	}
@@ -227,8 +227,7 @@ func (p *postRendererArgsSlice) Set(val string) error {
 		return nil
 	}
 	// overwrite if already create PostRenderer by `post-renderer` flags
-	// TODO: change to use plugin.Runtime.InvokeWithEnv
-	pr, err := plugin.NewExec(p.options.settings, p.options.pluginName, p.options.args...)
+	pr, err := plugin.NewPostRenderer(p.options.settings, p.options.pluginName, p.options.args...)
 	if err != nil {
 		return err
 	}
