@@ -145,56 +145,21 @@ func (i *OCIInstaller) Install() error {
 	}
 
 	// Extract each layer to the cache directory
+	// Only support compressed tar archives to preserve file permissions
 	for _, layer := range imageManifest.Layers {
 		layerData, err := content.FetchAll(ctx, memoryStore, layer)
 		if err != nil {
 			return fmt.Errorf("failed to fetch layer %s: %w", layer.Digest, err)
 		}
 
-		// Try to detect if this is a compressed tar file by examining the data
-		isGzip := false
-		if len(layerData) > 2 && layerData[0] == 0x1f && layerData[1] == 0x8b {
-			isGzip = true
+		// Check if this is a gzip compressed file
+		if len(layerData) < 2 || layerData[0] != 0x1f || layerData[1] != 0x8b {
+			return fmt.Errorf("layer %s is not a gzip compressed archive", layer.Digest)
 		}
 
-		// Try to extract as tar or gzipped tar
-		extracted := false
-		if isGzip {
-			// Try to extract as gzipped tar
-			if err := extractTarGz(bytes.NewReader(layerData), i.CacheDir); err == nil {
-				extracted = true
-			} else {
-				slog.Debug("failed to extract as gzipped tar", "layer", layer.Digest, "error", err)
-			}
-		} else {
-			// Try to extract as plain tar
-			if err := extractTar(bytes.NewReader(layerData), i.CacheDir); err == nil {
-				extracted = true
-			} else {
-				slog.Debug("failed to extract as tar", "layer", layer.Digest, "error", err)
-			}
-		}
-
-		// If not extracted as tar, check if it has a filename annotation
-		if !extracted {
-			if layer.Annotations != nil {
-				if filename, ok := layer.Annotations["org.opencontainers.image.title"]; ok {
-					filePath := filepath.Join(i.CacheDir, filename)
-					if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
-						return fmt.Errorf("failed to create directory for %s: %w", filename, err)
-					}
-					if err := os.WriteFile(filePath, layerData, 0644); err != nil {
-						return fmt.Errorf("failed to write file %s: %w", filename, err)
-					}
-				} else {
-					// If no filename annotation, save with digest as filename
-					filename := fmt.Sprintf("layer-%s", strings.TrimPrefix(layer.Digest.String(), "sha256:"))
-					filePath := filepath.Join(i.CacheDir, filename)
-					if err := os.WriteFile(filePath, layerData, 0644); err != nil {
-						return fmt.Errorf("failed to write layer file %s: %w", filename, err)
-					}
-				}
-			}
+		// Extract as gzipped tar
+		if err := extractTarGz(bytes.NewReader(layerData), i.CacheDir); err != nil {
+			return fmt.Errorf("failed to extract layer %s: %w", layer.Digest, err)
 		}
 	}
 
