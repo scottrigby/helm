@@ -32,6 +32,12 @@ import (
 	"helm.sh/helm/v4/pkg/plugin"
 )
 
+// TODO: move pluginDynamicCompletionExecutable pkg/plugin/runtime_subprocess.go
+// any references to executables should be for [plugin.RuntimeSubprocess] only
+// this should also be for backwards compatibility in [plugin.PluginLegacy] only
+//
+// TODO: for v1 make this configurable with a new CompletionCommand field for
+// [plugin.RuntimeConfigSubprocess]
 const (
 	pluginStaticCompletionFile        = "completion.yaml"
 	pluginDynamicCompletionExecutable = "plugin.complete"
@@ -355,6 +361,7 @@ func pluginDynamicComp(plug plugin.Plugin, cmd *cobra.Command, args []string, to
 	}
 
 	// Use ExecPluginWithEnv directly for dynamic completion
+	// TODO: update to use plugin.Runtime.InvokeWithEnv
 	if err := plugin.ExecPluginWithEnv(plug.GetName(), main, argv, env, nil, buf, buf); err != nil {
 		// The dynamic completion file is optional for a plugin, so this error is ok.
 		cobra.CompDebugln(fmt.Sprintf("Unable to call %s: %v", main, err.Error()), settings.Debug)

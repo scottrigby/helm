@@ -51,6 +51,7 @@ type ConfigDownload struct {
 // ConfigPostrender represents the configuration for postrender plugins
 type ConfigPostrender struct {
 	// PostrenderArgs are arguments passed to the postrender command
+	// TODO: remove this field. it is not needed as args are passed from CLI to the plugin
 	PostrenderArgs []string `json:"postrenderArgs"`
 }
 
