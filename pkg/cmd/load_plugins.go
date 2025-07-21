@@ -116,7 +116,7 @@ func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 				}
 
 				// Invoke plugin
-				err = runtime.InvokeWithEnv(os.Stdin, out, os.Stderr, env)
+				err = runtime.Invoke(os.Stdin, out, os.Stderr, env)
 				if execErr, ok := err.(*plugin.Error); ok {
 					return PluginError{
 						error: execErr.Err,
@@ -360,11 +360,23 @@ func pluginDynamicComp(plug plugin.Plugin, cmd *cobra.Command, args []string, to
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
 
-	// Use ExecPluginWithEnv directly for dynamic completion
-	// TODO: update to use plugin.Runtime.InvokeWithEnv
-	if err := plugin.ExecPluginWithEnv(plug.GetName(), main, argv, env, nil, buf, buf); err != nil {
-		// The dynamic completion file is optional for a plugin, so this error is ok.
-		cobra.CompDebugln(fmt.Sprintf("Unable to call %s: %v", main, err.Error()), settings.Debug)
+	// Get runtime instance for dynamic completion
+	runtime, err := plug.GetRuntimeInstance()
+	if err != nil {
+		cobra.CompDebugln(fmt.Sprintf("Unable to get runtime for %s: %v", plug.GetName(), err.Error()), settings.Debug)
+		return nil, cobra.ShellCompDirectiveDefault
+	}
+
+	// For subprocess runtime, use InvokeWithEnv for dynamic completion
+	if subprocessRuntime, ok := runtime.(*plugin.RuntimeSubprocess); ok {
+		if err := subprocessRuntime.InvokeWithEnv(main, argv, env, nil, buf, buf); err != nil {
+			// The dynamic completion file is optional for a plugin, so this error is ok.
+			cobra.CompDebugln(fmt.Sprintf("Unable to call %s: %v", main, err.Error()), settings.Debug)
+			return nil, cobra.ShellCompDirectiveDefault
+		}
+	} else {
+		// Non-subprocess runtimes don't support dynamic completion yet
+		cobra.CompDebugln(fmt.Sprintf("Dynamic completion not supported for runtime type of %s", plug.GetName()), settings.Debug)
 		return nil, cobra.ShellCompDirectiveDefault
 	}
 

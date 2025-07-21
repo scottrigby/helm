@@ -88,20 +88,15 @@ func (r *RuntimeConfigWasm) CreateRuntime(pluginDir string, pluginName string) (
 }
 
 // Invoke implementation for Runtime
-func (r *RuntimeWasm) Invoke(in *bytes.Buffer, out *bytes.Buffer) error {
+func (r *RuntimeWasm) Invoke(stdin io.Reader, stdout, stderr io.Writer, env []string) error {
 	// TODO: Implement WASM runtime execution
 	// This will include:
 	// - Loading the WASM module from r.config.WasmModule
 	// - Setting up host functions from r.config.HostFunctions
 	// - Configuring memory settings from r.config.MemorySettings
 	// - Applying security constraints (AllowedHosts, AllowedPaths)
-	// - Executing the WASM module with input from 'in' buffer
-	// - Writing output to 'out' buffer
-	return fmt.Errorf("WASM runtime not yet implemented")
-}
-
-// InvokeWithEnv implementation for RuntimeWasm (not yet implemented)
-func (r *RuntimeWasm) InvokeWithEnv(stdin io.Reader, stdout, stderr io.Writer, env []string) error {
+	// - Executing the WASM module with environment from 'env'
+	// - Reading input from 'stdin' and writing output to 'stdout'/'stderr'
 	return fmt.Errorf("WASM runtime not yet implemented")
 }
 

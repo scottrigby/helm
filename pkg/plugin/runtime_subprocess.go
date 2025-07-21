@@ -91,36 +91,7 @@ func (r *RuntimeConfigSubprocess) CreateRuntime(pluginDir string, pluginName str
 }
 
 // Invoke implementation for RuntimeConfig
-func (r *RuntimeSubprocess) Invoke(in *bytes.Buffer, out *bytes.Buffer) error {
-	// Setup plugin environment
-	SetupPluginEnv(r.settings, r.pluginName, r.pluginDir)
-
-	// Prepare command based on runtime configuration
-	// Note: IgnoreFlags is handled at the plugin level, not runtime level
-	extraArgsIn := r.extraArgs
-
-	cmds := r.config.PlatformCommand
-	if len(cmds) == 0 && len(r.config.Command) > 0 {
-		cmds = []PlatformCommand{{Command: r.config.Command}}
-	}
-
-	main, args, err := PrepareCommands(cmds, true, extraArgsIn)
-	if err != nil {
-		return fmt.Errorf("failed to prepare command: %w", err)
-	}
-
-	// Execute the command
-	cmd := exec.Command(main, args...)
-	cmd.Dir = r.pluginDir
-	cmd.Stdin = in
-	cmd.Stdout = out
-	cmd.Stderr = out
-
-	return cmd.Run()
-}
-
-// InvokeWithEnv implementation for RuntimeConfig
-func (r *RuntimeSubprocess) InvokeWithEnv(stdin io.Reader, stdout, stderr io.Writer, env []string) error {
+func (r *RuntimeSubprocess) Invoke(stdin io.Reader, stdout, stderr io.Writer, env []string) error {
 	// Prepare command based on runtime configuration
 	cmds := r.config.PlatformCommand
 	if len(cmds) == 0 && len(r.config.Command) > 0 {
@@ -132,7 +103,33 @@ func (r *RuntimeSubprocess) InvokeWithEnv(stdin io.Reader, stdout, stderr io.Wri
 		return fmt.Errorf("failed to prepare command: %w", err)
 	}
 
-	return ExecPluginWithEnv(r.pluginName, main, args, env, stdin, stdout, stderr)
+	// Execute the command directly
+	return r.InvokeWithEnv(main, args, env, stdin, stdout, stderr)
+}
+
+// InvokeWithEnv executes a plugin command with custom environment and I/O streams
+// This method allows execution with different command/args than the plugin's default
+func (r *RuntimeSubprocess) InvokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	mainCmdExp := os.ExpandEnv(main)
+	prog := exec.Command(mainCmdExp, argv...)
+	prog.Env = env
+	prog.Stdin = stdin
+	prog.Stdout = stdout
+	prog.Stderr = stderr
+
+	if err := prog.Run(); err != nil {
+		if eerr, ok := err.(*exec.ExitError); ok {
+			os.Stderr.Write(eerr.Stderr)
+			status := eerr.Sys().(syscall.WaitStatus)
+			return &Error{
+				Err:        fmt.Errorf("plugin %q exited with error", r.pluginName),
+				PluginName: r.pluginName,
+				Code:       status.ExitStatus(),
+			}
+		}
+		return err
+	}
+	return nil
 }
 
 // InvokeHook implementation for RuntimeConfig
@@ -242,30 +239,6 @@ func unmarshalRuntimeConfigSubprocess(runtimeData map[string]interface{}) (*Runt
 	}
 
 	return &config, nil
-}
-
-// ExecPluginWithEnv executes a plugin command with custom environment and I/O streams
-func ExecPluginWithEnv(pluginName string, main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {
-	mainCmdExp := os.ExpandEnv(main)
-	prog := exec.Command(mainCmdExp, argv...)
-	prog.Env = env
-	prog.Stdin = stdin
-	prog.Stdout = stdout
-	prog.Stderr = stderr
-
-	if err := prog.Run(); err != nil {
-		if eerr, ok := err.(*exec.ExitError); ok {
-			os.Stderr.Write(eerr.Stderr)
-			status := eerr.Sys().(syscall.WaitStatus)
-			return &Error{
-				Err:        fmt.Errorf("plugin %q exited with error", pluginName),
-				PluginName: pluginName,
-				Code:       status.ExitStatus(),
-			}
-		}
-		return err
-	}
-	return nil
 }
 
 // execHook executes a plugin hook command
