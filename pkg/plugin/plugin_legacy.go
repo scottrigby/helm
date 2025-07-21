@@ -62,16 +62,16 @@ func (p *PluginLegacy) GetConfig() Config {
 		}
 	case "cli":
 		return &ConfigCLI{
-			Usage:       "", // Legacy plugins don't have Usage field for command syntax
-			ShortHelp:   p.MetadataLegacy.Usage, // Map legacy usage to shortHelp
+			Usage:       "",                           // Legacy plugins don't have Usage field for command syntax
+			ShortHelp:   p.MetadataLegacy.Usage,       // Map legacy usage to shortHelp
 			LongHelp:    p.MetadataLegacy.Description, // Map legacy description to longHelp
 			IgnoreFlags: p.MetadataLegacy.IgnoreFlags,
 		}
 	default:
 		// Return a basic CLI config as fallback
 		return &ConfigCLI{
-			Usage:       "", // Legacy plugins don't have Usage field for command syntax
-			ShortHelp:   p.MetadataLegacy.Usage, // Map legacy usage to shortHelp
+			Usage:       "",                           // Legacy plugins don't have Usage field for command syntax
+			ShortHelp:   p.MetadataLegacy.Usage,       // Map legacy usage to shortHelp
 			LongHelp:    p.MetadataLegacy.Description, // Map legacy description to longHelp
 			IgnoreFlags: p.MetadataLegacy.IgnoreFlags,
 		}
