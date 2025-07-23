@@ -19,7 +19,6 @@ package plugin
 import (
 	"bytes"
 	"fmt"
-
 	"helm.sh/helm/v4/pkg/cli"
 )
 
