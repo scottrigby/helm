@@ -15,6 +15,8 @@ limitations under the License.
 
 package plugin // import "helm.sh/helm/v4/pkg/plugin"
 
+import "io"
+
 const PluginFileName = "plugin.yaml"
 
 // Downloaders represents the plugins capability if it can retrieve
@@ -29,17 +31,9 @@ type Downloaders struct {
 
 // Plugin interface defines the common methods that all plugin versions must implement
 type Plugin interface {
-	GetDir() string
-	GetName() string
-	GetType() string
-	GetAPIVersion() string
-	GetRuntime() string
-	GetMetadata() interface{}
-	GetConfig() Config
-	GetRuntimeConfig() RuntimeConfig
-	GetRuntimeInstance() (Runtime, error)
-	Validate() error
-	PrepareCommand(extraArgs []string) (string, []string, error)
+	Metadata() MetadataV1
+	Dir() string
+	Invoke(stdin io.Reader, stdout, stderr io.Writer, env []string) error
 }
 
 // Error is returned when a plugin exits with a non-zero status code

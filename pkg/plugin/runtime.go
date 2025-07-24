@@ -27,11 +27,13 @@ type Runtime interface {
 	// Postrender executes the plugin as a post-renderer with rendered manifests
 	// This method should only be called when the plugin type is "postrender"
 	Postrender(renderedManifests *bytes.Buffer, args []string) (*bytes.Buffer, error)
+	Metadata() MetadataV1
+	Dir() string
 }
 
 // RuntimeConfig interface defines the methods that all runtime configurations must implement
 type RuntimeConfig interface {
 	GetRuntimeType() string
 	Validate() error
-	CreateRuntime(pluginDir string, pluginName string) (Runtime, error)
+	CreateRuntime(*PluginV1) (Runtime, error)
 }

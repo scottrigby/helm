@@ -23,31 +23,21 @@ import (
 // PluginV1 represents a V1 plugin
 type PluginV1 struct {
 	// MetadataV1 is a parsed representation of a plugin.yaml
-	MetadataV1 *MetadataV1
+	Metadata MetadataV1
 	// Dir is the string path to the directory that holds the plugin.
 	Dir string
 }
 
-// Interface implementations for PluginV1
-func (p *PluginV1) GetDir() string                  { return p.Dir }
-func (p *PluginV1) GetName() string                 { return p.MetadataV1.Name }
-func (p *PluginV1) GetType() string                 { return p.MetadataV1.Type }
-func (p *PluginV1) GetAPIVersion() string           { return p.MetadataV1.APIVersion }
-func (p *PluginV1) GetRuntime() string              { return p.MetadataV1.Runtime }
-func (p *PluginV1) GetMetadata() interface{}        { return p.MetadataV1 }
-func (p *PluginV1) GetConfig() Config               { return p.MetadataV1.Config }
-func (p *PluginV1) GetRuntimeConfig() RuntimeConfig { return p.MetadataV1.RuntimeConfig }
-
 func (p *PluginV1) GetRuntimeInstance() (Runtime, error) {
-	if p.MetadataV1.RuntimeConfig == nil {
+	if p.Metadata.RuntimeConfig == nil {
 		return nil, fmt.Errorf("plugin has no runtime configuration")
 	}
-	return p.MetadataV1.RuntimeConfig.CreateRuntime(p.Dir, p.MetadataV1.Name)
+	return p.Metadata.RuntimeConfig.CreateRuntime(p)
 }
 
 func (p *PluginV1) PrepareCommand(extraArgs []string) (string, []string, error) {
-	config := p.GetConfig()
-	runtimeConfig := p.GetRuntimeConfig()
+	config := p.Metadata.Config
+	runtimeConfig := p.Metadata.RuntimeConfig
 
 	// Only subprocess runtime uses PrepareCommand
 	if subprocessConfig, ok := runtimeConfig.(*RuntimeConfigSubprocess); ok {
@@ -76,51 +66,48 @@ func (p *PluginV1) PrepareCommand(extraArgs []string) (string, []string, error) 
 }
 
 func (p *PluginV1) Validate() error {
-	if p.MetadataV1 == nil {
-		return fmt.Errorf("plugin metadata is missing")
-	}
 
-	if !validPluginName.MatchString(p.MetadataV1.Name) {
+	if !validPluginName.MatchString(p.Metadata.Name) {
 		return fmt.Errorf("invalid plugin name")
 	}
 
-	if p.MetadataV1.APIVersion != "v1" {
+	if p.Metadata.APIVersion != "v1" {
 		return fmt.Errorf("v1 plugin must have apiVersion: v1")
 	}
 
-	if p.MetadataV1.Type == "" {
+	if p.Metadata.Type == "" {
 		return fmt.Errorf("v1 plugin must have a type field")
 	}
 
-	if p.MetadataV1.Runtime == "" {
+	if p.Metadata.Runtime == "" {
 		return fmt.Errorf("v1 plugin must have a runtime field")
 	}
 
-	if p.MetadataV1.Config == nil {
+	if p.Metadata.Config == nil {
 		return fmt.Errorf("v1 plugin must have a config field")
 	}
 
-	if p.MetadataV1.RuntimeConfig == nil {
+	if p.Metadata.RuntimeConfig == nil {
 		return fmt.Errorf("v1 plugin must have a runtimeConfig field")
 	}
 
 	// Validate that config type matches plugin type
-	if p.MetadataV1.Config.GetType() != p.MetadataV1.Type {
-		return fmt.Errorf("config type %s does not match plugin type %s", p.MetadataV1.Config.GetType(), p.MetadataV1.Type)
+	if p.Metadata.Config.GetType() != p.Metadata.Type {
+		return fmt.Errorf("config type %s does not match plugin type %s", p.Metadata.Config.GetType(), p.Metadata.Type)
 	}
 
 	// Validate that runtime config type matches runtime type
-	if p.MetadataV1.RuntimeConfig.GetRuntimeType() != p.MetadataV1.Runtime {
-		return fmt.Errorf("runtime config type %s does not match runtime %s", p.MetadataV1.RuntimeConfig.GetRuntimeType(), p.MetadataV1.Runtime)
+	if p.Metadata.RuntimeConfig.GetRuntimeType() != p.Metadata.Runtime {
+		return fmt.Errorf("runtime config type %s does not match runtime %s", p.Metadata.RuntimeConfig.GetRuntimeType(), p.Metadata.Runtime)
 	}
 
 	// Validate the config itself
-	if err := p.MetadataV1.Config.Validate(); err != nil {
+	if err := p.Metadata.Config.Validate(); err != nil {
 		return fmt.Errorf("config validation failed: %w", err)
 	}
 
 	// Validate the runtime config itself
-	if err := p.MetadataV1.RuntimeConfig.Validate(); err != nil {
+	if err := p.Metadata.RuntimeConfig.Validate(); err != nil {
 		return fmt.Errorf("runtime config validation failed: %w", err)
 	}
 

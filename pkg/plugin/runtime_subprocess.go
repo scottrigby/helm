@@ -63,11 +63,10 @@ func (r *RuntimeConfigSubprocess) Validate() error {
 
 // RuntimeSubprocess implements the Runtime interface for subprocess execution
 type RuntimeSubprocess struct {
-	config     *RuntimeConfigSubprocess
-	pluginDir  string
-	pluginName string
-	extraArgs  []string
-	settings   *cli.EnvSettings
+	config    *RuntimeConfigSubprocess
+	plugin    *PluginV1
+	extraArgs []string
+	settings  *cli.EnvSettings
 }
 
 // SetExtraArgs sets the extra arguments for the subprocess runtime
@@ -81,13 +80,20 @@ func (r *RuntimeSubprocess) SetSettings(settings *cli.EnvSettings) {
 }
 
 // CreateRuntime implementation for RuntimeConfig
-func (r *RuntimeConfigSubprocess) CreateRuntime(pluginDir string, pluginName string) (Runtime, error) {
+func (r *RuntimeConfigSubprocess) CreateRuntime(p *PluginV1) (Runtime, error) {
 	return &RuntimeSubprocess{
-		config:     r,
-		pluginDir:  pluginDir,
-		pluginName: pluginName,
-		settings:   cli.New(),
+		config:   r,
+		plugin:   p,
+		settings: cli.New(),
 	}, nil
+}
+
+func (r *RuntimeSubprocess) Metadata() MetadataV1 {
+	return r.plugin.Metadata
+}
+
+func (r *RuntimeSubprocess) Dir() string {
+	return r.plugin.Dir
 }
 
 // Invoke implementation for RuntimeConfig
@@ -122,8 +128,8 @@ func (r *RuntimeSubprocess) InvokeWithEnv(main string, argv []string, env []stri
 			os.Stderr.Write(eerr.Stderr)
 			status := eerr.Sys().(syscall.WaitStatus)
 			return &Error{
-				Err:        fmt.Errorf("plugin %q exited with error", r.pluginName),
-				PluginName: r.pluginName,
+				Err:        fmt.Errorf("plugin %q exited with error", r.plugin.Metadata.Name),
+				PluginName: r.plugin.Metadata.Name,
 				Code:       status.ExitStatus(),
 			}
 		}
@@ -163,7 +169,7 @@ func (r *RuntimeSubprocess) InvokeHook(event string) error {
 	if err := prog.Run(); err != nil {
 		if eerr, ok := err.(*exec.ExitError); ok {
 			os.Stderr.Write(eerr.Stderr)
-			return fmt.Errorf("plugin %s hook for %q exited with error", event, r.pluginName)
+			return fmt.Errorf("plugin %s hook for %q exited with error", event, r.plugin.Metadata.Name)
 		}
 		return err
 	}
@@ -173,7 +179,7 @@ func (r *RuntimeSubprocess) InvokeHook(event string) error {
 // Postrender implementation for RuntimeSubprocess
 func (r *RuntimeSubprocess) Postrender(renderedManifests *bytes.Buffer, args []string) (*bytes.Buffer, error) {
 	// Setup plugin environment
-	SetupPluginEnv(r.settings, r.pluginName, r.pluginDir)
+	SetupPluginEnv(r.settings, r.plugin.Metadata.Name, r.plugin.Dir)
 
 	// Prepare command with the provided args
 	originalExtraArgs := r.extraArgs
@@ -225,12 +231,12 @@ func (r *RuntimeSubprocess) Postrender(renderedManifests *bytes.Buffer, args []s
 
 	// Wait for command to complete
 	if err := cmd.Wait(); err != nil {
-		return nil, fmt.Errorf("error while running postrender %s. error output:\n%s: %w", r.pluginName, stderr.String(), err)
+		return nil, fmt.Errorf("error while running postrender %s. error output:\n%s: %w", r.plugin.Metadata.Name, stderr.String(), err)
 	}
 
 	// Check for empty output
 	if len(bytes.TrimSpace(postRendered.Bytes())) == 0 {
-		return nil, fmt.Errorf("post-renderer %q produced empty output", r.pluginName)
+		return nil, fmt.Errorf("post-renderer %q produced empty output", r.plugin.Metadata.Name)
 	}
 
 	return &postRendered, nil
