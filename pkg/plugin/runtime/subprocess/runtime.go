@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package plugin
+package subprocess // import "helm.sh/helm/v4/pkg/plugin/runtime/subprocess"
 
 import (
 	"bytes"
@@ -26,10 +26,11 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"helm.sh/helm/v4/pkg/cli"
+	"helm.sh/helm/v4/pkg/plugin"
 )
 
-// RuntimeConfigSubprocess represents configuration for subprocess runtime
-type RuntimeConfigSubprocess struct {
+// RuntimeConfig represents configuration for subprocess runtime
+type RuntimeConfig struct {
 	// PlatformCommand is the plugin command, with a platform selector and support for args.
 	PlatformCommand []PlatformCommand `json:"platformCommand"`
 	// Command is the plugin command, as a single string.
@@ -48,10 +49,10 @@ type RuntimeConfigSubprocess struct {
 }
 
 // GetRuntimeType implementation for RuntimeConfig
-func (r *RuntimeConfigSubprocess) GetRuntimeType() string { return "subprocess" }
+func (r *RuntimeConfig) GetRuntimeType() string { return "subprocess" }
 
 // Validate implementation for RuntimeConfig
-func (r *RuntimeConfigSubprocess) Validate() error {
+func (r *RuntimeConfig) Validate() error {
 	if len(r.PlatformCommand) > 0 && len(r.Command) > 0 {
 		return fmt.Errorf("both platformCommand and command are set")
 	}
@@ -63,7 +64,7 @@ func (r *RuntimeConfigSubprocess) Validate() error {
 
 // RuntimeSubprocess implements the Runtime interface for subprocess execution
 type RuntimeSubprocess struct {
-	config     *RuntimeConfigSubprocess
+	config     *RuntimeConfig
 	pluginDir  string
 	pluginName string
 	extraArgs  []string
@@ -81,7 +82,7 @@ func (r *RuntimeSubprocess) SetSettings(settings *cli.EnvSettings) {
 }
 
 // CreateRuntime implementation for RuntimeConfig
-func (r *RuntimeConfigSubprocess) CreateRuntime(pluginDir string, pluginName string) (Runtime, error) {
+func (r *RuntimeConfig) CreateRuntime(pluginDir string, pluginName string) (plugin.Runtime, error) {
 	return &RuntimeSubprocess{
 		config:     r,
 		pluginDir:  pluginDir,
@@ -121,7 +122,7 @@ func (r *RuntimeSubprocess) InvokeWithEnv(main string, argv []string, env []stri
 		if eerr, ok := err.(*exec.ExitError); ok {
 			os.Stderr.Write(eerr.Stderr)
 			status := eerr.Sys().(syscall.WaitStatus)
-			return &Error{
+			return &plugin.Error{
 				Err:        fmt.Errorf("plugin %q exited with error", r.pluginName),
 				PluginName: r.pluginName,
 				Code:       status.ExitStatus(),
@@ -168,6 +169,18 @@ func (r *RuntimeSubprocess) InvokeHook(event string) error {
 		return err
 	}
 	return nil
+}
+
+// SetupPluginEnv prepares os.Env for plugins. It operates on os.Env because
+// the plugin subsystem itself needs access to the environment variables
+// created here.
+func SetupPluginEnv(settings *cli.EnvSettings, name, base string) {
+	env := settings.EnvVars()
+	env["HELM_PLUGIN_NAME"] = name
+	env["HELM_PLUGIN_DIR"] = base
+	for key, val := range env {
+		os.Setenv(key, val)
+	}
 }
 
 // Postrender implementation for RuntimeSubprocess
@@ -236,14 +249,14 @@ func (r *RuntimeSubprocess) Postrender(renderedManifests *bytes.Buffer, args []s
 	return &postRendered, nil
 }
 
-// unmarshalRuntimeConfigSubprocess unmarshals a runtime config map into a RuntimeConfigSubprocess struct
-func unmarshalRuntimeConfigSubprocess(runtimeData map[string]interface{}) (*RuntimeConfigSubprocess, error) {
+// ConvertRuntimeConfig unmarshals a runtime config map into a subprocess.RuntimeConfig struct
+func ConvertRuntimeConfig(runtimeData map[string]interface{}) (plugin.RuntimeConfig, error) {
 	data, err := yaml.Marshal(runtimeData)
 	if err != nil {
 		return nil, err
 	}
 
-	var config RuntimeConfigSubprocess
+	var config RuntimeConfig
 	if err := yaml.UnmarshalStrict(data, &config); err != nil {
 		return nil, err
 	}

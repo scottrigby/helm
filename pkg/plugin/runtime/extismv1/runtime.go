@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package plugin
+package extismv1
 
 import (
 	"bytes"
@@ -23,6 +23,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"helm.sh/helm/v4/pkg/cli"
+	"helm.sh/helm/v4/pkg/plugin"
 )
 
 // this filename underscore suffix is a workaround to Go treating files ending
@@ -30,7 +31,7 @@ import (
 // ref https://pkg.go.dev/cmd/go#hdr-Build_constraints
 
 // RuntimeConfigWasm represents configuration for WASM runtime
-type RuntimeConfigWasm struct {
+type RuntimeConfig struct {
 	// WasmModule is the path to the WASM module file
 	WasmModule string `json:"wasmModule"`
 	// HostFunctions are the host functions to make available to the WASM module
@@ -50,10 +51,10 @@ type WasmMemorySettings struct {
 }
 
 // GetRuntimeType implementation for RuntimeConfig
-func (r *RuntimeConfigWasm) GetRuntimeType() string { return "wasm" }
+func (r *RuntimeConfig) GetRuntimeType() string { return "wasm" }
 
 // Validate implementation for RuntimeConfig
-func (r *RuntimeConfigWasm) Validate() error {
+func (r *RuntimeConfig) Validate() error {
 	if r.WasmModule == "" {
 		return fmt.Errorf("wasmModule is required for WASM runtime")
 	}
@@ -71,14 +72,14 @@ func (r *RuntimeConfigWasm) Validate() error {
 
 // RuntimeWasm implements the Runtime interface for WASM execution
 type RuntimeWasm struct {
-	config     *RuntimeConfigWasm
+	config     *RuntimeConfig
 	pluginDir  string
 	pluginName string
 	settings   *cli.EnvSettings
 }
 
 // CreateRuntime implementation for RuntimeConfig
-func (r *RuntimeConfigWasm) CreateRuntime(pluginDir string, pluginName string) (Runtime, error) {
+func (r *RuntimeConfig) CreateRuntime(pluginDir string, pluginName string) (plugin.Runtime, error) {
 	return &RuntimeWasm{
 		config:     r,
 		pluginDir:  pluginDir,
@@ -110,14 +111,14 @@ func (r *RuntimeWasm) Postrender(renderedManifests *bytes.Buffer, args []string)
 	return nil, fmt.Errorf("WASM postrender not yet implemented")
 }
 
-// unmarshalRuntimeConfigWasm unmarshals a runtime config map into a RuntimeConfigWasm struct
-func unmarshalRuntimeConfigWasm(runtimeData map[string]interface{}) (*RuntimeConfigWasm, error) {
+// ConvertRuntimeConfig unmarshals a runtime config map into a RuntimeConfigWasm struct
+func ConvertRuntimeConfig(runtimeData map[string]interface{}) (*RuntimeConfig, error) {
 	data, err := yaml.Marshal(runtimeData)
 	if err != nil {
 		return nil, err
 	}
 
-	var config RuntimeConfigWasm
+	var config RuntimeConfig
 	if err := yaml.UnmarshalStrict(data, &config); err != nil {
 		return nil, err
 	}

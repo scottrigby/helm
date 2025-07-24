@@ -14,12 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package plugin
+package postrenderer
 
 import (
 	"bytes"
 	"fmt"
+	"plugin"
+
 	"helm.sh/helm/v4/pkg/cli"
+
+	pluginloader "helm.sh/helm/v4/pkg/plugin/loader"
 )
 
 // PostRenderer is an interface different plugin runtimes
@@ -33,14 +37,14 @@ type PostRenderer interface {
 
 // NewPostRenderer creates a PostRenderer that uses the plugin's runtime
 func NewPostRenderer(settings *cli.EnvSettings, pluginName string, args ...string) (PostRenderer, error) {
-	p, err := FindPlugin(pluginName, settings.PluginsDirectory, "postrender")
+	p, err := pluginloader.FindPlugin(pluginName, settings.PluginsDirectory, "postrender")
 	if err != nil {
 		return nil, err
 	}
 
 	// Verify this is a postrender plugin
 	config := p.GetConfig()
-	if _, ok := config.(*ConfigPostrender); !ok {
+	if _, ok := config.(*plugin.ConfigPostrender); !ok {
 		return nil, fmt.Errorf("plugin %s is not a postrender plugin", pluginName)
 	}
 
@@ -53,7 +57,7 @@ func NewPostRenderer(settings *cli.EnvSettings, pluginName string, args ...strin
 
 // runtimePostRenderer implements PostRenderer by delegating to the plugin's runtime
 type runtimePostRenderer struct {
-	plugin   Plugin
+	plugin   plugin.Plugin
 	args     []string
 	settings *cli.EnvSettings
 }
@@ -67,7 +71,7 @@ func (r *runtimePostRenderer) Run(renderedManifests *bytes.Buffer) (*bytes.Buffe
 	}
 
 	// For subprocess runtime, configure settings
-	if subprocessRuntime, ok := runtime.(*RuntimeSubprocess); ok {
+	if subprocessRuntime, ok := subprocess.Runtime; ok {
 		subprocessRuntime.SetSettings(r.settings)
 	}
 

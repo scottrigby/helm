@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"helm.sh/helm/v4/pkg/plugin"
+	"helm.sh/helm/v4/pkg/plugin/runtime/subprocess"
 )
 
 // TODO: move pluginDynamicCompletionExecutable pkg/plugin/runtime_subprocess.go
@@ -37,7 +38,7 @@ import (
 // this should also be for backwards compatibility in [plugin.PluginLegacy] only
 //
 // TODO: for v1 make this configurable with a new CompletionCommand field for
-// [plugin.RuntimeConfigSubprocess]
+// [plugin.subprocess.RuntimeConfig]
 const (
 	pluginStaticCompletionFile        = "completion.yaml"
 	pluginDynamicCompletionExecutable = "plugin.complete"
@@ -99,7 +100,7 @@ func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 					return err
 				}
 				// Setup plugin environment
-				plugin.SetupPluginEnv(settings, plug.GetName(), plug.GetDir())
+				subprocess.SetupPluginEnv(settings, plug.GetName(), plug.GetDir())
 
 				// Get runtime instance
 				runtime, err := plug.GetRuntimeInstance()

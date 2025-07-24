@@ -23,6 +23,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"helm.sh/helm/v4/pkg/plugin"
+	"helm.sh/helm/v4/pkg/plugin/runtime/subprocess"
 )
 
 const pluginHelp = `
@@ -46,7 +47,7 @@ func newPluginCmd(out io.Writer) *cobra.Command {
 
 // runHook will execute a plugin hook.
 func runHook(p plugin.Plugin, event string) error {
-	plugin.SetupPluginEnv(settings, p.GetName(), p.GetDir())
+	subprocess.SetupPluginEnv(settings, p.GetName(), p.GetDir())
 
 	// Get runtime instance
 	runtime, err := p.GetRuntimeInstance()

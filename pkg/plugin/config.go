@@ -41,6 +41,16 @@ type ConfigCLI struct {
 	IgnoreFlags bool `json:"ignoreFlags"`
 }
 
+// Downloaders represents the plugins capability if it can retrieve
+// charts from special sources
+type Downloaders struct {
+	// Protocols are the list of schemes from the charts URL.
+	Protocols []string `json:"protocols"`
+	// Command is the executable path with which the plugin performs
+	// the actual download for the corresponding Protocols
+	Command string `json:"command"`
+}
+
 // ConfigDownload represents the configuration for download plugins
 type ConfigDownload struct {
 	// Downloaders field is used if the plugin supply downloader mechanism
@@ -82,6 +92,7 @@ func (c *ConfigDownload) Validate() error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -91,7 +102,7 @@ func (c *ConfigPostrender) Validate() error {
 }
 
 // unmarshalConfigCLI unmarshals a config map into a ConfigCLI struct
-func unmarshalConfigCLI(configData map[string]interface{}) (*ConfigCLI, error) {
+func UnmarshalConfigCLI(configData map[string]interface{}) (*ConfigCLI, error) {
 	data, err := yaml.Marshal(configData)
 	if err != nil {
 		return nil, err
@@ -106,7 +117,7 @@ func unmarshalConfigCLI(configData map[string]interface{}) (*ConfigCLI, error) {
 }
 
 // unmarshalConfigDownload unmarshals a config map into a ConfigDownload struct
-func unmarshalConfigDownload(configData map[string]interface{}) (*ConfigDownload, error) {
+func UnmarshalConfigDownload(configData map[string]interface{}) (*ConfigDownload, error) {
 	data, err := yaml.Marshal(configData)
 	if err != nil {
 		return nil, err
@@ -121,7 +132,7 @@ func unmarshalConfigDownload(configData map[string]interface{}) (*ConfigDownload
 }
 
 // unmarshalConfigPostrender unmarshals a config map into a ConfigPostrender struct
-func unmarshalConfigPostrender(configData map[string]interface{}) (*ConfigPostrender, error) {
+func UnmarshalConfigPostrender(configData map[string]interface{}) (*ConfigPostrender, error) {
 	data, err := yaml.Marshal(configData)
 	if err != nil {
 		return nil, err

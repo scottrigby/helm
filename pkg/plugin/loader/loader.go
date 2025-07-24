@@ -13,21 +13,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package plugin
+package pluginloader
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"helm.sh/helm/v4/pkg/plugin"
+	"helm.sh/helm/v4/pkg/plugin/runtime/extismv1"
+	"helm.sh/helm/v4/pkg/plugin/runtime/subprocess"
 	"sigs.k8s.io/yaml"
-
-	"helm.sh/helm/v4/pkg/cli"
 )
 
 // LoadDir loads a plugin from the given directory.
-func LoadDir(dirname string) (Plugin, error) {
-	pluginfile := filepath.Join(dirname, PluginFileName)
+func LoadDir(dirname string) (plugin.Plugin, error) {
+	pluginfile := filepath.Join(dirname, plugin.PluginFileName)
 	data, err := os.ReadFile(pluginfile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read plugin at %q: %w", pluginfile, err)
@@ -43,7 +44,7 @@ func LoadDir(dirname string) (Plugin, error) {
 	if apiVersion, ok := raw["apiVersion"].(string); ok {
 		if apiVersion == "v1" {
 			// Load as V1 plugin with new structure
-			plug := &PluginV1{Dir: dirname}
+			plug := &plugin.PluginV1{Dir: dirname}
 
 			// First, unmarshal the base metadata without the config and runtimeConfig fields
 			tempMeta := &struct {
@@ -70,7 +71,7 @@ func LoadDir(dirname string) (Plugin, error) {
 			}
 
 			// Create the MetadataV1 struct with base fields
-			plug.MetadataV1 = &MetadataV1{
+			plug.MetadataV1 = &plugin.MetadataV1{
 				APIVersion: tempMeta.APIVersion,
 				Name:       tempMeta.Name,
 				Type:       tempMeta.Type,
@@ -81,16 +82,16 @@ func LoadDir(dirname string) (Plugin, error) {
 
 			// Extract the config section based on plugin type
 			if configData, ok := raw["config"].(map[string]interface{}); ok {
-				var config Config
+				var config plugin.Config
 				var err error
 
 				switch tempMeta.Type {
 				case "cli":
-					config, err = unmarshalConfigCLI(configData)
+					config, err = plugin.UnmarshalConfigCLI(configData)
 				case "download":
-					config, err = unmarshalConfigDownload(configData)
+					config, err = plugin.UnmarshalConfigDownload(configData)
 				case "postrender":
-					config, err = unmarshalConfigPostrender(configData)
+					config, err = plugin.UnmarshalConfigPostrender(configData)
 				default:
 					return nil, fmt.Errorf("unsupported plugin type: %s", tempMeta.Type)
 				}
@@ -102,14 +103,14 @@ func LoadDir(dirname string) (Plugin, error) {
 				plug.MetadataV1.Config = config
 			} else {
 				// Create default config based on plugin type
-				var config Config
+				var config plugin.Config
 				switch tempMeta.Type {
 				case "cli":
-					config = &ConfigCLI{}
+					config = &plugin.ConfigCLI{}
 				case "download":
-					config = &ConfigDownload{}
+					config = &plugin.ConfigDownload{}
 				case "postrender":
-					config = &ConfigPostrender{}
+					config = &plugin.ConfigPostrender{}
 				default:
 					return nil, fmt.Errorf("unsupported plugin type: %s", tempMeta.Type)
 				}
@@ -118,14 +119,14 @@ func LoadDir(dirname string) (Plugin, error) {
 
 			// Extract the runtimeConfig section based on runtime type
 			if runtimeConfigData, ok := raw["runtimeConfig"].(map[string]interface{}); ok {
-				var runtimeConfig RuntimeConfig
+				var runtimeConfig plugin.RuntimeConfig
 				var err error
 
 				switch tempMeta.Runtime {
 				case "subprocess":
-					runtimeConfig, err = unmarshalRuntimeConfigSubprocess(runtimeConfigData)
+					runtimeConfig, err = subprocess.ConvertRuntimeConfig(runtimeConfigData)
 				case "wasm":
-					runtimeConfig, err = unmarshalRuntimeConfigWasm(runtimeConfigData)
+					runtimeConfig, err = extismv1.ConvertRuntimeConfig(runtimeConfigData)
 				default:
 					return nil, fmt.Errorf("unsupported runtime type: %s", tempMeta.Runtime)
 				}
@@ -137,12 +138,12 @@ func LoadDir(dirname string) (Plugin, error) {
 				plug.MetadataV1.RuntimeConfig = runtimeConfig
 			} else {
 				// Create default runtimeConfig based on runtime type
-				var runtimeConfig RuntimeConfig
+				var runtimeConfig plugin.RuntimeConfig
 				switch tempMeta.Runtime {
 				case "subprocess":
-					runtimeConfig = &RuntimeConfigSubprocess{}
+					runtimeConfig = &subprocess.RuntimeConfig{}
 				case "wasm":
-					runtimeConfig = &RuntimeConfigWasm{}
+					runtimeConfig = &extismv1.RuntimeConfig{}
 				default:
 					return nil, fmt.Errorf("unsupported runtime type: %s", tempMeta.Runtime)
 				}
@@ -156,7 +157,7 @@ func LoadDir(dirname string) (Plugin, error) {
 		}
 	} else {
 		// Load as legacy plugin
-		plug := &PluginLegacy{Dir: dirname}
+		plug := &subprocess.Plugin{Dir: dirname}
 		if err := yaml.UnmarshalStrict(data, &plug.MetadataLegacy); err != nil {
 			return nil, fmt.Errorf("failed to load legacy plugin at %q: %w", pluginfile, err)
 		}
@@ -167,10 +168,10 @@ func LoadDir(dirname string) (Plugin, error) {
 // LoadAll loads all plugins found beneath the base directory.
 //
 // This scans only one directory level.
-func LoadAll(basedir string) ([]Plugin, error) {
-	plugins := []Plugin{}
+func LoadAll(basedir string) ([]plugin.Plugin, error) {
+	plugins := []plugin.Plugin{}
 	// We want basedir/*/plugin.yaml
-	scanpath := filepath.Join(basedir, "*", PluginFileName)
+	scanpath := filepath.Join(basedir, "*", plugin.PluginFileName)
 	matches, err := filepath.Glob(scanpath)
 	if err != nil {
 		return plugins, fmt.Errorf("failed to find plugins in %q: %w", scanpath, err)
@@ -192,19 +193,19 @@ func LoadAll(basedir string) ([]Plugin, error) {
 }
 
 // findFunc is a function that finds plugins in a directory
-type findFunc func(pluginsDir string) ([]Plugin, error)
+type findFunc func(pluginsDir string) ([]plugin.Plugin, error)
 
 // filterFunc is a function that filters plugins
-type filterFunc func(Plugin) bool
+type filterFunc func(plugin.Plugin) bool
 
 // FindPlugins returns a list of plugins that match the descriptor
-func FindPlugins(pluginsDirs []string, descriptor PluginDescriptor) ([]Plugin, error) {
+func FindPlugins(pluginsDirs []string, descriptor plugin.PluginDescriptor) ([]plugin.Plugin, error) {
 	return findPlugins(pluginsDirs, LoadAll, makeDescriptorFilter(descriptor))
 }
 
 // findPlugins is the internal implementation that uses the find and filter functions
-func findPlugins(pluginsDirs []string, findFunc findFunc, filterFunc filterFunc) ([]Plugin, error) {
-	found := []Plugin{}
+func findPlugins(pluginsDirs []string, findFunc findFunc, filterFunc filterFunc) ([]plugin.Plugin, error) {
+	found := []plugin.Plugin{}
 	for _, pluginsDir := range pluginsDirs {
 		ps, err := findFunc(pluginsDir)
 		if err != nil {
@@ -223,8 +224,8 @@ func findPlugins(pluginsDirs []string, findFunc findFunc, filterFunc filterFunc)
 
 // makeDescriptorFilter creates a filter function from a descriptor
 // Additional plugin filter criteria we wish to support can be added here
-func makeDescriptorFilter(descriptor PluginDescriptor) filterFunc {
-	return func(p Plugin) bool {
+func makeDescriptorFilter(descriptor plugin.PluginDescriptor) filterFunc {
+	return func(p plugin.Plugin) bool {
 		// If name is specified, it must match
 		if descriptor.Name != "" && p.GetName() != descriptor.Name {
 			return false
@@ -238,9 +239,9 @@ func makeDescriptorFilter(descriptor PluginDescriptor) filterFunc {
 }
 
 // FindPlugin returns a plugin by name and type
-func FindPlugin(name, plugdirs, pluginType string) (Plugin, error) {
+func FindPlugin(name, plugdirs, pluginType string) (plugin.Plugin, error) {
 	dirs := filepath.SplitList(plugdirs)
-	descriptor := PluginDescriptor{
+	descriptor := plugin.PluginDescriptor{
 		Name: name,
 		Type: pluginType,
 	}
@@ -256,7 +257,7 @@ func FindPlugin(name, plugdirs, pluginType string) (Plugin, error) {
 	return nil, fmt.Errorf("plugin: %s not found", name)
 }
 
-func detectDuplicates(plugs []Plugin) error {
+func detectDuplicates(plugs []plugin.Plugin) error {
 	names := map[string]string{}
 
 	for _, plug := range plugs {
@@ -272,16 +273,4 @@ func detectDuplicates(plugs []Plugin) error {
 	}
 
 	return nil
-}
-
-// SetupPluginEnv prepares os.Env for plugins. It operates on os.Env because
-// the plugin subsystem itself needs access to the environment variables
-// created here.
-func SetupPluginEnv(settings *cli.EnvSettings, name, base string) {
-	env := settings.EnvVars()
-	env["HELM_PLUGIN_NAME"] = name
-	env["HELM_PLUGIN_DIR"] = base
-	for key, val := range env {
-		os.Setenv(key, val)
-	}
 }

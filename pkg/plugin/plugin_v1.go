@@ -45,42 +45,12 @@ func (p *PluginV1) GetRuntimeInstance() (Runtime, error) {
 	return p.MetadataV1.RuntimeConfig.CreateRuntime(p.Dir, p.MetadataV1.Name)
 }
 
-func (p *PluginV1) PrepareCommand(extraArgs []string) (string, []string, error) {
-	config := p.GetConfig()
-	runtimeConfig := p.GetRuntimeConfig()
-
-	// Only subprocess runtime uses PrepareCommand
-	if subprocessConfig, ok := runtimeConfig.(*RuntimeConfigSubprocess); ok {
-		var extraArgsIn []string
-
-		// For CLI plugins, check ignore flags
-		if config.GetType() == "cli" {
-			if cliConfig, ok := config.(*ConfigCLI); ok && cliConfig.IgnoreFlags {
-				extraArgsIn = []string{}
-			} else {
-				extraArgsIn = extraArgs
-			}
-		} else {
-			extraArgsIn = extraArgs
-		}
-
-		cmds := subprocessConfig.PlatformCommand
-		if len(cmds) == 0 && len(subprocessConfig.Command) > 0 {
-			cmds = []PlatformCommand{{Command: subprocessConfig.Command}}
-		}
-
-		return PrepareCommands(cmds, true, extraArgsIn)
-	}
-
-	return "", nil, fmt.Errorf("PrepareCommand only supported for subprocess runtime")
-}
-
 func (p *PluginV1) Validate() error {
 	if p.MetadataV1 == nil {
 		return fmt.Errorf("plugin metadata is missing")
 	}
 
-	if !validPluginName.MatchString(p.MetadataV1.Name) {
+	if !ValidPluginName.MatchString(p.MetadataV1.Name) {
 		return fmt.Errorf("invalid plugin name")
 	}
 
@@ -130,4 +100,4 @@ func (p *PluginV1) Validate() error {
 // validPluginName is a regular expression that validates plugin names.
 //
 // Plugin names can only contain the ASCII characters a-z, A-Z, 0-9, ​_​ and ​-.
-var validPluginName = regexp.MustCompile("^[A-Za-z0-9_-]+$")
+var ValidPluginName = regexp.MustCompile("^[A-Za-z0-9_-]+$")

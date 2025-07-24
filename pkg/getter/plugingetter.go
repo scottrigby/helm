@@ -24,6 +24,8 @@ import (
 
 	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/plugin"
+	pluginloader "helm.sh/helm/v4/pkg/plugin/loader"
+	"helm.sh/helm/v4/pkg/plugin/runtime/subprocess"
 )
 
 // collectPlugins scans for getter plugins.
@@ -33,7 +35,7 @@ func collectPlugins(settings *cli.EnvSettings) (Providers, error) {
 	descriptor := plugin.PluginDescriptor{
 		Type: "download",
 	}
-	plugins, err := plugin.FindPlugins(dirs, descriptor)
+	plugins, err := pluginloader.FindPlugins(dirs, descriptor)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +45,7 @@ func collectPlugins(settings *cli.EnvSettings) (Providers, error) {
 		var downloaders []plugin.Downloaders
 		switch p.GetAPIVersion() {
 		case "legacy":
-			if metadata, ok := p.GetMetadata().(*plugin.MetadataLegacy); ok {
+			if metadata, ok := p.GetMetadata().(*subprocess.MetadataLegacy); ok {
 				downloaders = metadata.Downloaders
 			}
 		case "v1":
@@ -94,11 +96,11 @@ func (p *pluginGetter) Get(href string, options ...Option) (*bytes.Buffer, error
 	commands := strings.Split(p.command, " ")
 	argv := append(commands[1:], p.opts.certFile, p.opts.keyFile, p.opts.caFile, href)
 	commandPath := filepath.Join(p.base, commands[0])
-	plugin.SetupPluginEnv(p.settings, p.name, p.base)
+	subprocess.SetupPluginEnv(p.settings, p.name, p.base)
 	env := p.setupOptionsEnv(os.Environ())
 
 	// TODO: change to use plugin.Runtime.InvokeWithEnv
-	return plugin.ExecDownloader(p.base, commandPath, argv, env)
+	return subprocess.ExecDownloader(p.base, commandPath, argv, env)
 }
 
 // NewPluginGetter constructs a valid plugin getter

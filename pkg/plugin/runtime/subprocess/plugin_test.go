@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package plugin // import "helm.sh/helm/v4/pkg/plugin"
+package subprocess // import "helm.sh/helm/v4/pkg/plugin"
 
 import (
 	"bytes"
@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"helm.sh/helm/v4/pkg/cli"
+	"helm.sh/helm/v4/pkg/plugin"
 )
 
 // TODO add tests for both legacy and v1 plugins
@@ -34,17 +35,17 @@ func TestPrepareCommand(t *testing.T) {
 	cmdMain := "sh"
 	cmdArgs := []string{"-c", "echo \"test\""}
 
-	p := &PluginV1{
+	p := &plugin.PluginV1{
 		Dir: "/tmp", // Unused
-		MetadataV1: &MetadataV1{
+		MetadataV1: &plugin.MetadataV1{
 			Name:       "test",
 			Type:       "cli",
 			APIVersion: "v1",
 			Runtime:    "subprocess",
-			Config: &ConfigCLI{
+			Config: &plugin.ConfigCLI{
 				IgnoreFlags: false,
 			},
-			RuntimeConfig: &RuntimeConfigSubprocess{
+			RuntimeConfig: &RuntimeConfig{
 				Command: "echo \"error\"",
 				PlatformCommand: []PlatformCommand{
 					{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
@@ -83,7 +84,7 @@ func TestPrepareCommandExtraArgs(t *testing.T) {
 			Config: &ConfigCLI{
 				IgnoreFlags: false,
 			},
-			RuntimeConfig: &RuntimeConfigSubprocess{
+			RuntimeConfig: &subprocess.RuntimeConfig{
 				Command: "echo \"error\"",
 				PlatformCommand: []PlatformCommand{
 					{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
@@ -124,7 +125,7 @@ func TestPrepareCommandExtraArgsIgnored(t *testing.T) {
 			Config: &ConfigCLI{
 				IgnoreFlags: true,
 			},
-			RuntimeConfig: &RuntimeConfigSubprocess{
+			RuntimeConfig: &subprocess.RuntimeConfig{
 				Command: "echo \"error\"",
 				PlatformCommand: []PlatformCommand{
 					{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
@@ -326,7 +327,7 @@ func TestLoadDir(t *testing.T) {
 			LongHelp:    "description",
 			IgnoreFlags: true,
 		},
-		RuntimeConfig: &RuntimeConfigSubprocess{
+		RuntimeConfig: &subprocess.RuntimeConfig{
 			PlatformCommand: []PlatformCommand{
 				{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "${HELM_PLUGIN_DIR}/hello.sh"}},
 				{OperatingSystem: "windows", Architecture: "", Command: "pwsh", Args: []string{"-c", "${HELM_PLUGIN_DIR}/hello.ps1"}},
@@ -377,7 +378,7 @@ func TestDownloader(t *testing.T) {
 				},
 			},
 		},
-		RuntimeConfig: &RuntimeConfigSubprocess{
+		RuntimeConfig: &subprocess.RuntimeConfig{
 			Command: "echo Hello",
 		},
 	}
@@ -407,7 +408,7 @@ func TestPostRenderer(t *testing.T) {
 		Config: &ConfigPostrender{
 			PostrenderArgs: []string{},
 		},
-		RuntimeConfig: &RuntimeConfigSubprocess{
+		RuntimeConfig: &subprocess.RuntimeConfig{
 			PlatformCommand: []PlatformCommand{
 				{
 					Command: "${HELM_PLUGIN_DIR}/sed-test.sh",
@@ -597,14 +598,14 @@ func TestValidatePluginData(t *testing.T) {
 
 	// A mock plugin with no commands
 	mockNoCommand := mockPlugin("foo")
-	mockNoCommand.MetadataV1.RuntimeConfig = &RuntimeConfigSubprocess{
+	mockNoCommand.MetadataV1.RuntimeConfig = &subprocess.RuntimeConfig{
 		PlatformCommand: []PlatformCommand{},
 		PlatformHooks:   map[string][]PlatformCommand{},
 	}
 
 	// A mock plugin with legacy commands
 	mockLegacyCommand := mockPlugin("foo")
-	mockLegacyCommand.MetadataV1.RuntimeConfig = &RuntimeConfigSubprocess{
+	mockLegacyCommand.MetadataV1.RuntimeConfig = &subprocess.RuntimeConfig{
 		PlatformCommand: []PlatformCommand{},
 		Command:         "echo \"mock plugin\"",
 		PlatformHooks:   map[string][]PlatformCommand{},
@@ -615,7 +616,7 @@ func TestValidatePluginData(t *testing.T) {
 
 	// A mock plugin with a command also set
 	mockWithCommand := mockPlugin("foo")
-	mockWithCommand.MetadataV1.RuntimeConfig = &RuntimeConfigSubprocess{
+	mockWithCommand.MetadataV1.RuntimeConfig = &subprocess.RuntimeConfig{
 		PlatformCommand: []PlatformCommand{
 			{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"mock plugin\""}},
 		},
@@ -624,7 +625,7 @@ func TestValidatePluginData(t *testing.T) {
 
 	// A mock plugin with a hooks also set
 	mockWithHooks := mockPlugin("foo")
-	mockWithHooks.MetadataV1.RuntimeConfig = &RuntimeConfigSubprocess{
+	mockWithHooks.MetadataV1.RuntimeConfig = &subprocess.RuntimeConfig{
 		PlatformCommand: []PlatformCommand{
 			{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"mock plugin\""}},
 		},
@@ -677,21 +678,21 @@ func TestDetectDuplicates(t *testing.T) {
 	}
 }
 
-func mockPlugin(name string) *PluginV1 {
-	return &PluginV1{
-		MetadataV1: &MetadataV1{
+func mockPlugin(name string) *plugin.PluginV1 {
+	return &plugin.PluginV1{
+		MetadataV1: &plugin.MetadataV1{
 			Name:       name,
 			Version:    "v0.1.2",
 			Type:       "cli",
 			APIVersion: "v1",
 			Runtime:    "subprocess",
-			Config: &ConfigCLI{
+			Config: &plugin.ConfigCLI{
 				Usage:       "Mock plugin",
 				ShortHelp:   "Mock plugin",
 				LongHelp:    "Mock plugin for testing",
 				IgnoreFlags: false,
 			},
-			RuntimeConfig: &RuntimeConfigSubprocess{
+			RuntimeConfig: &RuntimeConfig{
 				PlatformCommand: []PlatformCommand{
 					{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"mock plugin\""}},
 					{OperatingSystem: "windows", Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"mock plugin\""}},

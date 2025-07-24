@@ -17,16 +17,6 @@ package plugin // import "helm.sh/helm/v4/pkg/plugin"
 
 const PluginFileName = "plugin.yaml"
 
-// Downloaders represents the plugins capability if it can retrieve
-// charts from special sources
-type Downloaders struct {
-	// Protocols are the list of schemes from the charts URL.
-	Protocols []string `json:"protocols"`
-	// Command is the executable path with which the plugin performs
-	// the actual download for the corresponding Protocols
-	Command string `json:"command"`
-}
-
 // Plugin interface defines the common methods that all plugin versions must implement
 type Plugin interface {
 	GetDir() string
@@ -39,7 +29,6 @@ type Plugin interface {
 	GetRuntimeConfig() RuntimeConfig
 	GetRuntimeInstance() (Runtime, error)
 	Validate() error
-	PrepareCommand(extraArgs []string) (string, []string, error)
 }
 
 // Error is returned when a plugin exits with a non-zero status code

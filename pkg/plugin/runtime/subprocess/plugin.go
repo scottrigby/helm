@@ -13,39 +13,41 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package plugin
+package subprocess
 
 import (
 	"fmt"
 	"strings"
 	"unicode"
+
+	"helm.sh/helm/v4/pkg/plugin"
 )
 
-// PluginLegacy represents a legacy plugin
-type PluginLegacy struct {
-	// MetadataLegacy is a parsed representation of a plugin.yaml
-	MetadataLegacy *MetadataLegacy
+// Plugin represents a subprocess plugin
+type Plugin struct {
+	// Metadata is a parsed representation of a legacy plugin.yaml
+	Metadata plugin.MetadataV1
 	// Dir is the string path to the directory that holds the plugin.
 	Dir string
 }
 
 // Interface implementations for PluginLegacy
-func (p *PluginLegacy) GetDir() string  { return p.Dir }
-func (p *PluginLegacy) GetName() string { return p.MetadataLegacy.Name }
+func (p *Plugin) GetDir() string  { return p.Dir }
+func (p *Plugin) GetName() string { return p.MetadataLegacy.Name }
 
 // Legacy plugins can be either a downloader or a legacy-CLI plugin (we label them as legacy)
-func (p *PluginLegacy) GetType() string {
+func (p *Plugin) GetType() string {
 	if len(p.MetadataLegacy.Downloaders) > 0 {
 		return "download"
 	}
 	return "cli"
 }
-func (p *PluginLegacy) GetAPIVersion() string    { return "legacy" }
-func (p *PluginLegacy) GetRuntime() string       { return "subprocess" }
-func (p *PluginLegacy) GetMetadata() interface{} { return p.MetadataLegacy }
+func (p *Plugin) GetAPIVersion() string    { return "legacy" }
+func (p *Plugin) GetRuntime() string       { return "subprocess" }
+func (p *Plugin) GetMetadata() interface{} { return p.MetadataLegacy }
 
-func (p *PluginLegacy) GetRuntimeConfig() RuntimeConfig {
-	return &RuntimeConfigSubprocess{
+func (p *Plugin) GetRuntimeConfig() plugin.RuntimeConfig {
+	return &RuntimeConfig{
 		PlatformCommand: p.MetadataLegacy.PlatformCommand,
 		Command:         p.MetadataLegacy.Command,
 		PlatformHooks:   p.MetadataLegacy.PlatformHooks,
@@ -54,14 +56,23 @@ func (p *PluginLegacy) GetRuntimeConfig() RuntimeConfig {
 	}
 }
 
-func (p *PluginLegacy) GetConfig() Config {
+func (p *Plugin) GetConfig() plugin.Config {
 	switch p.GetType() {
 	case "download":
-		return &ConfigDownload{
-			Downloaders: p.MetadataLegacy.Downloaders,
+		downloaders := []plugin.Downloaders{}
+		for _, d := range p.MetadataLegacy.Downloaders {
+			downloaders = append(downloaders, plugin.Downloaders{
+				Protocols: d.Protocols,
+				Command:   d.Command,
+			})
+
+		}
+
+		return &plugin.ConfigDownload{
+			Downloaders: downloaders,
 		}
 	case "cli":
-		return &ConfigCLI{
+		return &plugin.ConfigCLI{
 			Usage:       "",                           // Legacy plugins don't have Usage field for command syntax
 			ShortHelp:   p.MetadataLegacy.Usage,       // Map legacy usage to shortHelp
 			LongHelp:    p.MetadataLegacy.Description, // Map legacy description to longHelp
@@ -69,7 +80,7 @@ func (p *PluginLegacy) GetConfig() Config {
 		}
 	default:
 		// Return a basic CLI config as fallback
-		return &ConfigCLI{
+		return &plugin.ConfigCLI{
 			Usage:       "",                           // Legacy plugins don't have Usage field for command syntax
 			ShortHelp:   p.MetadataLegacy.Usage,       // Map legacy usage to shortHelp
 			LongHelp:    p.MetadataLegacy.Description, // Map legacy description to longHelp
@@ -78,29 +89,59 @@ func (p *PluginLegacy) GetConfig() Config {
 	}
 }
 
-func (p *PluginLegacy) GetRuntimeInstance() (Runtime, error) {
+func (p *Plugin) GetRuntimeInstance() (plugin.Runtime, error) {
 	runtimeConfig := p.GetRuntimeConfig()
 	return runtimeConfig.CreateRuntime(p.Dir, p.MetadataLegacy.Name)
 }
 
-func (p *PluginLegacy) PrepareCommand(extraArgs []string) (string, []string, error) {
-	var extraArgsIn []string
+//func (p *Plugin) PrepareCommand(extraArgs []string) (string, []string, error) {
+//	var extraArgsIn []string
+//
+//	if !p.MetadataLegacy.IgnoreFlags {
+//		extraArgsIn = extraArgs
+//	}
+//
+//	cmds := p.MetadataLegacy.PlatformCommand
+//	if len(cmds) == 0 && len(p.MetadataLegacy.Command) > 0 {
+//		cmds = []PlatformCommand{{Command: p.MetadataLegacy.Command}}
+//	}
+//
+//	return PrepareCommands(cmds, true, extraArgsIn)
+//}
 
-	if !p.MetadataLegacy.IgnoreFlags {
-		extraArgsIn = extraArgs
+func (p *Plugin) PrepareCommand(extraArgs []string) (string, []string, error) {
+	config := p.GetConfig()
+	runtimeConfig := p.GetRuntimeConfig()
+
+	// Only subprocess runtime uses PrepareCommand
+	if subprocessConfig, ok := runtimeConfig.(*RuntimeConfig); ok {
+		var extraArgsIn []string
+
+		// For CLI plugins, check ignore flags
+		if config.GetType() == "cli" {
+			if cliConfig, ok := config.(*plugin.ConfigCLI); ok && cliConfig.IgnoreFlags {
+				extraArgsIn = []string{}
+			} else {
+				extraArgsIn = extraArgs
+			}
+		} else {
+			extraArgsIn = extraArgs
+		}
+
+		cmds := subprocessConfig.PlatformCommand
+		if len(cmds) == 0 && len(subprocessConfig.Command) > 0 {
+			cmds = []PlatformCommand{{Command: subprocessConfig.Command}}
+		}
+
+		return PrepareCommands(cmds, true, extraArgsIn)
 	}
 
-	cmds := p.MetadataLegacy.PlatformCommand
-	if len(cmds) == 0 && len(p.MetadataLegacy.Command) > 0 {
-		cmds = []PlatformCommand{{Command: p.MetadataLegacy.Command}}
-	}
-
-	return PrepareCommands(cmds, true, extraArgsIn)
+	return "", nil, fmt.Errorf("PrepareCommand only supported for subprocess runtime")
 }
 
 // Validate validates a legacy plugin's metadata.
-func (p *PluginLegacy) Validate() error {
-	if !validPluginName.MatchString(p.MetadataLegacy.Name) {
+func (p *Plugin) Validate() error {
+	if !plugin.ValidPluginName.MatchString(p.MetadataLegacy.Name) {
 		return fmt.Errorf("invalid plugin name")
 	}
 	p.MetadataLegacy.Usage = sanitizeString(p.MetadataLegacy.Usage)

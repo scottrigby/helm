@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package plugin
+package subprocess // import "helm.sh/helm/v4/pkg/plugin/runtime/subprocess"
 
 import (
 	"fmt"
