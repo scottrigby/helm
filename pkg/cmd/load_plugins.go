@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -113,7 +114,7 @@ func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 				}
 
 				// Invoke plugin
-				err = plug.Invoke(os.Stdin, out, os.Stderr, env)
+				_, err = plug.Invoke(context.Background(), &plugin.Input{Stdin: os.Stdin, Stdout: out, Stderr: os.Stderr})
 				if execErr, ok := err.(*plugin.Error); ok {
 					return PluginError{
 						error: execErr.Err,

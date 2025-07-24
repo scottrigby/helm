@@ -44,7 +44,7 @@ func (p *PluginV1) PrepareCommand(extraArgs []string) (string, []string, error) 
 		var extraArgsIn []string
 
 		// For CLI plugins, check ignore flags
-		if config.GetType() == "cli" {
+		if config.GetType() == "cli/v1" {
 			if cliConfig, ok := config.(*ConfigCLI); ok && cliConfig.IgnoreFlags {
 				extraArgsIn = []string{}
 			} else {

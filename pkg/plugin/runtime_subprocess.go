@@ -17,16 +17,28 @@ package plugin
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 
 	"sigs.k8s.io/yaml"
 
 	"helm.sh/helm/v4/pkg/cli"
 )
+
+// Downloaders represents the plugins capability if it can retrieve
+// charts from
+type SubprocessDownloaders struct {
+	// Protocols are the list of schemes from the charts URL.
+	Protocols []string `json:"protocols"`
+	// Command is the executable path with which the plugin performs
+	// the actual download for the corresponding Protocols
+	Command string `json:"command"`
+}
 
 // RuntimeConfigSubprocess represents configuration for subprocess runtime
 type RuntimeConfigSubprocess struct {
@@ -42,9 +54,10 @@ type RuntimeConfigSubprocess struct {
 	// Hooks are commands that will run on plugin events, as a single string.
 	// DEPRECATED: Use PlatformHooks instead. Remove in Helm 4.
 	Hooks Hooks `json:"hooks"`
-	// UseTunnel indicates that this command needs a tunnel.
-	// DEPRECATED and unused, but retained for backwards compatibility. Remove in Helm 4.
-	UseTunnel bool `json:"useTunnel"`
+
+	// Downloaders field is used if the plugin supply downloader mechanism
+	// for special protocols.
+	Downloaders []SubprocessDownloaders `json:"downloaders"`
 }
 
 // GetRuntimeType implementation for RuntimeConfig
@@ -97,20 +110,42 @@ func (r *RuntimeSubprocess) Dir() string {
 }
 
 // Invoke implementation for RuntimeConfig
-func (r *RuntimeSubprocess) Invoke(stdin io.Reader, stdout, stderr io.Writer, env []string) error {
-	// Prepare command based on runtime configuration
-	cmds := r.config.PlatformCommand
-	if len(cmds) == 0 && len(r.config.Command) > 0 {
-		cmds = []PlatformCommand{{Command: r.config.Command}}
-	}
+func (r *RuntimeSubprocess) Invoke(ctx context.Context, input *Input) (*Output, error) {
 
-	main, args, err := PrepareCommands(cmds, true, r.extraArgs)
+	pluginExec, err := convertInput(r, input)
 	if err != nil {
-		return fmt.Errorf("failed to prepare command: %w", err)
+		return nil, fmt.Errorf("failed to convert plugin input: %w", err)
 	}
 
-	// Execute the command directly
-	return r.InvokeWithEnv(main, args, env, stdin, stdout, stderr)
+	pluginCommand := filepath.Join(r.plugin.Dir, pluginExec.command)
+	prog := exec.Command(
+		pluginCommand,
+		pluginExec.argv...)
+	prog.Env = pluginExec.env
+	buf := bytes.NewBuffer(nil)
+	prog.Stdout = buf
+	prog.Stderr = os.Stderr
+	if err := prog.Run(); err != nil {
+		if eerr, ok := err.(*exec.ExitError); ok {
+			os.Stderr.Write(eerr.Stderr)
+			return nil, fmt.Errorf("plugin %q exited with error", pluginCommand)
+		}
+		return nil, fmt.Errorf("failed to run plugin %q: %w", pluginCommand, err)
+	}
+
+	return convertOutput(buf), nil
+
+	//main, args, err := PrepareCommands(cmds, true, r.extraArgs)
+	//if err != nil {
+	//	return nil, fmt.Errorf("failed to prepare command: %w", err)
+	//}
+
+	//// Execute the command directly
+	//if err := r.InvokeWithEnv(main, args, env, input.Stdin, input.Stdout, input.Stderr); err != nil {
+	//	return nil, err
+	//}
+
+	//return &Output{}, nil
 }
 
 // InvokeWithEnv executes a plugin command with custom environment and I/O streams

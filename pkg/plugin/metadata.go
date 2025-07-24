@@ -83,14 +83,18 @@ type MetadataV1 struct {
 }
 
 func ConvertMetadataLegacy(m MetadataLegacy) MetadataV1 {
-	pluginType := "cli"
+	pluginType := "cli/v1"
 
 	var config Config
 	if len(m.Downloaders) > 0 {
-		pluginType = "getter"
+		pluginType = "getter/v1"
 
-		config = &ConfigDownload{
-			Downloaders: m.Downloaders,
+		protocols := make([]string, 0, len(m.Downloaders))
+		for _, d := range m.Downloaders {
+			protocols = append(protocols, d.Protocols...)
+		}
+		config = &ConfigGetter{
+			Protocols: protocols,
 		}
 	}
 
@@ -99,7 +103,6 @@ func ConvertMetadataLegacy(m MetadataLegacy) MetadataV1 {
 		Command:         m.Command,
 		PlatformHooks:   m.PlatformHooks,
 		Hooks:           m.Hooks,
-		UseTunnel:       m.UseTunnelDeprecated,
 	}
 
 	return MetadataV1{

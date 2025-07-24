@@ -42,10 +42,9 @@ type ConfigCLI struct {
 }
 
 // ConfigDownload represents the configuration for download plugins
-type ConfigDownload struct {
-	// Downloaders field is used if the plugin supply downloader mechanism
-	// for special protocols.
-	Downloaders []Downloaders `json:"downloaders"`
+type ConfigGetter struct {
+	// Protocols are the list of URL schemes supported by this downloader
+	Protocols []string `json:"protocols"`
 }
 
 // ConfigPostrender represents the configuration for postrender plugins
@@ -57,7 +56,7 @@ type ConfigPostrender struct {
 
 // GetType implementations for Config types
 func (c *ConfigCLI) GetType() string        { return "cli" }
-func (c *ConfigDownload) GetType() string   { return "download" }
+func (c *ConfigGetter) GetType() string     { return "download" }
 func (c *ConfigPostrender) GetType() string { return "postrender" }
 
 // Validate implementations for Config types
@@ -66,22 +65,16 @@ func (c *ConfigCLI) Validate() error {
 	return nil
 }
 
-func (c *ConfigDownload) Validate() error {
-	if len(c.Downloaders) > 0 {
-		for i, downloader := range c.Downloaders {
-			if downloader.Command == "" {
-				return fmt.Errorf("downloader %d has empty command", i)
-			}
-			if len(downloader.Protocols) == 0 {
-				return fmt.Errorf("downloader %d has no protocols", i)
-			}
-			for j, protocol := range downloader.Protocols {
-				if protocol == "" {
-					return fmt.Errorf("downloader %d has empty protocol at index %d", i, j)
-				}
-			}
+func (c *ConfigGetter) Validate() error {
+	if len(c.Protocols) == 0 {
+		return fmt.Errorf("getter has no protocols")
+	}
+	for i, protocol := range c.Protocols {
+		if protocol == "" {
+			return fmt.Errorf("getter has empty protocol at index %d", i)
 		}
 	}
+
 	return nil
 }
 
@@ -105,14 +98,14 @@ func unmarshalConfigCLI(configData map[string]interface{}) (*ConfigCLI, error) {
 	return &config, nil
 }
 
-// unmarshalConfigDownload unmarshals a config map into a ConfigDownload struct
-func unmarshalConfigDownload(configData map[string]interface{}) (*ConfigDownload, error) {
+// unmarshalConfigGetter unmarshals a config map into a ConfigGetter struct
+func unmarshalConfigGetter(configData map[string]interface{}) (*ConfigGetter, error) {
 	data, err := yaml.Marshal(configData)
 	if err != nil {
 		return nil, err
 	}
 
-	var config ConfigDownload
+	var config ConfigGetter
 	if err := yaml.UnmarshalStrict(data, &config); err != nil {
 		return nil, err
 	}

@@ -92,15 +92,15 @@ func compListPlugins(_ string, ignoredPluginNames []string) []string {
 	var pNames []string
 	dirs := filepath.SplitList(settings.PluginsDirectory)
 	descriptor := plugin.Descriptor{
-		Type: "cli",
+		Type: "cli/v1",
 	}
 	plugins, err := plugin.FindPlugins(dirs, descriptor)
 	if err == nil && len(plugins) > 0 {
 		filteredPlugins := filterPlugins(plugins, ignoredPluginNames)
 		for _, p := range filteredPlugins {
 			m := p.Metadata()
-			var shortHelp string
 
+			shortHelp := ""
 			if config, ok := m.Config.(*plugin.ConfigCLI); ok {
 				shortHelp = config.ShortHelp
 			}

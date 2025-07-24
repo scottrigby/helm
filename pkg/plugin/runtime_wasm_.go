@@ -17,8 +17,8 @@ package plugin
 
 import (
 	"bytes"
+	"context"
 	"fmt"
-	"io"
 
 	"sigs.k8s.io/yaml"
 
@@ -94,7 +94,7 @@ func (r *RuntimeWasm) Dir() string {
 }
 
 // Invoke implementation for Runtime
-func (r *RuntimeWasm) Invoke(stdin io.Reader, stdout, stderr io.Writer, env []string) error {
+func (r *RuntimeWasm) Invoke(ctx context.Context, input *Input) (*Output, error) {
 	// TODO: Implement WASM runtime execution
 	// This will include:
 	// - Loading the WASM module from r.config.WasmModule
@@ -103,7 +103,7 @@ func (r *RuntimeWasm) Invoke(stdin io.Reader, stdout, stderr io.Writer, env []st
 	// - Applying security constraints (AllowedHosts, AllowedPaths)
 	// - Executing the WASM module with environment from 'env'
 	// - Reading input from 'stdin' and writing output to 'stdout'/'stderr'
-	return fmt.Errorf("WASM runtime not yet implemented")
+	return nil, fmt.Errorf("WASM runtime not yet implemented")
 }
 
 // InvokeHook implementation for RuntimeWasm (not yet implemented)

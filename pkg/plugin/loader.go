@@ -73,15 +73,15 @@ func loadDir(dirname string) (*PluginV1, error) {
 			return nil, fmt.Errorf("failed to load V1 plugin metadata at %q: %w", pluginfile, err)
 		}
 
-		// Default runtime to subprocess if not specified
-		if tempMeta.Runtime == "" {
-			tempMeta.Runtime = "subprocess"
-		}
+		// // Default runtime to subprocess if not specified
+		// if tempMeta.Runtime == "" {
+		// 	tempMeta.Runtime = "subprocess"
+		// }
 
-		// Default type to cli if not specified
-		if tempMeta.Type == "" {
-			tempMeta.Type = "cli"
-		}
+		// // Default type to cli if not specified
+		// if tempMeta.Type == "" {
+		// 	tempMeta.Type = "cli"
+		// }
 
 		// Create the MetadataV1 struct with base fields
 		plug.Metadata = MetadataV1{
@@ -99,11 +99,11 @@ func loadDir(dirname string) (*PluginV1, error) {
 			var err error
 
 			switch tempMeta.Type {
-			case "cli":
+			case "cli/v1":
 				config, err = unmarshalConfigCLI(configData)
-			case "download":
-				config, err = unmarshalConfigDownload(configData)
-			case "postrender":
+			case "getter/v1":
+				config, err = unmarshalConfigGetter(configData)
+			case "postrenderer/v1":
 				config, err = unmarshalConfigPostrender(configData)
 			default:
 				return nil, fmt.Errorf("unsupported plugin type: %s", tempMeta.Type)
@@ -121,7 +121,7 @@ func loadDir(dirname string) (*PluginV1, error) {
 			case "cli":
 				config = &ConfigCLI{}
 			case "download":
-				config = &ConfigDownload{}
+				config = &ConfigGetter{}
 			case "postrender":
 				config = &ConfigPostrender{}
 			default:
