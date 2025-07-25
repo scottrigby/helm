@@ -25,18 +25,13 @@ import (
 	"helm.sh/helm/v4/pkg/cli"
 )
 
-// LoadDir loads a plugin from the given directory.
-func LoadDir(dirname string) (Plugin, error) {
-	pluginfile := filepath.Join(dirname, PluginFileName)
-	data, err := os.ReadFile(pluginfile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read plugin at %q: %w", pluginfile, err)
-	}
-
+// Load loads a plugin from raw YAML data.
+// dirname is optional and can be empty if the plugin is not loaded from a directory.
+func Load(data []byte, dirname string) (Plugin, error) {
 	// First, try to detect the API version
 	var raw map[string]interface{}
 	if err := yaml.UnmarshalStrict(data, &raw); err != nil {
-		return nil, fmt.Errorf("failed to parse plugin at %q: %w", pluginfile, err)
+		return nil, fmt.Errorf("failed to parse plugin: %w", err)
 	}
 
 	// Check if APIVersion is present
@@ -56,7 +51,7 @@ func LoadDir(dirname string) (Plugin, error) {
 			}{}
 
 			if err := yaml.Unmarshal(data, tempMeta); err != nil {
-				return nil, fmt.Errorf("failed to load V1 plugin metadata at %q: %w", pluginfile, err)
+				return nil, fmt.Errorf("failed to load V1 plugin metadata: %w", err)
 			}
 
 			// Default runtime to subprocess if not specified
@@ -96,7 +91,7 @@ func LoadDir(dirname string) (Plugin, error) {
 				}
 
 				if err != nil {
-					return nil, fmt.Errorf("failed to unmarshal config for %s plugin at %q: %w", tempMeta.Type, pluginfile, err)
+					return nil, fmt.Errorf("failed to unmarshal config for %s plugin: %w", tempMeta.Type, err)
 				}
 
 				plug.MetadataV1.Config = config
@@ -131,7 +126,7 @@ func LoadDir(dirname string) (Plugin, error) {
 				}
 
 				if err != nil {
-					return nil, fmt.Errorf("failed to unmarshal runtimeConfig for %s runtime at %q: %w", tempMeta.Runtime, pluginfile, err)
+					return nil, fmt.Errorf("failed to unmarshal runtimeConfig for %s runtime: %w", tempMeta.Runtime, err)
 				}
 
 				plug.MetadataV1.RuntimeConfig = runtimeConfig
@@ -152,16 +147,31 @@ func LoadDir(dirname string) (Plugin, error) {
 			return plug, plug.Validate()
 		} else {
 			// Unsupported apiVersion
-			return nil, fmt.Errorf("unsupported apiVersion %q in plugin at %q", apiVersion, pluginfile)
+			return nil, fmt.Errorf("unsupported apiVersion %q in plugin", apiVersion)
 		}
 	} else {
 		// Load as legacy plugin
 		plug := &PluginLegacy{Dir: dirname}
 		if err := yaml.UnmarshalStrict(data, &plug.MetadataLegacy); err != nil {
-			return nil, fmt.Errorf("failed to load legacy plugin at %q: %w", pluginfile, err)
+			return nil, fmt.Errorf("failed to load legacy plugin: %w", err)
 		}
 		return plug, plug.Validate()
 	}
+}
+
+// LoadDir loads a plugin from the given directory.
+func LoadDir(dirname string) (Plugin, error) {
+	pluginfile := filepath.Join(dirname, PluginFileName)
+	data, err := os.ReadFile(pluginfile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read plugin at %q: %w", pluginfile, err)
+	}
+
+	plugin, err := Load(data, dirname)
+	if err != nil {
+		return nil, fmt.Errorf("plugin at %q: %w", pluginfile, err)
+	}
+	return plugin, nil
 }
 
 // LoadAll loads all plugins found beneath the base directory.
