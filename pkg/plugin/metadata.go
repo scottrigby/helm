@@ -81,3 +81,35 @@ type MetadataV1 struct {
 	// RuntimeConfig contains the runtime-specific configuration
 	RuntimeConfig RuntimeConfig `json:"runtimeConfig"`
 }
+
+func ConvertMetadataLegacy(m MetadataLegacy) MetadataV1 {
+	pluginType := "cli"
+
+	var config Config
+	if len(m.Downloaders) > 0 {
+		pluginType = "getter"
+
+		config = &ConfigDownload{
+			Downloaders: m.Downloaders,
+		}
+	}
+
+	runtimeConfig := &RuntimeConfigSubprocess{
+		PlatformCommand: m.PlatformCommand,
+		Command:         m.Command,
+		PlatformHooks:   m.PlatformHooks,
+		Hooks:           m.Hooks,
+		UseTunnel:       m.UseTunnelDeprecated,
+	}
+
+	return MetadataV1{
+		APIVersion: "legacy",
+		Name:       m.Name,
+		Version:    m.Version,
+		// Description:  m.Description,
+		Type:          pluginType,
+		Runtime:       "subprocess",
+		Config:        config,
+		RuntimeConfig: runtimeConfig,
+	}
+}

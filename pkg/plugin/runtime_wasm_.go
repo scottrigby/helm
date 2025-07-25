@@ -71,20 +71,26 @@ func (r *RuntimeConfigWasm) Validate() error {
 
 // RuntimeWasm implements the Runtime interface for WASM execution
 type RuntimeWasm struct {
-	config     *RuntimeConfigWasm
-	pluginDir  string
-	pluginName string
-	settings   *cli.EnvSettings
+	config   *RuntimeConfigWasm
+	plugin   *PluginV1
+	settings *cli.EnvSettings
 }
 
 // CreateRuntime implementation for RuntimeConfig
-func (r *RuntimeConfigWasm) CreateRuntime(pluginDir string, pluginName string) (Runtime, error) {
+func (r *RuntimeConfigWasm) CreateRuntime(p *PluginV1) (Runtime, error) {
 	return &RuntimeWasm{
-		config:     r,
-		pluginDir:  pluginDir,
-		pluginName: pluginName,
-		settings:   cli.New(),
+		config:   r,
+		plugin:   p,
+		settings: cli.New(),
 	}, nil
+}
+
+func (r *RuntimeWasm) Metadata() MetadataV1 {
+	return r.plugin.Metadata
+}
+
+func (r *RuntimeWasm) Dir() string {
+	return r.plugin.Dir
 }
 
 // Invoke implementation for Runtime
@@ -101,12 +107,12 @@ func (r *RuntimeWasm) Invoke(stdin io.Reader, stdout, stderr io.Writer, env []st
 }
 
 // InvokeHook implementation for RuntimeWasm (not yet implemented)
-func (r *RuntimeWasm) InvokeHook(event string) error {
+func (r *RuntimeWasm) InvokeHook(_ string) error {
 	return fmt.Errorf("WASM runtime not yet implemented")
 }
 
 // Postrender implementation for RuntimeWasm
-func (r *RuntimeWasm) Postrender(renderedManifests *bytes.Buffer, args []string) (*bytes.Buffer, error) {
+func (r *RuntimeWasm) Postrender(_ *bytes.Buffer, args []string) (*bytes.Buffer, error) {
 	return nil, fmt.Errorf("WASM postrender not yet implemented")
 }
 

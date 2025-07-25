@@ -19,6 +19,7 @@ package plugin
 import (
 	"bytes"
 	"fmt"
+
 	"helm.sh/helm/v4/pkg/cli"
 )
 
@@ -39,7 +40,7 @@ func NewPostRenderer(settings *cli.EnvSettings, pluginName string, args ...strin
 	}
 
 	// Verify this is a postrender plugin
-	config := p.GetConfig()
+	config := p.Metadata().Config
 	if _, ok := config.(*ConfigPostrender); !ok {
 		return nil, fmt.Errorf("plugin %s is not a postrender plugin", pluginName)
 	}
@@ -59,18 +60,13 @@ type runtimePostRenderer struct {
 }
 
 // Run implements PostRenderer by using the plugin's runtime
-func (r *runtimePostRenderer) Run(renderedManifests *bytes.Buffer) (*bytes.Buffer, error) {
-	// Get runtime instance
-	runtime, err := r.plugin.GetRuntimeInstance()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get runtime instance: %w", err)
-	}
-
+func (r *runtimePostRenderer) Run(_ /*renderedManifests*/ *bytes.Buffer) (*bytes.Buffer, error) {
 	// For subprocess runtime, configure settings
-	if subprocessRuntime, ok := runtime.(*RuntimeSubprocess); ok {
+	if subprocessRuntime, ok := r.plugin.(*RuntimeSubprocess); ok {
 		subprocessRuntime.SetSettings(r.settings)
 	}
 
 	// Use the runtime's Postrender method
-	return runtime.Postrender(renderedManifests, r.args)
+	// return r.plugin.PostRender(renderedManifests, r.args) TODO: need to fix this
+	return nil, nil
 }
