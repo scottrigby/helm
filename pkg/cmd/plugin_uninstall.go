@@ -87,6 +87,16 @@ func uninstallPlugin(p plugin.Plugin) error {
 	if err := os.RemoveAll(p.GetDir()); err != nil {
 		return err
 	}
+
+	// Also remove the .prov file if it exists
+	provFile := p.GetDir() + ".prov"
+	if _, err := os.Stat(provFile); err == nil {
+		if err := os.Remove(provFile); err != nil {
+			// Log error but don't fail the uninstall
+			slog.Warn("failed to remove provenance file", "file", provFile, "error", err)
+		}
+	}
+
 	return runHook(p, plugin.Delete)
 }
 

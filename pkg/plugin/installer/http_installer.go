@@ -46,6 +46,7 @@ type HTTPInstaller struct {
 	base
 	extractor Extractor
 	getter    getter.Getter
+	provData  []byte // Provenance data to save after installation
 }
 
 // TarGzExtractor extracts gzip compressed tar archives
@@ -69,6 +70,9 @@ func mediaTypeToExtension(mt string) (string, bool) {
 	switch strings.ToLower(mt) {
 	case "application/gzip", "application/x-gzip", "application/x-tgz", "application/x-gtar":
 		return ".tgz", true
+	case "application/octet-stream":
+		// Generic binary type - we'll need to check the URL suffix
+		return "", false
 	default:
 		return "", false
 	}
@@ -138,11 +142,18 @@ func (i *HTTPInstaller) Install() error {
 		return fmt.Errorf("extracting files from archive: %w", err)
 	}
 
-	if !isPlugin(i.CacheDir) {
-		return ErrMissingMetadata
+	// Detect where the plugin.yaml actually is
+	pluginRoot, err := detectPluginRoot(i.CacheDir)
+	if err != nil {
+		return err
 	}
 
-	src, err := filepath.Abs(i.CacheDir)
+	// Validate plugin structure if needed
+	if err := validatePluginName(pluginRoot, i.PluginName); err != nil {
+		return err
+	}
+
+	src, err := filepath.Abs(pluginRoot)
 	if err != nil {
 		return err
 	}
@@ -248,10 +259,14 @@ func (g *TarGzExtractor) Extract(buffer *bytes.Buffer, targetDir string) error {
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.Mkdir(path, 0755); err != nil {
+			if err := os.MkdirAll(path, 0755); err != nil {
 				return err
 			}
 		case tar.TypeReg:
+			// Ensure parent directory exists
+			if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+				return err
+			}
 			outFile, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
 			if err != nil {
 				return err
@@ -269,4 +284,74 @@ func (g *TarGzExtractor) Extract(buffer *bytes.Buffer, targetDir string) error {
 		}
 	}
 	return nil
+}
+
+// SupportsVerification returns true if the HTTP installer can verify plugins
+func (i *HTTPInstaller) SupportsVerification() bool {
+	// Only support verification for tarball URLs
+	return strings.HasSuffix(i.Source, ".tgz") || strings.HasSuffix(i.Source, ".tar.gz")
+}
+
+// PrepareForVerification downloads the plugin and signature files for verification
+func (i *HTTPInstaller) PrepareForVerification() (string, func(), error) {
+	if !i.SupportsVerification() {
+		return "", nil, fmt.Errorf("verification not supported for this source")
+	}
+
+	// Create temporary directory for downloads
+	tempDir, err := os.MkdirTemp("", "helm-plugin-verify-*")
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to create temp directory: %w", err)
+	}
+
+	cleanup := func() {
+		os.RemoveAll(tempDir)
+	}
+
+	// Download plugin tarball
+	pluginFile := filepath.Join(tempDir, filepath.Base(i.Source))
+
+	g, err := getter.All(new(cli.EnvSettings)).ByScheme("http")
+	if err != nil {
+		cleanup()
+		return "", nil, err
+	}
+
+	data, err := g.Get(i.Source, getter.WithURL(i.Source))
+	if err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("failed to download plugin: %w", err)
+	}
+
+	if err := os.WriteFile(pluginFile, data.Bytes(), 0644); err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("failed to write plugin file: %w", err)
+	}
+
+	// Download signature file
+	provData, err := g.Get(i.Source+".prov", getter.WithURL(i.Source+".prov"))
+	if err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("failed to download plugin signature: %w", err)
+	}
+
+	if err := os.WriteFile(pluginFile+".prov", provData.Bytes(), 0644); err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("failed to write signature file: %w", err)
+	}
+
+	// Store the provenance data so we can save it after installation
+	i.provData = provData.Bytes()
+
+	return pluginFile, cleanup, nil
+}
+
+// SaveProvenance saves the provenance file for the installed plugin
+func (i *HTTPInstaller) SaveProvenance() error {
+	if len(i.provData) == 0 {
+		return nil // No provenance data to save
+	}
+
+	provFile := i.Path() + ".prov"
+	return os.WriteFile(provFile, i.provData, 0644)
 }
