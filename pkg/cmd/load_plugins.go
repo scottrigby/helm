@@ -60,7 +60,7 @@ func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 	}
 
 	dirs := filepath.SplitList(settings.PluginsDirectory)
-	descriptor := plugin.PluginDescriptor{
+	descriptor := plugin.Descriptor{
 		Type: pluginType,
 	}
 	found, err := plugin.FindPlugins(dirs, descriptor)

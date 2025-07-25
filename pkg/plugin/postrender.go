@@ -60,7 +60,7 @@ type runtimePostRenderer struct {
 }
 
 // Run implements PostRenderer by using the plugin's runtime
-func (r *runtimePostRenderer) Run(renderedManifests *bytes.Buffer) (*bytes.Buffer, error) {
+func (r *runtimePostRenderer) Run(_ /*renderedManifests*/ *bytes.Buffer) (*bytes.Buffer, error) {
 	// For subprocess runtime, configure settings
 	if subprocessRuntime, ok := r.plugin.(*RuntimeSubprocess); ok {
 		subprocessRuntime.SetSettings(r.settings)

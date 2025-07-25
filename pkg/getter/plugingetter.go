@@ -30,7 +30,7 @@ import (
 // This will load plugins according to the cli.
 func collectPlugins(settings *cli.EnvSettings) (Providers, error) {
 	dirs := filepath.SplitList(settings.PluginsDirectory)
-	descriptor := plugin.PluginDescriptor{
+	descriptor := plugin.Descriptor{
 		Type: "download",
 	}
 	plugins, err := plugin.FindPlugins(dirs, descriptor)

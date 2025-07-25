@@ -107,12 +107,12 @@ func (r *RuntimeWasm) Invoke(stdin io.Reader, stdout, stderr io.Writer, env []st
 }
 
 // InvokeHook implementation for RuntimeWasm (not yet implemented)
-func (r *RuntimeWasm) InvokeHook(event string) error {
+func (r *RuntimeWasm) InvokeHook(_ string) error {
 	return fmt.Errorf("WASM runtime not yet implemented")
 }
 
 // Postrender implementation for RuntimeWasm
-func (r *RuntimeWasm) Postrender(renderedManifests *bytes.Buffer, args []string) (*bytes.Buffer, error) {
+func (r *RuntimeWasm) Postrender(_ *bytes.Buffer, args []string) (*bytes.Buffer, error) {
 	return nil, fmt.Errorf("WASM postrender not yet implemented")
 }
 

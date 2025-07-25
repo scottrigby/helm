@@ -15,8 +15,8 @@ limitations under the License.
 
 package plugin
 
-// PluginDescriptor describes a plugin to find
-type PluginDescriptor struct {
+// Descriptor describes a plugin to find
+type Descriptor struct {
 	// Name is the name of the plugin
 	Name string
 	// Type is the type of the plugin (cli, download, postrender)

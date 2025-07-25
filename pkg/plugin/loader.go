@@ -229,7 +229,7 @@ type findFunc func(pluginsDir string) ([]Plugin, error)
 type filterFunc func(Plugin) bool
 
 // FindPlugins returns a list of plugins that match the descriptor
-func FindPlugins(pluginsDirs []string, descriptor PluginDescriptor) ([]Plugin, error) {
+func FindPlugins(pluginsDirs []string, descriptor Descriptor) ([]Plugin, error) {
 	return findPlugins(pluginsDirs, LoadAll, makeDescriptorFilter(descriptor))
 }
 
@@ -254,7 +254,7 @@ func findPlugins(pluginsDirs []string, findFunc findFunc, filterFunc filterFunc)
 
 // makeDescriptorFilter creates a filter function from a descriptor
 // Additional plugin filter criteria we wish to support can be added here
-func makeDescriptorFilter(descriptor PluginDescriptor) filterFunc {
+func makeDescriptorFilter(descriptor Descriptor) filterFunc {
 	return func(p Plugin) bool {
 		// If name is specified, it must match
 		if descriptor.Name != "" && p.Metadata().Name != descriptor.Name {
@@ -271,7 +271,7 @@ func makeDescriptorFilter(descriptor PluginDescriptor) filterFunc {
 // FindPlugin returns a plugin by name and type
 func FindPlugin(name, plugdirs, pluginType string) (Plugin, error) {
 	dirs := filepath.SplitList(plugdirs)
-	descriptor := PluginDescriptor{
+	descriptor := Descriptor{
 		Name: name,
 		Type: pluginType,
 	}

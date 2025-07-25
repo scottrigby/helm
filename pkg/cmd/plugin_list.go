@@ -38,7 +38,7 @@ func newPluginListCmd(out io.Writer) *cobra.Command {
 		RunE: func(_ *cobra.Command, _ []string) error {
 			slog.Debug("pluginDirs", "directory", settings.PluginsDirectory)
 			dirs := filepath.SplitList(settings.PluginsDirectory)
-			descriptor := plugin.PluginDescriptor{
+			descriptor := plugin.Descriptor{
 				Type: pluginType,
 			}
 			plugins, err := plugin.FindPlugins(dirs, descriptor)
@@ -91,7 +91,7 @@ func filterPlugins(plugins []plugin.Plugin, ignoredPluginNames []string) []plugi
 func compListPlugins(_ string, ignoredPluginNames []string) []string {
 	var pNames []string
 	dirs := filepath.SplitList(settings.PluginsDirectory)
-	descriptor := plugin.PluginDescriptor{
+	descriptor := plugin.Descriptor{
 		Type: "cli",
 	}
 	plugins, err := plugin.FindPlugins(dirs, descriptor)

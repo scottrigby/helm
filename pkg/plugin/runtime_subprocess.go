@@ -258,7 +258,7 @@ func unmarshalRuntimeConfigSubprocess(runtimeData map[string]interface{}) (*Runt
 }
 
 // ExecDownloader executes a plugin downloader command with custom environment
-func ExecDownloader(base string, command string, argv []string, env []string) (*bytes.Buffer, error) {
+func ExecDownloader(_ string, command string, argv []string, env []string) (*bytes.Buffer, error) {
 	prog := exec.Command(command, argv...)
 	prog.Env = env
 
