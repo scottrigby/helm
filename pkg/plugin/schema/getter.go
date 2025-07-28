@@ -22,9 +22,9 @@ import (
 
 type GetterOptionsV1 struct {
 	URL                   string
-	Cert                  []byte
-	Key                   []byte
-	CA                    []byte
+	CertFile              string
+	KeyFile               string
+	CAFile                string
 	UNTar                 bool
 	InsecureSkipVerifyTLS bool
 	PlainHTTP             bool
@@ -37,7 +37,7 @@ type GetterOptionsV1 struct {
 	Timeout               time.Duration
 }
 
-type GetterInputV1 struct {
+type InputMessageGetterV1 struct {
 	Href     string          `json:"href"`
 	Protocol string          `json:"protocol"`
 	Options  GetterOptionsV1 `json:"options"`
@@ -45,4 +45,10 @@ type GetterInputV1 struct {
 
 type GetterOutputV1 struct {
 	Data *bytes.Buffer `json:"data"`
+}
+
+type CLIInputV1 struct {
+}
+
+type CLIOutputV1 struct {
 }

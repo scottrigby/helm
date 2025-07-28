@@ -73,15 +73,15 @@ func loadDir(dirname string) (*PluginV1, error) {
 			return nil, fmt.Errorf("failed to load V1 plugin metadata at %q: %w", pluginfile, err)
 		}
 
-		// // Default runtime to subprocess if not specified
-		// if tempMeta.Runtime == "" {
-		// 	tempMeta.Runtime = "subprocess"
-		// }
+		// Default runtime to subprocess if not specified
+		if tempMeta.Runtime == "" {
+			tempMeta.Runtime = "subprocess"
+		}
 
-		// // Default type to cli if not specified
-		// if tempMeta.Type == "" {
-		// 	tempMeta.Type = "cli"
-		// }
+		// Default type to cli if not specified
+		if tempMeta.Type == "" {
+			tempMeta.Type = "cli"
+		}
 
 		// Create the MetadataV1 struct with base fields
 		plug.Metadata = MetadataV1{
@@ -118,11 +118,11 @@ func loadDir(dirname string) (*PluginV1, error) {
 			// Create default config based on plugin type
 			var config Config
 			switch tempMeta.Type {
-			case "cli":
+			case "cli/v1":
 				config = &ConfigCLI{}
-			case "download":
+			case "getter/v1":
 				config = &ConfigGetter{}
-			case "postrender":
+			case "postrenderer/v1":
 				config = &ConfigPostrender{}
 			default:
 				return nil, fmt.Errorf("unsupported plugin type: %s", tempMeta.Type)
@@ -269,12 +269,7 @@ func makeDescriptorFilter(descriptor Descriptor) filterFunc {
 }
 
 // FindPlugin returns a plugin by name and type
-func FindPlugin(name, plugdirs, pluginType string) (Plugin, error) {
-	dirs := filepath.SplitList(plugdirs)
-	descriptor := Descriptor{
-		Name: name,
-		Type: pluginType,
-	}
+func FindPlugin(dirs []string, descriptor Descriptor) (Plugin, error) {
 	plugins, err := FindPlugins(dirs, descriptor)
 	if err != nil {
 		return nil, err
@@ -284,7 +279,7 @@ func FindPlugin(name, plugdirs, pluginType string) (Plugin, error) {
 		return plugins[0], nil
 	}
 
-	return nil, fmt.Errorf("plugin: %s not found", name)
+	return nil, fmt.Errorf("plugin: %+v not found", descriptor)
 }
 
 func detectDuplicates(plugs []*PluginV1) error {

@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 
 	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/plugin"
@@ -63,7 +62,7 @@ func collectGetterPlugins(settings *cli.EnvSettings) (Providers, error) {
 	return results, nil
 }
 
-func convertOptions(globalOptions, options []Option) (schema.GetterOptionsV1, error) {
+func convertOptions(globalOptions, options []Option) schema.GetterOptionsV1 {
 	opts := getterOptions{}
 	for _, opt := range globalOptions {
 		opt(&opts)
@@ -73,10 +72,10 @@ func convertOptions(globalOptions, options []Option) (schema.GetterOptionsV1, er
 	}
 
 	result := schema.GetterOptionsV1{
-		URL: opts.url,
-		// CertFile              string
-		// KeyFile               string
-		// CAFile                string
+		URL:                   opts.url,
+		CertFile:              opts.certFile,
+		KeyFile:               opts.keyFile,
+		CAFile:                opts.caFile,
 		UNTar:                 opts.unTar,
 		InsecureSkipVerifyTLS: opts.insecureSkipVerifyTLS,
 		PlainHTTP:             opts.plainHTTP,
@@ -89,31 +88,7 @@ func convertOptions(globalOptions, options []Option) (schema.GetterOptionsV1, er
 		Timeout:               opts.timeout,
 	}
 
-	if opts.caFile != "" {
-		caData, err := os.ReadFile(opts.caFile)
-		if err != nil {
-			return schema.GetterOptionsV1{}, fmt.Errorf("unable to read CA file: %q: %w", opts.caFile, err)
-		}
-		result.CA = caData
-	}
-
-	if opts.certFile != "" || opts.keyFile != "" {
-
-		certData, err := os.ReadFile(opts.certFile)
-		if err != nil {
-			return schema.GetterOptionsV1{}, fmt.Errorf("unable to read cert file: %q: %w", opts.certFile, err)
-		}
-
-		keyData, err := os.ReadFile(opts.keyFile)
-		if err != nil {
-			return schema.GetterOptionsV1{}, fmt.Errorf("unable to read key file: %q: %w", opts.keyFile, err)
-		}
-
-		result.Cert = certData
-		result.Key = keyData
-	}
-
-	return result, nil
+	return result
 }
 
 type getterPlugin struct {
@@ -123,13 +98,10 @@ type getterPlugin struct {
 
 func (g *getterPlugin) Get(href string, options ...Option) (*bytes.Buffer, error) {
 
-	opts, err := convertOptions(g.options, options)
-	if err != nil {
-		return nil, err
-	}
+	opts := convertOptions(g.options, options)
 
 	input := &plugin.Input{
-		Message: schema.GetterInputV1{
+		Message: schema.InputMessageGetterV1{
 			Href:    href,
 			Options: opts,
 		},

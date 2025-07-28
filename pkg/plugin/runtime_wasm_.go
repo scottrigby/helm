@@ -94,7 +94,7 @@ func (r *RuntimeWasm) Dir() string {
 }
 
 // Invoke implementation for Runtime
-func (r *RuntimeWasm) Invoke(ctx context.Context, input *Input) (*Output, error) {
+func (r *RuntimeWasm) Invoke(_ context.Context, _ *Input) (*Output, error) {
 	// TODO: Implement WASM runtime execution
 	// This will include:
 	// - Loading the WASM module from r.config.WasmModule
@@ -112,7 +112,7 @@ func (r *RuntimeWasm) InvokeHook(_ string) error {
 }
 
 // Postrender implementation for RuntimeWasm
-func (r *RuntimeWasm) Postrender(_ *bytes.Buffer, args []string) (*bytes.Buffer, error) {
+func (r *RuntimeWasm) Postrender(_ *bytes.Buffer, _ []string) (*bytes.Buffer, error) {
 	return nil, fmt.Errorf("WASM postrender not yet implemented")
 }
 

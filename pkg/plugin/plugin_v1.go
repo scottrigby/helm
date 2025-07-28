@@ -68,27 +68,27 @@ func (p *PluginV1) PrepareCommand(extraArgs []string) (string, []string, error) 
 func (p *PluginV1) Validate() error {
 
 	if !validPluginName.MatchString(p.Metadata.Name) {
-		return fmt.Errorf("invalid plugin name")
+		return fmt.Errorf("invalid name")
 	}
 
 	if p.Metadata.APIVersion != "v1" {
-		return fmt.Errorf("v1 plugin must have apiVersion: v1")
+		return fmt.Errorf("invalid apiVersion: %q", p.Metadata.APIVersion)
 	}
 
 	if p.Metadata.Type == "" {
-		return fmt.Errorf("v1 plugin must have a type field")
+		return fmt.Errorf("empty type field")
 	}
 
 	if p.Metadata.Runtime == "" {
-		return fmt.Errorf("v1 plugin must have a runtime field")
+		return fmt.Errorf("empty runtime field")
 	}
 
 	if p.Metadata.Config == nil {
-		return fmt.Errorf("v1 plugin must have a config field")
+		return fmt.Errorf("missing config field")
 	}
 
 	if p.Metadata.RuntimeConfig == nil {
-		return fmt.Errorf("v1 plugin must have a runtimeConfig field")
+		return fmt.Errorf("missing runtimeConfig field")
 	}
 
 	// Validate that config type matches plugin type

@@ -60,15 +60,3 @@ type Plugin interface {
 	Dir() string
 	Invoke(ctx context.Context, input *Input) (*Output, error)
 }
-
-// Error is returned when a plugin exits with a non-zero status code
-type Error struct {
-	Err        error
-	PluginName string
-	Code       int
-}
-
-// Error implements the error interface
-func (e *Error) Error() string {
-	return e.Err.Error()
-}

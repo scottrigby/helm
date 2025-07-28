@@ -55,9 +55,9 @@ type ConfigPostrender struct {
 }
 
 // GetType implementations for Config types
-func (c *ConfigCLI) GetType() string        { return "cli" }
-func (c *ConfigGetter) GetType() string     { return "download" }
-func (c *ConfigPostrender) GetType() string { return "postrender" }
+func (c *ConfigCLI) GetType() string        { return "cli/v1" }
+func (c *ConfigGetter) GetType() string     { return "getter/v1" }
+func (c *ConfigPostrender) GetType() string { return "postrenderer/v1" }
 
 // Validate implementations for Config types
 func (c *ConfigCLI) Validate() error {

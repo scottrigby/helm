@@ -1,6 +1,8 @@
-name: args
-type: cli
+---
 apiVersion: v1
+name: args
+version: 1.0.0
+type: cli/v1
 runtime: subprocess
 config:
   shortHelp: "echo args"

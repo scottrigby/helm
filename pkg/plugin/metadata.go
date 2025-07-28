@@ -106,7 +106,7 @@ func ConvertMetadataLegacy(m MetadataLegacy) MetadataV1 {
 	}
 
 	return MetadataV1{
-		APIVersion: "legacy",
+		APIVersion: "v1",
 		Name:       m.Name,
 		Version:    m.Version,
 		// Description:  m.Description,

@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -26,74 +27,40 @@ import (
 	"helm.sh/helm/v4/pkg/plugin/schema"
 )
 
-type pluginExec struct {
-	command string
-	argv    []string
-	env     []string
-}
-
-func getProtocolDownloader(downloaders []SubprocessDownloaders, protocol string) *SubprocessDownloaders {
-	for _, d := range downloaders {
-		if slices.Contains(d.Protocols, protocol) {
-			return &d
+func getProtocolCommand(commands []SubprocessProtocolCommand, protocol string) *SubprocessProtocolCommand {
+	for _, c := range commands {
+		if slices.Contains(c.Protocols, protocol) {
+			return &c
 		}
 	}
 
 	return nil
 }
 
-func convertGetter(r *RuntimeSubprocess, input *Input) (pluginExec, error) {
+func runGetter(r *RuntimeSubprocess, input *Input) (*Output, error) {
 
-	msg, ok := (input.Message).(*schema.GetterInputV1)
+	msg, ok := (input.Message).(*schema.InputMessageGetterV1)
 	if !ok {
-		return pluginExec{}, fmt.Errorf("expected input type schema.GetterInputV1, got %T", input)
+		return nil, fmt.Errorf("expected input type schema.InputMessageGetterV1, got %T", input)
 	}
 
 	tmpDir, err := os.MkdirTemp(os.TempDir(), fmt.Sprintf("helm-plugin-%s-", r.plugin.Metadata.Name))
 	if err != nil {
-		return pluginExec{}, fmt.Errorf("failed to create temporary directory: %w", err)
+		return nil, fmt.Errorf("failed to create temporary directory: %w", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	writeTempFile := func(name string, data []byte) (string, error) {
-		if len(data) == 0 {
-			return "", nil
-		}
-
-		tempFile := filepath.Join(tmpDir, name)
-		err := os.WriteFile(tempFile, msg.Options.Cert, 0o640)
-		if err != nil {
-			return "", fmt.Errorf("failed to write temporary file: %w", err)
-		}
-		return tempFile, nil
-	}
-
-	certFile, err := writeTempFile("cert", msg.Options.Cert)
-	if err != nil {
-		return pluginExec{}, err
-	}
-
-	keyFile, err := writeTempFile("key", msg.Options.Cert)
-	if err != nil {
-		return pluginExec{}, err
-	}
-
-	caFile, err := writeTempFile("ca", msg.Options.Cert)
-	if err != nil {
-		return pluginExec{}, err
-	}
-
-	d := getProtocolDownloader(r.config.Downloaders, msg.Protocol)
+	d := getProtocolCommand(r.config.ProtocolCommands, msg.Protocol)
 	if d == nil {
-		return pluginExec{}, fmt.Errorf("no downloader found for protocol %q", msg.Protocol)
+		return nil, fmt.Errorf("no downloader found for protocol %q", msg.Protocol)
 	}
 
 	commands := strings.Split(d.Command, " ")
-	argv := append(
+	args := append(
 		commands[1:],
-		certFile,
-		keyFile,
-		caFile,
+		msg.Options.CertFile,
+		msg.Options.KeyFile,
+		msg.Options.CAFile,
 		msg.Href)
 
 	env := append(
@@ -102,33 +69,22 @@ func convertGetter(r *RuntimeSubprocess, input *Input) (pluginExec, error) {
 		fmt.Sprintf("HELM_PLUGIN_PASSWORD=%s", msg.Options.Password),
 		fmt.Sprintf("HELM_PLUGIN_PASS_CREDENTIALS_ALL=%t", msg.Options.PassCredentialsAll))
 
-	return pluginExec{
-		command: commands[0],
-		argv:    argv,
-		env:     env,
-	}, nil
-}
+	buf := bytes.Buffer{} // subprocess getters are expected to write content to stdout
 
-func convertCli(r *RuntimeSubprocess, input *Input) (pluginExec, error) {
-	return pluginExec{}, nil
-}
-
-func convertInput(r *RuntimeSubprocess, input *Input) (pluginExec, error) {
-
-	switch r.plugin.Metadata.Type {
-	case "getter/v1":
-		return convertGetter(r, input)
-	case "cli/v1":
-		return convertCli(r, input)
+	pluginCommand := filepath.Join(r.plugin.Dir, commands[0])
+	prog := exec.Command(
+		pluginCommand,
+		args...)
+	prog.Env = env
+	prog.Stdout = &buf
+	prog.Stderr = os.Stderr
+	if err := executeCmd(prog, r.plugin.Metadata.Name); err != nil {
+		return nil, err
 	}
 
-	return pluginExec{}, fmt.Errorf("unsupported subprocess plugin type %q", r.plugin.Metadata.Type)
-}
-
-func convertOutput(buf *bytes.Buffer) *Output {
 	return &Output{
-		Message: schema.GetterOutputV1{
-			Data: buf,
+		Message: &schema.GetterOutputV1{
+			Data: &buf,
 		},
-	}
+	}, nil
 }
