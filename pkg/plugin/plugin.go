@@ -15,7 +15,10 @@ limitations under the License.
 
 package plugin // import "helm.sh/helm/v4/pkg/plugin"
 
-import "io"
+import (
+	"context"
+	"io"
+)
 
 const PluginFileName = "plugin.yaml"
 
@@ -29,21 +32,31 @@ type Downloaders struct {
 	Command string `json:"command"`
 }
 
-// Plugin interface defines the common methods that all plugin versions must implement
+// Input defined the input message and parameters to be passed to the plugin
+type Input struct {
+	// Message represents the type-elided value to be passed to the plugin
+	// The plugin is expected to interpret the message according to its type/version
+	// The message object must be JSON-serializable
+	Message any
+
+	// Optional: Reader to be consumed plugin's "stdin"
+	Stdin io.Reader
+
+	// Optional: Writers to consume the plugin's "stdout" and "stderr"
+	Stdout, Stderr io.Writer
+}
+
+// Input defined the output message and parameters the passed from the plugin
+type Output struct {
+	// Message represents the type-elided value passed from the plugin
+	// The invoker is expected to interpret the message according to the plugins type/version
+	Message any
+}
+
+// Plugin defines the "invokable" interface for a plugin, as well a getter for the plugin's describing manifest
+// The invoke method can be thought of request/response message passing between the plugin invoker and the plugin itself
 type Plugin interface {
 	Metadata() MetadataV1
 	Dir() string
-	Invoke(stdin io.Reader, stdout, stderr io.Writer, env []string) error
-}
-
-// Error is returned when a plugin exits with a non-zero status code
-type Error struct {
-	Err        error
-	PluginName string
-	Code       int
-}
-
-// Error implements the error interface
-func (e *Error) Error() string {
-	return e.Err.Error()
+	Invoke(ctx context.Context, input *Input) (*Output, error)
 }

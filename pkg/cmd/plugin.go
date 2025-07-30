@@ -50,8 +50,8 @@ func runHook(p plugin.Plugin, event string) error {
 	// For subprocess runtime, set settings
 	if subprocessRuntime, ok := p.(*plugin.RuntimeSubprocess); ok {
 		subprocessRuntime.SetSettings(settings)
-		slog.Debug("running hook", "event", event)
 
+		slog.Debug("running hook", "event", event)
 		return subprocessRuntime.InvokeHook(event)
 	}
 

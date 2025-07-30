@@ -51,7 +51,7 @@ package plugin
 // func (p *PluginLegacy) GetConfig() Config {
 // 	switch p.GetType() {
 // 	case "download":
-// 		return &ConfigDownload{
+// 		return &ConfigGetter{
 // 			Downloaders: p.MetadataLegacy.Downloaders,
 // 		}
 // 	case "cli":

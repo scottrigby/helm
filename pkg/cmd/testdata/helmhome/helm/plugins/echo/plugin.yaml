@@ -1,5 +1,5 @@
 name: echo
-type: cli
+type: cli/v1
 apiVersion: v1
 runtime: subprocess
 config:

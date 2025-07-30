@@ -1,13 +1,16 @@
-name: "downloader"
-version: "1.2.3"
-type: download
+---
 apiVersion: v1
+name: "downloadertest"
+version: "1.2.3"
+type: getter/v1
 runtime: subprocess
 config:
-  downloaders:
-    - protocols:
-      - "myprotocol"
-      - "myprotocols"
-      command: "echo Download"
+  protocols:
+  - "myprotocol"
+  - "myprotocol2"
 runtimeConfig:
-  command: "echo Hello"
+  protocolCommands:
+  - protocols:
+    - "myprotocol"
+    - "myprotocol2"
+    command: "echo Hello"

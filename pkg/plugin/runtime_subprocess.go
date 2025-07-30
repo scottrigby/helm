@@ -17,6 +17,7 @@ package plugin
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -26,7 +27,17 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"helm.sh/helm/v4/pkg/cli"
+	"helm.sh/helm/v4/pkg/plugin/schema"
 )
+
+// SubprocessGetter maps a given protocol to the getter command used to retrieve artifacts for that protcol
+type SubprocessProtocolCommand struct {
+	// Protocols are the list of schemes from the charts URL.
+	Protocols []string `json:"protocols"`
+	// Command is the executable path with which the plugin performs
+	// the actual download for the corresponding Protocols
+	Command string `json:"command"`
+}
 
 // RuntimeConfigSubprocess represents configuration for subprocess runtime
 type RuntimeConfigSubprocess struct {
@@ -42,9 +53,12 @@ type RuntimeConfigSubprocess struct {
 	// Hooks are commands that will run on plugin events, as a single string.
 	// DEPRECATED: Use PlatformHooks instead. Remove in Helm 4.
 	Hooks Hooks `json:"hooks"`
-	// UseTunnel indicates that this command needs a tunnel.
-	// DEPRECATED and unused, but retained for backwards compatibility. Remove in Helm 4.
-	UseTunnel bool `json:"useTunnel"`
+
+	// ProtocolCommands field is used if the plugin supply downloader mechanism
+	// for special protocols.
+	// (This is a compartiblity handover from the old plugin downloader mechanism, which was extended to support multiple
+	// protocols in a given plugin)
+	ProtocolCommands []SubprocessProtocolCommand `json:"protocolCommands,omitempty"`
 }
 
 // GetRuntimeType implementation for RuntimeConfig
@@ -97,20 +111,17 @@ func (r *RuntimeSubprocess) Dir() string {
 }
 
 // Invoke implementation for RuntimeConfig
-func (r *RuntimeSubprocess) Invoke(stdin io.Reader, stdout, stderr io.Writer, env []string) error {
-	// Prepare command based on runtime configuration
-	cmds := r.config.PlatformCommand
-	if len(cmds) == 0 && len(r.config.Command) > 0 {
-		cmds = []PlatformCommand{{Command: r.config.Command}}
+func (r *RuntimeSubprocess) Invoke(_ context.Context, input *Input) (*Output, error) {
+
+	switch r.plugin.Metadata.Type {
+	case "getter/v1":
+		return runGetter(r, input)
+	case "cli/v1", "postrenderer/v1":
+		return runSubprocess(r, input)
 	}
 
-	main, args, err := PrepareCommands(cmds, true, r.extraArgs)
-	if err != nil {
-		return fmt.Errorf("failed to prepare command: %w", err)
-	}
+	return nil, fmt.Errorf("unsupported subprocess plugin type %q", r.plugin.Metadata.Type)
 
-	// Execute the command directly
-	return r.InvokeWithEnv(main, args, env, stdin, stdout, stderr)
 }
 
 // InvokeWithEnv executes a plugin command with custom environment and I/O streams
@@ -128,9 +139,8 @@ func (r *RuntimeSubprocess) InvokeWithEnv(main string, argv []string, env []stri
 			os.Stderr.Write(eerr.Stderr)
 			status := eerr.Sys().(syscall.WaitStatus)
 			return &Error{
-				Err:        fmt.Errorf("plugin %q exited with error", r.plugin.Metadata.Name),
-				PluginName: r.plugin.Metadata.Name,
-				Code:       status.ExitStatus(),
+				Err:  fmt.Errorf("plugin %q exited with error", r.plugin.Metadata.Name),
+				Code: status.ExitStatus(),
 			}
 		}
 		return err
@@ -257,21 +267,47 @@ func unmarshalRuntimeConfigSubprocess(runtimeData map[string]interface{}) (*Runt
 	return &config, nil
 }
 
-// ExecDownloader executes a plugin downloader command with custom environment
-func ExecDownloader(_ string, command string, argv []string, env []string) (*bytes.Buffer, error) {
-	prog := exec.Command(command, argv...)
-	prog.Env = env
-
-	buf := bytes.NewBuffer(nil)
-	prog.Stdout = buf
-	prog.Stderr = os.Stderr
-
+func executeCmd(prog *exec.Cmd, pluginName string) error {
 	if err := prog.Run(); err != nil {
 		if eerr, ok := err.(*exec.ExitError); ok {
 			os.Stderr.Write(eerr.Stderr)
-			return nil, fmt.Errorf("plugin %q exited with error", command)
+			return &Error{
+				Err:  fmt.Errorf("plugin %q exited with error", pluginName),
+				Code: eerr.ExitCode(),
+			}
 		}
+
+		return &Error{
+			Err: err,
+		}
+	}
+
+	return nil
+}
+
+func runSubprocess(r *RuntimeSubprocess, input *Input) (*Output, error) {
+
+	cmds := r.config.PlatformCommand
+	if len(cmds) == 0 && len(r.config.Command) > 0 {
+		cmds = []PlatformCommand{{Command: r.config.Command}}
+	}
+
+	command, args, err := PrepareCommands(cmds, true, r.extraArgs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare plugin command: %w", err)
+	}
+
+	prog := exec.Command(
+		command,
+		args...)
+	//prog.Env = pluginExec.env
+	prog.Stdin = input.Stdin
+	prog.Stdout = input.Stdout
+	prog.Stderr = input.Stderr
+	if err := executeCmd(prog, r.plugin.Metadata.Name); err != nil {
 		return nil, err
 	}
-	return buf, nil
+	return &Output{
+		Message: &schema.CLIOutputV1{},
+	}, nil
 }

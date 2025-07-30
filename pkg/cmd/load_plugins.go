@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -48,12 +49,12 @@ type PluginError struct {
 	Code int
 }
 
-// loadPlugins loads plugins into the command list.
+// loadCLIPlugins loads CLI plugins into the command list.
 //
 // This follows a different pattern than the other commands because it has
 // to inspect its environment and then add commands to the base command
 // as it finds them.
-func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
+func loadCLIPlugins(baseCmd *cobra.Command, out io.Writer) {
 	// If HELM_NO_PLUGINS is set to 1, do not load plugins.
 	if os.Getenv("HELM_NO_PLUGINS") == "1" {
 		return
@@ -61,7 +62,7 @@ func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 
 	dirs := filepath.SplitList(settings.PluginsDirectory)
 	descriptor := plugin.Descriptor{
-		Type: pluginType,
+		Type: "cli/v1",
 	}
 	found, err := plugin.FindPlugins(dirs, descriptor)
 	if err != nil {
@@ -113,7 +114,7 @@ func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 				}
 
 				// Invoke plugin
-				err = plug.Invoke(os.Stdin, out, os.Stderr, env)
+				_, err = plug.Invoke(context.Background(), &plugin.Input{Stdin: os.Stdin, Stdout: out, Stderr: os.Stderr})
 				if execErr, ok := err.(*plugin.Error); ok {
 					return PluginError{
 						error: execErr.Err,
