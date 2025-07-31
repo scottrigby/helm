@@ -18,10 +18,13 @@ package plugin
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"path/filepath"
 
 	"helm.sh/helm/v4/pkg/cli"
+	"helm.sh/helm/v4/pkg/plugin"
+	"helm.sh/helm/v4/pkg/plugin/schema"
 )
 
 // PostRenderer is an interface different plugin runtimes
@@ -35,19 +38,13 @@ type PostRenderer interface {
 
 // NewPostRenderer creates a PostRenderer that uses the plugin's runtime
 func NewPostRenderer(settings *cli.EnvSettings, pluginName string, args ...string) (PostRenderer, error) {
-	descriptor := Descriptor{
+	descriptor := plugin.Descriptor{
 		Name: pluginName,
 		Type: "postrenderer/v1",
 	}
-	p, err := FindPlugin(filepath.SplitList(settings.PluginsDirectory), descriptor)
+	p, err := plugin.FindPlugin(filepath.SplitList(settings.PluginsDirectory), descriptor)
 	if err != nil {
 		return nil, err
-	}
-
-	// Verify this is a postrender plugin
-	config := p.Metadata().Config
-	if _, ok := config.(*ConfigPostrender); !ok {
-		return nil, fmt.Errorf("plugin %s is not a postrender plugin", pluginName)
 	}
 
 	return &runtimePostRenderer{
@@ -59,19 +56,28 @@ func NewPostRenderer(settings *cli.EnvSettings, pluginName string, args ...strin
 
 // runtimePostRenderer implements PostRenderer by delegating to the plugin's runtime
 type runtimePostRenderer struct {
-	plugin   Plugin
+	plugin   plugin.Plugin
 	args     []string
 	settings *cli.EnvSettings
 }
 
 // Run implements PostRenderer by using the plugin's runtime
-func (r *runtimePostRenderer) Run(_ /*renderedManifests*/ *bytes.Buffer) (*bytes.Buffer, error) {
-	// For subprocess runtime, configure settings
-	if subprocessRuntime, ok := r.plugin.(*RuntimeSubprocess); ok {
-		subprocessRuntime.SetSettings(r.settings)
+func (r *runtimePostRenderer) Run(renderedManifests *bytes.Buffer) (*bytes.Buffer, error) {
+	//// For subprocess runtime, configure settings
+	//if subprocessRuntime, ok := r.plugin.(*RuntimeSubprocess); ok {
+	//	subprocessRuntime.SetSettings(r.settings)
+	//}
+
+	input := plugin.Input{
+		Message: schema.InputMessagePostRendererV1{
+			Manifests: renderedManifests,
+		},
+	}
+	output, err := r.plugin.Invoke(context.Background(), input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to invoke post-renderer plugin %q: %w", &r.plugin.Metadata.Name, err)
 	}
 
-	// Use the runtime's Postrender method
-	// return r.plugin.PostRender(renderedManifests, r.args) TODO: need to fix this
-	return nil, nil
+	outputMessage := output.Message.(schema.OutputMessagePostRendererV1)
+	return outputMessage.Manifests, nil
 }

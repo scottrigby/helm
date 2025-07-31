@@ -116,8 +116,10 @@ func (r *RuntimeSubprocess) Invoke(_ context.Context, input *Input) (*Output, er
 	switch r.plugin.Metadata.Type {
 	case "getter/v1":
 		return runGetter(r, input)
-	case "cli/v1", "postrenderer/v1":
-		return runSubprocess(r, input)
+	case "cli/v1":
+		return runCLI(r, input)
+	case "postrenderer/v1":
+		return runPostRenderer(r, input)
 	}
 
 	return nil, fmt.Errorf("unsupported subprocess plugin type %q", r.plugin.Metadata.Type)
@@ -187,7 +189,8 @@ func (r *RuntimeSubprocess) InvokeHook(event string) error {
 }
 
 // Postrender implementation for RuntimeSubprocess
-func (r *RuntimeSubprocess) Postrender(renderedManifests *bytes.Buffer, args []string) (*bytes.Buffer, error) {
+func runPostRenderer(r *RuntimeSubprocess, input *Input) (*Output, error) {
+	// renderedManifests *bytes.Buffer, args []string
 	// Setup plugin environment
 	SetupPluginEnv(r.settings, r.plugin.Metadata.Name, r.plugin.Dir)
 
@@ -285,7 +288,7 @@ func executeCmd(prog *exec.Cmd, pluginName string) error {
 	return nil
 }
 
-func runSubprocess(r *RuntimeSubprocess, input *Input) (*Output, error) {
+func runCLI(r *RuntimeSubprocess, input *Input) (*Output, error) {
 
 	cmds := r.config.PlatformCommand
 	if len(cmds) == 0 && len(r.config.Command) > 0 {

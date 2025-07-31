@@ -43,12 +43,20 @@ type InputMessageGetterV1 struct {
 	Options  GetterOptionsV1 `json:"options"`
 }
 
-type GetterOutputV1 struct {
+type OutputMessageGetterV1 struct {
 	Data *bytes.Buffer `json:"data"`
 }
 
-type CLIInputV1 struct {
+type InputMessageCLIV1 struct {
 }
 
-type CLIOutputV1 struct {
+type OutputMessageCLIV1 struct {
+}
+
+type InputMessagePostRendererV1 struct {
+	Manifests *bytes.Buffer `json:"manifests"`
+}
+
+type OutputMessagePostRendererV1 struct {
+	Manifests *bytes.Buffer `json:"manifests"`
 }
