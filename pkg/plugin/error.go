@@ -15,7 +15,7 @@ limitations under the License.
 
 package plugin // import "helm.sh/helm/v4/pkg/plugin"
 
-// Error is returned when a plugin invocatoin returns a non-zero status/exit code
+// Error is returned when a plugin invocation returns a non-zero status/exit code
 // - subprocess plugins: child process exit code
 type Error struct {
 	// Underlying error

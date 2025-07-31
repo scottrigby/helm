@@ -119,7 +119,7 @@ func (t *TestPlugin) Dir() string {
 func (t *TestPlugin) Invoke(_ context.Context, _ *plugin.Input) (*plugin.Output, error) {
 	// Simulate a plugin invocation
 	output := &plugin.Output{
-		Message: schema.GetterOutputV1{
+		Message: schema.OutputMessageGetterV1{
 			Data: bytes.NewBuffer([]byte("fake-plugin output")),
 		},
 	}

@@ -54,6 +54,7 @@ type OutputMessageCLIV1 struct {
 }
 
 type InputMessagePostRendererV1 struct {
+	Args      []string
 	Manifests *bytes.Buffer `json:"manifests"`
 }
 

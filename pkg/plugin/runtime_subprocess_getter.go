@@ -83,7 +83,7 @@ func runGetter(r *RuntimeSubprocess, input *Input) (*Output, error) {
 	}
 
 	return &Output{
-		Message: &schema.GetterOutputV1{
+		Message: &schema.OutputMessageGetterV1{
 			Data: &buf,
 		},
 	}, nil

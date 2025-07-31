@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package plugin
+package postrenderer
 
 import (
 	"bytes"
@@ -37,7 +37,7 @@ type PostRenderer interface {
 }
 
 // NewPostRenderer creates a PostRenderer that uses the plugin's runtime
-func NewPostRenderer(settings *cli.EnvSettings, pluginName string, args ...string) (PostRenderer, error) {
+func NewPostRendererPlugin(settings *cli.EnvSettings, pluginName string) (PostRenderer, error) {
 	descriptor := plugin.Descriptor{
 		Name: pluginName,
 		Type: "postrenderer/v1",
@@ -47,37 +47,38 @@ func NewPostRenderer(settings *cli.EnvSettings, pluginName string, args ...strin
 		return nil, err
 	}
 
-	return &runtimePostRenderer{
+	return &postRendererPlugin{
 		plugin:   p,
-		args:     args,
 		settings: settings,
 	}, nil
 }
 
 // runtimePostRenderer implements PostRenderer by delegating to the plugin's runtime
-type runtimePostRenderer struct {
+type postRendererPlugin struct {
 	plugin   plugin.Plugin
-	args     []string
 	settings *cli.EnvSettings
 }
 
 // Run implements PostRenderer by using the plugin's runtime
-func (r *runtimePostRenderer) Run(renderedManifests *bytes.Buffer) (*bytes.Buffer, error) {
-	//// For subprocess runtime, configure settings
-	//if subprocessRuntime, ok := r.plugin.(*RuntimeSubprocess); ok {
-	//	subprocessRuntime.SetSettings(r.settings)
-	//}
+func (p *postRendererPlugin) Run(renderedManifests *bytes.Buffer) (*bytes.Buffer, error) {
 
-	input := plugin.Input{
+	input := &plugin.Input{
 		Message: schema.InputMessagePostRendererV1{
 			Manifests: renderedManifests,
 		},
 	}
-	output, err := r.plugin.Invoke(context.Background(), input)
+	output, err := p.plugin.Invoke(context.Background(), input)
 	if err != nil {
-		return nil, fmt.Errorf("failed to invoke post-renderer plugin %q: %w", &r.plugin.Metadata.Name, err)
+		return nil, fmt.Errorf("failed to invoke post-renderer plugin %q: %w", p.plugin.Metadata().Name, err)
 	}
 
 	outputMessage := output.Message.(schema.OutputMessagePostRendererV1)
+
+	// If the binary returned almost nothing, it's likely that it didn't
+	// successfully render anything
+	if len(bytes.TrimSpace(outputMessage.Manifests.Bytes())) == 0 {
+		return nil, fmt.Errorf("post-renderer %q produced empty output", p.plugin.Metadata().Name)
+	}
+
 	return outputMessage.Manifests, nil
 }

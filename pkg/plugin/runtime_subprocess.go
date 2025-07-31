@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"syscall"
@@ -188,73 +189,6 @@ func (r *RuntimeSubprocess) InvokeHook(event string) error {
 	return nil
 }
 
-// Postrender implementation for RuntimeSubprocess
-func runPostRenderer(r *RuntimeSubprocess, input *Input) (*Output, error) {
-	// renderedManifests *bytes.Buffer, args []string
-	// Setup plugin environment
-	SetupPluginEnv(r.settings, r.plugin.Metadata.Name, r.plugin.Dir)
-
-	// Prepare command with the provided args
-	originalExtraArgs := r.extraArgs
-	r.extraArgs = args
-	defer func() { r.extraArgs = originalExtraArgs }()
-
-	cmds := r.config.PlatformCommand
-	if len(cmds) == 0 && len(r.config.Command) > 0 {
-		cmds = []PlatformCommand{{Command: r.config.Command}}
-	}
-
-	main, argv, err := PrepareCommands(cmds, true, r.extraArgs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to prepare command: %w", err)
-	}
-
-	// Execute the postrender command
-	mainCmdExp := os.ExpandEnv(main)
-	cmd := exec.Command(mainCmdExp, argv...)
-
-	// Set up environment
-	env := os.Environ()
-	for k, v := range r.settings.EnvVars() {
-		env = append(env, fmt.Sprintf("%s=%s", k, v))
-	}
-	cmd.Env = env
-
-	// Set up stdin pipe
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return nil, err
-	}
-
-	var postRendered bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &postRendered
-	cmd.Stderr = &stderr
-
-	// Start the command
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-
-	// Write input to stdin
-	go func() {
-		defer stdin.Close()
-		io.Copy(stdin, renderedManifests)
-	}()
-
-	// Wait for command to complete
-	if err := cmd.Wait(); err != nil {
-		return nil, fmt.Errorf("error while running postrender %s. error output:\n%s: %w", r.plugin.Metadata.Name, stderr.String(), err)
-	}
-
-	// Check for empty output
-	if len(bytes.TrimSpace(postRendered.Bytes())) == 0 {
-		return nil, fmt.Errorf("post-renderer %q produced empty output", r.plugin.Metadata.Name)
-	}
-
-	return &postRendered, nil
-}
-
 // unmarshalRuntimeConfigSubprocess unmarshals a runtime config map into a RuntimeConfigSubprocess struct
 func unmarshalRuntimeConfigSubprocess(runtimeData map[string]interface{}) (*RuntimeConfigSubprocess, error) {
 	data, err := yaml.Marshal(runtimeData)
@@ -305,17 +239,68 @@ func runCLI(r *RuntimeSubprocess, input *Input) (*Output, error) {
 		return nil, fmt.Errorf("failed to prepare plugin command: %w", err)
 	}
 
-	prog := exec.Command(
+	cmd := exec.Command(
 		command,
 		args...)
-	//prog.Env = pluginExec.env
-	prog.Stdin = input.Stdin
-	prog.Stdout = input.Stdout
-	prog.Stderr = input.Stderr
-	if err := executeCmd(prog, r.plugin.Metadata.Name); err != nil {
+	//cmd.Env = pluginExec.env
+	cmd.Stdin = input.Stdin
+	cmd.Stdout = input.Stdout
+	cmd.Stderr = input.Stderr
+	if err := executeCmd(cmd, r.plugin.Metadata.Name); err != nil {
 		return nil, err
 	}
 	return &Output{
-		Message: &schema.CLIOutputV1{},
+		Message: &schema.OutputMessageCLIV1{},
 	}, nil
+}
+
+// Postrender implementation for RuntimeSubprocess
+func runPostRenderer(r *RuntimeSubprocess, input *Input) (*Output, error) {
+	// Setup plugin environment
+	SetupPluginEnv(r.settings, r.plugin.Metadata.Name, r.plugin.Dir)
+
+	msg := input.Message.(schema.InputMessagePostRendererV1)
+
+	cmds := r.config.PlatformCommand
+	if len(cmds) == 0 && len(r.config.Command) > 0 {
+		cmds = []PlatformCommand{{Command: r.config.Command}}
+	}
+
+	command, args, err := PrepareCommands(cmds, true, r.extraArgs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare plugin command: %w", err)
+	}
+
+	cmd := exec.Command(
+		command,
+		args...)
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
+
+	go func() {
+		defer stdin.Close()
+		io.Copy(stdin, msg.Manifests)
+	}()
+
+	postRendered := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	//cmd.Env = pluginExec.env
+	cmd.Stdout = postRendered
+	cmd.Stderr = stderr
+
+	if err := executeCmd(cmd, r.plugin.Metadata.Name); err != nil {
+		slog.Info("plugin execution failed", slog.String("stderr", stderr.String()))
+		return nil, err
+	}
+
+	return &Output{
+		Message: &schema.OutputMessagePostRendererV1{
+			Manifests: postRendered,
+		},
+	}, nil
+
 }
