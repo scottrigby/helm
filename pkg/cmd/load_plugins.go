@@ -97,7 +97,7 @@ func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 				plugin.SetupPluginEnv(settings, plug.Metadata().GetName(), plug.GetDir())
 
 				// Get runtime instance
-				runtime, err := plug.GetRuntimeInstance()
+				runtime, err := plug.Runtime()
 				if err != nil {
 					return fmt.Errorf("failed to get runtime instance: %w", err)
 				}
@@ -359,7 +359,7 @@ func pluginDynamicComp(plug plugin.Plugin, cmd *cobra.Command, args []string, to
 	}
 
 	// Get runtime instance for dynamic completion
-	runtime, err := plug.GetRuntimeInstance()
+	runtime, err := plug.Runtime()
 	if err != nil {
 		cobra.CompDebugln(fmt.Sprintf("Unable to get runtime for %s: %v", plug.Metadata().GetName(), err.Error()), settings.Debug)
 		return nil, cobra.ShellCompDirectiveDefault

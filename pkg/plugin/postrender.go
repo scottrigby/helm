@@ -61,7 +61,7 @@ type runtimePostRenderer struct {
 // Run implements PostRenderer by using the plugin's runtime
 func (r *runtimePostRenderer) Run(renderedManifests *bytes.Buffer) (*bytes.Buffer, error) {
 	// Get runtime instance
-	runtime, err := r.plugin.GetRuntimeInstance()
+	runtime, err := r.plugin.Runtime()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get runtime instance: %w", err)
 	}

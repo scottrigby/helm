@@ -33,7 +33,7 @@ type PluginLegacy struct {
 func (p *PluginLegacy) GetDir() string     { return p.Dir }
 func (p *PluginLegacy) Metadata() Metadata { return p.MetadataLegacy }
 
-func (p *PluginLegacy) GetRuntimeInstance() (Runtime, error) {
+func (p *PluginLegacy) Runtime() (Runtime, error) {
 	runtimeConfig := p.Metadata().GetRuntimeConfig()
 	return runtimeConfig.CreateRuntime(p.Dir, p.MetadataLegacy.Name)
 }

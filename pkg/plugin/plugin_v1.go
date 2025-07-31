@@ -32,7 +32,7 @@ type PluginV1 struct {
 func (p *PluginV1) GetDir() string     { return p.Dir }
 func (p *PluginV1) Metadata() Metadata { return p.MetadataV1 }
 
-func (p *PluginV1) GetRuntimeInstance() (Runtime, error) {
+func (p *PluginV1) Runtime() (Runtime, error) {
 	if p.MetadataV1.RuntimeConfig == nil {
 		return nil, fmt.Errorf("plugin has no runtime configuration")
 	}

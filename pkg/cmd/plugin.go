@@ -49,7 +49,7 @@ func runHook(p plugin.Plugin, event string) error {
 	plugin.SetupPluginEnv(settings, p.Metadata().GetName(), p.GetDir())
 
 	// Get runtime instance
-	runtime, err := p.GetRuntimeInstance()
+	runtime, err := p.Runtime()
 	if err != nil {
 		return fmt.Errorf("failed to get runtime instance: %w", err)
 	}

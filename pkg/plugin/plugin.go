@@ -31,7 +31,7 @@ type Downloaders struct {
 type Plugin interface {
 	GetDir() string
 	Metadata() Metadata
-	GetRuntimeInstance() (Runtime, error)
+	Runtime() (Runtime, error)
 	Validate() error
 	PrepareCommand(extraArgs []string) (string, []string, error)
 }
