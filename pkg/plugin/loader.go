@@ -176,10 +176,11 @@ func LoadAll(basedir, pluginType string) ([]Plugin, error) {
 	scanpath := filepath.Join(basedir, "*", PluginFileName)
 	matches, err := filepath.Glob(scanpath)
 	if err != nil {
-		return plugins, fmt.Errorf("failed to find plugins in %q: %w", scanpath, err)
+		return nil, fmt.Errorf("failed to search for plugins in %q: %w", scanpath, err)
 	}
 
-	if matches == nil {
+	// empty dir should load
+	if len(matches) == 0 {
 		return plugins, nil
 	}
 
