@@ -31,7 +31,7 @@ type Runtime interface {
 
 // RuntimeConfig interface defines the methods that all runtime configurations must implement
 type RuntimeConfig interface {
-	GetRuntimeType() string
+	Type() string
 	Validate() error
 	CreateRuntime(pluginDir string, pluginName string) (Runtime, error)
 }

@@ -47,8 +47,8 @@ func (p *PluginV1) PrepareCommand(extraArgs []string) (string, []string, error) 
 		var extraArgsIn []string
 
 		// For CLI plugins, check ignore flags
-		if p.MetadataV1.Config.GetType() == "cli" {
-			if cliConfig, ok := p.MetadataV1.Config.(*ConfigCLI); ok && cliConfig.IgnoreFlags {
+		if cliConfig, ok := p.MetadataV1.Config.(*ConfigCLI); ok {
+			if cliConfig.IgnoreFlags {
 				extraArgsIn = []string{}
 			} else {
 				extraArgsIn = extraArgs
@@ -98,13 +98,13 @@ func (p *PluginV1) Validate() error {
 	}
 
 	// Validate that config type matches plugin type
-	if p.MetadataV1.Config.GetType() != p.MetadataV1.Type {
-		return fmt.Errorf("config type %s does not match plugin type %s", p.MetadataV1.Config.GetType(), p.MetadataV1.Type)
+	if p.MetadataV1.Config.Type() != p.MetadataV1.Type {
+		return fmt.Errorf("config type %s does not match plugin type %s", p.MetadataV1.Config.Type(), p.MetadataV1.Type)
 	}
 
 	// Validate that runtime config type matches runtime type
-	if p.MetadataV1.RuntimeConfig.GetRuntimeType() != p.MetadataV1.Runtime {
-		return fmt.Errorf("runtime config type %s does not match runtime %s", p.MetadataV1.RuntimeConfig.GetRuntimeType(), p.MetadataV1.Runtime)
+	if p.MetadataV1.RuntimeConfig.Type() != p.MetadataV1.Runtime {
+		return fmt.Errorf("runtime config type %s does not match runtime %s", p.MetadataV1.RuntimeConfig.Type(), p.MetadataV1.Runtime)
 	}
 
 	// Validate the config itself

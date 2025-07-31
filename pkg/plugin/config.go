@@ -23,7 +23,7 @@ import (
 
 // Config interface defines the methods that all plugin type configurations must implement
 type Config interface {
-	GetType() string
+	Type() string
 	Validate() error
 }
 
@@ -56,9 +56,9 @@ type ConfigPostrender struct {
 }
 
 // GetType implementations for Config types
-func (c *ConfigCLI) GetType() string        { return "cli" }
-func (c *ConfigDownload) GetType() string   { return "download" }
-func (c *ConfigPostrender) GetType() string { return "postrender" }
+func (c *ConfigCLI) Type() string        { return "cli" }
+func (c *ConfigDownload) Type() string   { return "download" }
+func (c *ConfigPostrender) Type() string { return "postrender" }
 
 // Validate implementations for Config types
 func (c *ConfigCLI) Validate() error {

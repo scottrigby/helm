@@ -49,10 +49,8 @@ type WasmMemorySettings struct {
 	MaxPages     int `json:"maxPages"`
 }
 
-// GetRuntimeType implementation for RuntimeConfig
-func (r *RuntimeConfigWasm) GetRuntimeType() string { return "wasm" }
+func (r *RuntimeConfigWasm) Type() string { return "wasm" }
 
-// Validate implementation for RuntimeConfig
 func (r *RuntimeConfigWasm) Validate() error {
 	if r.WasmModule == "" {
 		return fmt.Errorf("wasmModule is required for WASM runtime")
@@ -77,7 +75,6 @@ type RuntimeWasm struct {
 	settings   *cli.EnvSettings
 }
 
-// CreateRuntime implementation for RuntimeConfig
 func (r *RuntimeConfigWasm) CreateRuntime(pluginDir string, pluginName string) (Runtime, error) {
 	return &RuntimeWasm{
 		config:     r,
@@ -100,17 +97,14 @@ func (r *RuntimeWasm) Invoke(stdin io.Reader, stdout, stderr io.Writer, env []st
 	return fmt.Errorf("WASM runtime not yet implemented")
 }
 
-// InvokeHook implementation for RuntimeWasm (not yet implemented)
 func (r *RuntimeWasm) InvokeHook(event string) error {
 	return fmt.Errorf("WASM runtime not yet implemented")
 }
 
-// Postrender implementation for RuntimeWasm
 func (r *RuntimeWasm) Postrender(renderedManifests *bytes.Buffer, args []string) (*bytes.Buffer, error) {
 	return nil, fmt.Errorf("WASM postrender not yet implemented")
 }
 
-// unmarshalRuntimeConfigWasm unmarshals a runtime config map into a RuntimeConfigWasm struct
 func unmarshalRuntimeConfigWasm(runtimeData map[string]interface{}) (*RuntimeConfigWasm, error) {
 	data, err := yaml.Marshal(runtimeData)
 	if err != nil {

@@ -47,10 +47,8 @@ type RuntimeConfigSubprocess struct {
 	UseTunnel bool `json:"useTunnel"`
 }
 
-// GetRuntimeType implementation for RuntimeConfig
-func (r *RuntimeConfigSubprocess) GetRuntimeType() string { return "subprocess" }
+func (r *RuntimeConfigSubprocess) Type() string { return "subprocess" }
 
-// Validate implementation for RuntimeConfig
 func (r *RuntimeConfigSubprocess) Validate() error {
 	if len(r.PlatformCommand) > 0 && len(r.Command) > 0 {
 		return fmt.Errorf("both platformCommand and command are set")
@@ -90,7 +88,6 @@ func (r *RuntimeConfigSubprocess) CreateRuntime(pluginDir string, pluginName str
 	}, nil
 }
 
-// Invoke implementation for RuntimeConfig
 func (r *RuntimeSubprocess) Invoke(stdin io.Reader, stdout, stderr io.Writer, env []string) error {
 	// Prepare command based on runtime configuration
 	cmds := r.config.PlatformCommand
@@ -132,7 +129,6 @@ func (r *RuntimeSubprocess) InvokeWithEnv(main string, argv []string, env []stri
 	return nil
 }
 
-// InvokeHook implementation for RuntimeConfig
 func (r *RuntimeSubprocess) InvokeHook(event string) error {
 	// Get hook commands for the event
 	var cmds []PlatformCommand
@@ -170,7 +166,6 @@ func (r *RuntimeSubprocess) InvokeHook(event string) error {
 	return nil
 }
 
-// Postrender implementation for RuntimeSubprocess
 func (r *RuntimeSubprocess) Postrender(renderedManifests *bytes.Buffer, args []string) (*bytes.Buffer, error) {
 	// Setup plugin environment
 	SetupPluginEnv(r.settings, r.pluginName, r.pluginDir)
@@ -236,7 +231,6 @@ func (r *RuntimeSubprocess) Postrender(renderedManifests *bytes.Buffer, args []s
 	return &postRendered, nil
 }
 
-// unmarshalRuntimeConfigSubprocess unmarshals a runtime config map into a RuntimeConfigSubprocess struct
 func unmarshalRuntimeConfigSubprocess(runtimeData map[string]interface{}) (*RuntimeConfigSubprocess, error) {
 	data, err := yaml.Marshal(runtimeData)
 	if err != nil {
