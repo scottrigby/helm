@@ -171,7 +171,7 @@ func LoadDir(dirname string) (Plugin, error) {
 //
 // This scans only one directory level.
 func LoadAll(basedir, pluginType string) ([]Plugin, error) {
-	plugins := []Plugin{}
+	var plugins []Plugin
 	// We want basedir/*/plugin.yaml
 	scanpath := filepath.Join(basedir, "*", PluginFileName)
 	matches, err := filepath.Glob(scanpath)
@@ -184,8 +184,8 @@ func LoadAll(basedir, pluginType string) ([]Plugin, error) {
 		return plugins, nil
 	}
 
-	for _, yaml := range matches {
-		dir := filepath.Dir(yaml)
+	for _, yamlFile := range matches {
+		dir := filepath.Dir(yamlFile)
 		p, err := LoadDir(dir)
 		if err != nil {
 			return plugins, err
@@ -199,7 +199,7 @@ func LoadAll(basedir, pluginType string) ([]Plugin, error) {
 
 // FindPlugins returns a list of YAML files that describe plugins.
 func FindPlugins(plugdirs string, pluginType string) ([]Plugin, error) {
-	found := []Plugin{}
+	var found []Plugin
 	// Let's get all UNIXy and allow path separators
 	for _, p := range filepath.SplitList(plugdirs) {
 		matches, err := LoadAll(p, pluginType)
