@@ -32,7 +32,7 @@ type PostRenderer interface {
 	Run(renderedManifests *bytes.Buffer) (modifiedManifests *bytes.Buffer, err error)
 }
 
-// NewPostRenderer creates a PostRenderer that uses the plugin's runtime
+// NewPostRenderer creates a PostRenderer that uses the plugin's Runtime
 func NewPostRenderer(settings *cli.EnvSettings, pluginName string, args ...string) (PostRenderer, error) {
 	p, err := FindPlugin(pluginName, settings.PluginsDirectory, "postrender")
 	if err != nil {
@@ -51,26 +51,14 @@ func NewPostRenderer(settings *cli.EnvSettings, pluginName string, args ...strin
 	}, nil
 }
 
-// runtimePostRenderer implements PostRenderer by delegating to the plugin's runtime
+// runtimePostRenderer implements PostRenderer by delegating to the plugin's Runtime
 type runtimePostRenderer struct {
 	plugin   Plugin
 	args     []string
 	settings *cli.EnvSettings
 }
 
-// Run implements PostRenderer by using the plugin's runtime
+// Run implements PostRenderer by using the plugin's Runtime
 func (r *runtimePostRenderer) Run(renderedManifests *bytes.Buffer) (*bytes.Buffer, error) {
-	// Get runtime instance
-	runtime, err := r.plugin.Runtime()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get runtime instance: %w", err)
-	}
-
-	// For subprocess runtime, configure settings
-	if subprocessRuntime, ok := runtime.(*RuntimeSubprocess); ok {
-		subprocessRuntime.SetSettings(r.settings)
-	}
-
-	// Use the runtime's Postrender method
-	return runtime.Postrender(renderedManifests, r.args)
+	return r.plugin.Postrender(renderedManifests, r.args, []string{}, r.settings)
 }

@@ -14,6 +14,12 @@ limitations under the License.
 */
 
 package plugin // import "helm.sh/helm/v4/pkg/plugin"
+import (
+	"bytes"
+	"io"
+
+	"helm.sh/helm/v4/pkg/cli"
+)
 
 const PluginFileName = "plugin.yaml"
 
@@ -31,9 +37,10 @@ type Downloaders struct {
 type Plugin interface {
 	GetDir() string
 	Metadata() Metadata
-	Runtime() (Runtime, error)
-	Validate() error
-	PrepareCommand(extraArgs []string) (string, []string, error)
+	Invoke(stdin io.Reader, stdout, stderr io.Writer, env []string, extraArgs []string, settings *cli.EnvSettings) error
+	InvokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error
+	InvokeHook(event string) error
+	Postrender(renderedManifests *bytes.Buffer, args []string, extraArgs []string, settings *cli.EnvSettings) (*bytes.Buffer, error)
 }
 
 // Error is returned when a plugin exits with a non-zero status code

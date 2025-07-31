@@ -17,7 +17,6 @@ package plugin
 
 import (
 	"fmt"
-
 	"sigs.k8s.io/yaml"
 )
 
@@ -55,12 +54,10 @@ type ConfigPostrender struct {
 	PostrenderArgs []string `json:"postrenderArgs"`
 }
 
-// GetType implementations for Config types
 func (c *ConfigCLI) Type() string        { return "cli" }
 func (c *ConfigDownload) Type() string   { return "download" }
 func (c *ConfigPostrender) Type() string { return "postrender" }
 
-// Validate implementations for Config types
 func (c *ConfigCLI) Validate() error {
 	// Config validation for CLI plugins
 	return nil
@@ -90,7 +87,6 @@ func (c *ConfigPostrender) Validate() error {
 	return nil
 }
 
-// unmarshalConfigCLI unmarshals a config map into a ConfigCLI struct
 func unmarshalConfigCLI(configData map[string]interface{}) (*ConfigCLI, error) {
 	data, err := yaml.Marshal(configData)
 	if err != nil {
@@ -105,7 +101,6 @@ func unmarshalConfigCLI(configData map[string]interface{}) (*ConfigCLI, error) {
 	return &config, nil
 }
 
-// unmarshalConfigDownload unmarshals a config map into a ConfigDownload struct
 func unmarshalConfigDownload(configData map[string]interface{}) (*ConfigDownload, error) {
 	data, err := yaml.Marshal(configData)
 	if err != nil {
@@ -120,7 +115,6 @@ func unmarshalConfigDownload(configData map[string]interface{}) (*ConfigDownload
 	return &config, nil
 }
 
-// unmarshalConfigPostrender unmarshals a config map into a ConfigPostrender struct
 func unmarshalConfigPostrender(configData map[string]interface{}) (*ConfigPostrender, error) {
 	data, err := yaml.Marshal(configData)
 	if err != nil {

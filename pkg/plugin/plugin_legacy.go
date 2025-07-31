@@ -16,9 +16,13 @@ limitations under the License.
 package plugin
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"strings"
 	"unicode"
+
+	"helm.sh/helm/v4/pkg/cli"
 )
 
 // PluginLegacy represents a legacy plugin
@@ -29,7 +33,6 @@ type PluginLegacy struct {
 	Dir string
 }
 
-// Interface implementations for PluginLegacy
 func (p *PluginLegacy) GetDir() string     { return p.Dir }
 func (p *PluginLegacy) Metadata() Metadata { return p.MetadataLegacy }
 
@@ -38,19 +41,35 @@ func (p *PluginLegacy) Runtime() (Runtime, error) {
 	return runtimeConfig.CreateRuntime(p.Dir, p.MetadataLegacy.Name)
 }
 
-func (p *PluginLegacy) PrepareCommand(extraArgs []string) (string, []string, error) {
-	var extraArgsIn []string
-
-	if !p.MetadataLegacy.IgnoreFlags {
-		extraArgsIn = extraArgs
+func (p *PluginLegacy) Invoke(stdin io.Reader, stdout, stderr io.Writer, env []string, extraArgs []string, settings *cli.EnvSettings) error {
+	r, err := p.Runtime()
+	if err != nil {
+		return err
 	}
+	return r.invoke(stdin, stdout, stderr, env, extraArgs, settings)
+}
 
-	cmds := p.MetadataLegacy.PlatformCommand
-	if len(cmds) == 0 && len(p.MetadataLegacy.Command) > 0 {
-		cmds = []PlatformCommand{{Command: p.MetadataLegacy.Command}}
+func (p *PluginLegacy) InvokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	r, err := p.Runtime()
+	if err != nil {
+		return err
 	}
+	return r.invokeWithEnv(main, argv, env, stdin, stdout, stderr)
+}
+func (p *PluginLegacy) InvokeHook(event string) error {
+	r, err := p.Runtime()
+	if err != nil {
+		return err
+	}
+	return r.invokeHook(event)
+}
 
-	return PrepareCommands(cmds, true, extraArgsIn)
+func (p *PluginLegacy) Postrender(renderedManifests *bytes.Buffer, args []string, extraArgs []string, settings *cli.EnvSettings) (*bytes.Buffer, error) {
+	r, err := p.Runtime()
+	if err != nil {
+		return nil, err
+	}
+	return r.postrender(renderedManifests, args, extraArgs, settings)
 }
 
 // Validate validates a legacy plugin's metadata.

@@ -56,15 +56,18 @@ func TestPrepareCommand(t *testing.T) {
 		},
 	}
 
-	cmd, args, err := p.PrepareCommand([]string{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cmd != cmdMain {
-		t.Fatalf("Expected %q, got %q", cmdMain, cmd)
-	}
-	if !reflect.DeepEqual(args, cmdArgs) {
-		t.Fatalf("Expected %v, got %v", cmdArgs, args)
+	if subprocessConfig, ok := p.MetadataV1.RuntimeConfig.(*RuntimeConfigSubprocess); ok {
+		cmds := subprocessConfig.PlatformCommand
+		cmd, args, err := PrepareCommands(cmds, true, []string{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cmd != cmdMain {
+			t.Fatalf("Expected %q, got %q", cmdMain, cmd)
+		}
+		if !reflect.DeepEqual(args, cmdArgs) {
+			t.Fatalf("Expected %v, got %v", cmdArgs, args)
+		}
 	}
 }
 
@@ -97,15 +100,24 @@ func TestPrepareCommandExtraArgs(t *testing.T) {
 
 	expectedArgs := append(cmdArgs, extraArgs...)
 
-	cmd, args, err := p.PrepareCommand(extraArgs)
-	if err != nil {
-		t.Fatal(err)
+	// extra args are expected when ignoreFlags is unset or false
+	if cliConfig, ok := p.Metadata().GetConfig().(*ConfigCLI); ok {
+		if cliConfig.IgnoreFlags {
+			extraArgs = []string{}
+		}
 	}
-	if cmd != cmdMain {
-		t.Fatalf("Expected %q, got %q", cmdMain, cmd)
-	}
-	if !reflect.DeepEqual(args, expectedArgs) {
-		t.Fatalf("Expected %v, got %v", expectedArgs, args)
+	if subprocessConfig, ok := p.MetadataV1.RuntimeConfig.(*RuntimeConfigSubprocess); ok {
+		cmds := subprocessConfig.PlatformCommand
+		cmd, args, err := PrepareCommands(cmds, true, extraArgs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cmd != cmdMain {
+			t.Fatalf("Expected %q, got %q", cmdMain, cmd)
+		}
+		if !reflect.DeepEqual(args, expectedArgs) {
+			t.Fatalf("Expected %v, got %v", expectedArgs, args)
+		}
 	}
 }
 
@@ -136,15 +148,24 @@ func TestPrepareCommandExtraArgsIgnored(t *testing.T) {
 		},
 	}
 
-	cmd, args, err := p.PrepareCommand(extraArgs)
-	if err != nil {
-		t.Fatal(err)
+	// no extra args if ignoreFlags is set
+	if cliConfig, ok := p.Metadata().GetConfig().(*ConfigCLI); ok {
+		if cliConfig.IgnoreFlags {
+			extraArgs = []string{}
+		}
 	}
-	if cmd != cmdMain {
-		t.Fatalf("Expected %q, got %q", cmdMain, cmd)
-	}
-	if !reflect.DeepEqual(args, cmdArgs) {
-		t.Fatalf("Expected %v, got %v", cmdArgs, args)
+	if subprocessConfig, ok := p.Metadata().GetRuntimeConfig().(*RuntimeConfigSubprocess); ok {
+		cmds := subprocessConfig.PlatformCommand
+		cmd, args, err := PrepareCommands(cmds, true, extraArgs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cmd != cmdMain {
+			t.Fatalf("Expected %q, got %q", cmdMain, cmd)
+		}
+		if !reflect.DeepEqual(args, cmdArgs) {
+			t.Fatalf("Expected %v, got %v", cmdArgs, args)
+		}
 	}
 }
 

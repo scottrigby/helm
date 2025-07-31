@@ -35,8 +35,6 @@ type RuntimeConfigSubprocess struct {
 	// Command is the plugin command, as a single string.
 	// DEPRECATED: Use PlatformCommand instead. Remove in Helm 4.
 	Command string `json:"command"`
-	// ExtraArgs are additional arguments to pass to the plugin command
-	ExtraArgs []string `json:"extraArgs"`
 	// PlatformHooks are commands that will run on plugin events, with a platform selector and support for args.
 	PlatformHooks PlatformHooks `json:"platformHooks"`
 	// Hooks are commands that will run on plugin events, as a single string.
@@ -64,49 +62,37 @@ type RuntimeSubprocess struct {
 	config     *RuntimeConfigSubprocess
 	pluginDir  string
 	pluginName string
-	extraArgs  []string
-	settings   *cli.EnvSettings
-}
-
-// SetExtraArgs sets the extra arguments for the subprocess runtime
-func (r *RuntimeSubprocess) SetExtraArgs(args []string) {
-	r.extraArgs = args
-}
-
-// SetSettings sets the environment settings for the subprocess runtime
-func (r *RuntimeSubprocess) SetSettings(settings *cli.EnvSettings) {
-	r.settings = settings
 }
 
 // CreateRuntime implementation for RuntimeConfig
+// TODO should we pass cli settings and extra args as params, amd remove SetExtraArgs() and SetSettings() methods?
 func (r *RuntimeConfigSubprocess) CreateRuntime(pluginDir string, pluginName string) (Runtime, error) {
 	return &RuntimeSubprocess{
 		config:     r,
 		pluginDir:  pluginDir,
 		pluginName: pluginName,
-		settings:   cli.New(),
 	}, nil
 }
 
-func (r *RuntimeSubprocess) Invoke(stdin io.Reader, stdout, stderr io.Writer, env []string) error {
-	// Prepare command based on runtime configuration
+func (r *RuntimeSubprocess) invoke(stdin io.Reader, stdout, stderr io.Writer, env []string, extraArgs []string, settings *cli.EnvSettings) error {
+	// Prepare command based on Runtime configuration
 	cmds := r.config.PlatformCommand
 	if len(cmds) == 0 && len(r.config.Command) > 0 {
 		cmds = []PlatformCommand{{Command: r.config.Command}}
 	}
 
-	main, args, err := PrepareCommands(cmds, true, r.extraArgs)
+	main, args, err := PrepareCommands(cmds, true, extraArgs)
 	if err != nil {
 		return fmt.Errorf("failed to prepare command: %w", err)
 	}
 
 	// Execute the command directly
-	return r.InvokeWithEnv(main, args, env, stdin, stdout, stderr)
+	return r.invokeWithEnv(main, args, env, stdin, stdout, stderr)
 }
 
 // InvokeWithEnv executes a plugin command with custom environment and I/O streams
 // This method allows execution with different command/args than the plugin's default
-func (r *RuntimeSubprocess) InvokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {
+func (r *RuntimeSubprocess) invokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	mainCmdExp := os.ExpandEnv(main)
 	prog := exec.Command(mainCmdExp, argv...)
 	prog.Env = env
@@ -129,7 +115,7 @@ func (r *RuntimeSubprocess) InvokeWithEnv(main string, argv []string, env []stri
 	return nil
 }
 
-func (r *RuntimeSubprocess) InvokeHook(event string) error {
+func (r *RuntimeSubprocess) invokeHook(event string) error {
 	// Get hook commands for the event
 	var cmds []PlatformCommand
 	expandArgs := true
@@ -166,21 +152,21 @@ func (r *RuntimeSubprocess) InvokeHook(event string) error {
 	return nil
 }
 
-func (r *RuntimeSubprocess) Postrender(renderedManifests *bytes.Buffer, args []string) (*bytes.Buffer, error) {
+func (r *RuntimeSubprocess) postrender(renderedManifests *bytes.Buffer, args []string, extraArgs []string, settings *cli.EnvSettings) (*bytes.Buffer, error) {
 	// Setup plugin environment
-	SetupPluginEnv(r.settings, r.pluginName, r.pluginDir)
+	SetupPluginEnv(settings, r.pluginName, r.pluginDir)
 
 	// Prepare command with the provided args
-	originalExtraArgs := r.extraArgs
-	r.extraArgs = args
-	defer func() { r.extraArgs = originalExtraArgs }()
+	originalExtraArgs := extraArgs
+	extraArgs = args
+	defer func() { extraArgs = originalExtraArgs }()
 
 	cmds := r.config.PlatformCommand
 	if len(cmds) == 0 && len(r.config.Command) > 0 {
 		cmds = []PlatformCommand{{Command: r.config.Command}}
 	}
 
-	main, argv, err := PrepareCommands(cmds, true, r.extraArgs)
+	main, argv, err := PrepareCommands(cmds, true, extraArgs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare command: %w", err)
 	}
@@ -191,7 +177,7 @@ func (r *RuntimeSubprocess) Postrender(renderedManifests *bytes.Buffer, args []s
 
 	// Set up environment
 	env := os.Environ()
-	for k, v := range r.settings.EnvVars() {
+	for k, v := range settings.EnvVars() {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
 	cmd.Env = env

@@ -16,8 +16,12 @@ limitations under the License.
 package plugin
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"regexp"
+
+	"helm.sh/helm/v4/pkg/cli"
 )
 
 // PluginV1 represents a V1 plugin
@@ -28,7 +32,38 @@ type PluginV1 struct {
 	Dir string
 }
 
-// Interface implementations for PluginV1
+func (p *PluginV1) Invoke(stdin io.Reader, stdout, stderr io.Writer, env []string, extraArgs []string, settings *cli.EnvSettings) error {
+	r, err := p.Runtime()
+	if err != nil {
+		return err
+	}
+	return r.invoke(stdin, stdout, stderr, env, extraArgs, settings)
+}
+
+func (p *PluginV1) InvokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	r, err := p.Runtime()
+	if err != nil {
+		return err
+	}
+	return r.invokeWithEnv(main, argv, env, stdin, stdout, stderr)
+}
+
+func (p *PluginV1) InvokeHook(event string) error {
+	r, err := p.Runtime()
+	if err != nil {
+		return err
+	}
+	return r.invokeHook(event)
+}
+
+func (p *PluginV1) Postrender(renderedManifests *bytes.Buffer, args []string, extraArgs []string, settings *cli.EnvSettings) (*bytes.Buffer, error) {
+	r, err := p.Runtime()
+	if err != nil {
+		return nil, err
+	}
+	return r.postrender(renderedManifests, args, extraArgs, settings)
+}
+
 func (p *PluginV1) GetDir() string     { return p.Dir }
 func (p *PluginV1) Metadata() Metadata { return p.MetadataV1 }
 
@@ -37,35 +72,6 @@ func (p *PluginV1) Runtime() (Runtime, error) {
 		return nil, fmt.Errorf("plugin has no runtime configuration")
 	}
 	return p.MetadataV1.RuntimeConfig.CreateRuntime(p.Dir, p.MetadataV1.Name)
-}
-
-// TODO call this from other packages instead of PrepareCommands() directly, so that ignore flags logic isn't lost
-// it was a mistake that I left that out
-func (p *PluginV1) PrepareCommand(extraArgs []string) (string, []string, error) {
-	// Only subprocess runtime uses PrepareCommand
-	if subprocessConfig, ok := p.MetadataV1.RuntimeConfig.(*RuntimeConfigSubprocess); ok {
-		var extraArgsIn []string
-
-		// For CLI plugins, check ignore flags
-		if cliConfig, ok := p.MetadataV1.Config.(*ConfigCLI); ok {
-			if cliConfig.IgnoreFlags {
-				extraArgsIn = []string{}
-			} else {
-				extraArgsIn = extraArgs
-			}
-		} else {
-			extraArgsIn = extraArgs
-		}
-
-		cmds := subprocessConfig.PlatformCommand
-		if len(cmds) == 0 && len(subprocessConfig.Command) > 0 {
-			cmds = []PlatformCommand{{Command: subprocessConfig.Command}}
-		}
-
-		return PrepareCommands(cmds, true, extraArgsIn)
-	}
-
-	return "", nil, fmt.Errorf("PrepareCommand only supported for subprocess runtime")
 }
 
 func (p *PluginV1) Validate() error {
