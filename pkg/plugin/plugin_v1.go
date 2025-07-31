@@ -29,13 +29,8 @@ type PluginV1 struct {
 }
 
 // Interface implementations for PluginV1
-func (p *PluginV1) GetDir() string                  { return p.Dir }
-func (p *PluginV1) GetName() string                 { return p.MetadataV1.Name }
-func (p *PluginV1) GetType() string                 { return p.MetadataV1.Type }
-func (p *PluginV1) GetAPIVersion() string           { return p.MetadataV1.APIVersion }
-func (p *PluginV1) Metadata() interface{}           { return p.MetadataV1 }
-func (p *PluginV1) GetConfig() Config               { return p.MetadataV1.Config }
-func (p *PluginV1) GetRuntimeConfig() RuntimeConfig { return p.MetadataV1.RuntimeConfig }
+func (p *PluginV1) GetDir() string     { return p.Dir }
+func (p *PluginV1) Metadata() Metadata { return p.MetadataV1 }
 
 func (p *PluginV1) GetRuntimeInstance() (Runtime, error) {
 	if p.MetadataV1.RuntimeConfig == nil {
@@ -44,17 +39,16 @@ func (p *PluginV1) GetRuntimeInstance() (Runtime, error) {
 	return p.MetadataV1.RuntimeConfig.CreateRuntime(p.Dir, p.MetadataV1.Name)
 }
 
+// TODO call this from other packages instead of PrepareCommands() directly, so that ignore flags logic isn't lost
+// it was a mistake that I left that out
 func (p *PluginV1) PrepareCommand(extraArgs []string) (string, []string, error) {
-	config := p.GetConfig()
-	runtimeConfig := p.GetRuntimeConfig()
-
 	// Only subprocess runtime uses PrepareCommand
-	if subprocessConfig, ok := runtimeConfig.(*RuntimeConfigSubprocess); ok {
+	if subprocessConfig, ok := p.MetadataV1.RuntimeConfig.(*RuntimeConfigSubprocess); ok {
 		var extraArgsIn []string
 
 		// For CLI plugins, check ignore flags
-		if config.GetType() == "cli" {
-			if cliConfig, ok := config.(*ConfigCLI); ok && cliConfig.IgnoreFlags {
+		if p.MetadataV1.Config.GetType() == "cli" {
+			if cliConfig, ok := p.MetadataV1.Config.(*ConfigCLI); ok && cliConfig.IgnoreFlags {
 				extraArgsIn = []string{}
 			} else {
 				extraArgsIn = extraArgs

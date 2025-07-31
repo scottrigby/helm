@@ -186,7 +186,7 @@ func LoadAll(basedir, pluginType string) ([]Plugin, error) {
 		if err != nil {
 			return plugins, err
 		}
-		if pluginType == "" || p.GetType() == pluginType {
+		if pluginType == "" || p.Metadata().GetType() == pluginType {
 			plugins = append(plugins, p)
 		}
 	}
@@ -213,7 +213,7 @@ func FindPlugins(plugdirs string, pluginType string) ([]Plugin, error) {
 func FindPlugin(name, plugdirs, pluginType string) (Plugin, error) {
 	plugins, _ := FindPlugins(plugdirs, pluginType)
 	for _, p := range plugins {
-		if p.GetName() == name {
+		if p.Metadata().GetName() == name {
 			return p, nil
 		}
 	}
@@ -225,15 +225,15 @@ func detectDuplicates(plugs []Plugin) error {
 	names := map[string]string{}
 
 	for _, plug := range plugs {
-		if oldpath, ok := names[plug.GetName()]; ok {
+		if oldpath, ok := names[plug.Metadata().GetName()]; ok {
 			return fmt.Errorf(
 				"two plugins claim the name %q at %q and %q",
-				plug.GetName(),
+				plug.Metadata().GetName(),
 				oldpath,
 				plug.GetDir(),
 			)
 		}
-		names[plug.GetName()] = plug.GetDir()
+		names[plug.Metadata().GetName()] = plug.GetDir()
 	}
 
 	return nil

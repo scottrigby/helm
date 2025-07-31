@@ -40,8 +40,7 @@ func NewPostRenderer(settings *cli.EnvSettings, pluginName string, args ...strin
 	}
 
 	// Verify this is a postrender plugin
-	config := p.GetConfig()
-	if _, ok := config.(*ConfigPostrender); !ok {
+	if _, ok := p.Metadata().GetConfig().(*ConfigPostrender); !ok {
 		return nil, fmt.Errorf("plugin %s is not a postrender plugin", pluginName)
 	}
 

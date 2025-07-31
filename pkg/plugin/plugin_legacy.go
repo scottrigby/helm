@@ -30,55 +30,11 @@ type PluginLegacy struct {
 }
 
 // Interface implementations for PluginLegacy
-func (p *PluginLegacy) GetDir() string  { return p.Dir }
-func (p *PluginLegacy) GetName() string { return p.MetadataLegacy.Name }
-
-// Legacy plugins can be either a downloader or a legacy-CLI plugin (we label them as legacy)
-func (p *PluginLegacy) GetType() string {
-	if len(p.MetadataLegacy.Downloaders) > 0 {
-		return "download"
-	}
-	return "cli"
-}
-func (p *PluginLegacy) GetAPIVersion() string { return "legacy" }
-func (p *PluginLegacy) Metadata() interface{} { return p.MetadataLegacy }
-
-func (p *PluginLegacy) GetRuntimeConfig() RuntimeConfig {
-	return &RuntimeConfigSubprocess{
-		PlatformCommand: p.MetadataLegacy.PlatformCommand,
-		Command:         p.MetadataLegacy.Command,
-		PlatformHooks:   p.MetadataLegacy.PlatformHooks,
-		Hooks:           p.MetadataLegacy.Hooks,
-		UseTunnel:       p.MetadataLegacy.UseTunnelDeprecated,
-	}
-}
-
-func (p *PluginLegacy) GetConfig() Config {
-	switch p.GetType() {
-	case "download":
-		return &ConfigDownload{
-			Downloaders: p.MetadataLegacy.Downloaders,
-		}
-	case "cli":
-		return &ConfigCLI{
-			Usage:       "",                           // Legacy plugins don't have Usage field for command syntax
-			ShortHelp:   p.MetadataLegacy.Usage,       // Map legacy usage to shortHelp
-			LongHelp:    p.MetadataLegacy.Description, // Map legacy description to longHelp
-			IgnoreFlags: p.MetadataLegacy.IgnoreFlags,
-		}
-	default:
-		// Return a basic CLI config as fallback
-		return &ConfigCLI{
-			Usage:       "",                           // Legacy plugins don't have Usage field for command syntax
-			ShortHelp:   p.MetadataLegacy.Usage,       // Map legacy usage to shortHelp
-			LongHelp:    p.MetadataLegacy.Description, // Map legacy description to longHelp
-			IgnoreFlags: p.MetadataLegacy.IgnoreFlags,
-		}
-	}
-}
+func (p *PluginLegacy) GetDir() string     { return p.Dir }
+func (p *PluginLegacy) Metadata() Metadata { return p.MetadataLegacy }
 
 func (p *PluginLegacy) GetRuntimeInstance() (Runtime, error) {
-	runtimeConfig := p.GetRuntimeConfig()
+	runtimeConfig := p.Metadata().GetRuntimeConfig()
 	return runtimeConfig.CreateRuntime(p.Dir, p.MetadataLegacy.Name)
 }
 

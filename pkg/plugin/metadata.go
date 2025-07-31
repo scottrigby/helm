@@ -15,6 +15,14 @@ limitations under the License.
 
 package plugin
 
+type Metadata interface {
+	GetAPIVersion() string
+	GetName() string
+	GetType() string
+	GetConfig() Config
+	GetRuntimeConfig() RuntimeConfig
+}
+
 // MetadataLegacy describes a legacy plugin (no APIVersion field)
 type MetadataLegacy struct {
 	// Name is the name of the plugin
@@ -55,6 +63,45 @@ type MetadataLegacy struct {
 	UseTunnelDeprecated bool `json:"useTunnel,omitempty"`
 }
 
+func (m *MetadataLegacy) GetAPIVersion() string { return "legacy" }
+
+func (m *MetadataLegacy) GetName() string { return m.Name }
+
+func (m *MetadataLegacy) GetType() string {
+	if len(m.Downloaders) > 0 {
+		return "download"
+	}
+	return "cli"
+}
+
+func (m *MetadataLegacy) GetConfig() Config {
+	switch m.GetType() {
+	case "download":
+		return &ConfigDownload{
+			Downloaders: m.Downloaders,
+		}
+	case "cli":
+		return &ConfigCLI{
+			Usage:       "",            // Legacy plugins don't have Usage field for command syntax
+			ShortHelp:   m.Usage,       // Map legacy usage to shortHelp
+			LongHelp:    m.Description, // Map legacy description to longHelp
+			IgnoreFlags: m.IgnoreFlags,
+		}
+	default:
+		return nil
+	}
+}
+
+func (m *MetadataLegacy) GetRuntimeConfig() RuntimeConfig {
+	return &RuntimeConfigSubprocess{
+		PlatformCommand: m.PlatformCommand,
+		Command:         m.Command,
+		PlatformHooks:   m.PlatformHooks,
+		Hooks:           m.Hooks,
+		UseTunnel:       m.UseTunnelDeprecated,
+	}
+}
+
 // MetadataV1 describes a V1 plugin (APIVersion: v1)
 type MetadataV1 struct {
 	// APIVersion specifies the plugin API version
@@ -81,3 +128,13 @@ type MetadataV1 struct {
 	// RuntimeConfig contains the runtime-specific configuration
 	RuntimeConfig RuntimeConfig `json:"runtimeConfig"`
 }
+
+func (m *MetadataV1) GetAPIVersion() string { return m.APIVersion }
+
+func (m *MetadataV1) GetName() string { return m.Name }
+
+func (m *MetadataV1) GetType() string { return m.Type }
+
+func (m *MetadataV1) GetConfig() Config { return m.Config }
+
+func (m *MetadataV1) GetRuntimeConfig() RuntimeConfig { return m.RuntimeConfig }

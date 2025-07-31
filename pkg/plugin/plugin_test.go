@@ -498,17 +498,17 @@ func TestLoadAll(t *testing.T) {
 		t.Fatalf("expected 4 plugins, found %d", l)
 	}
 
-	if plugs[0].GetName() != "downloader" {
-		t.Errorf("Expected first plugin to be downloader, got %q", plugs[0].GetName())
+	if plugs[0].Metadata().GetName() != "downloader" {
+		t.Errorf("Expected first plugin to be downloader, got %q", plugs[0].Metadata().GetName())
 	}
-	if plugs[1].GetName() != "echo" {
-		t.Errorf("Expected first plugin to be echo, got %q", plugs[1].GetName())
+	if plugs[1].Metadata().GetName() != "echo" {
+		t.Errorf("Expected first plugin to be echo, got %q", plugs[1].Metadata().GetName())
 	}
-	if plugs[2].GetName() != "hello" {
-		t.Errorf("Expected second plugin to be hello, got %q", plugs[2].GetName())
+	if plugs[2].Metadata().GetName() != "hello" {
+		t.Errorf("Expected second plugin to be hello, got %q", plugs[2].Metadata().GetName())
 	}
-	if plugs[3].GetName() != "postrender" {
-		t.Errorf("Expected second plugin to be postrender, got %q", plugs[3].GetName())
+	if plugs[3].Metadata().GetName() != "postrender" {
+		t.Errorf("Expected second plugin to be postrender, got %q", plugs[3].Metadata().GetName())
 	}
 }
 

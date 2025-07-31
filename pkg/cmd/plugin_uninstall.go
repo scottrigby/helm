@@ -92,7 +92,7 @@ func uninstallPlugin(p plugin.Plugin) error {
 
 func findPlugin(plugins []plugin.Plugin, name string) plugin.Plugin {
 	for _, p := range plugins {
-		if p.GetName() == name {
+		if p.Metadata().GetName() == name {
 			return p
 		}
 	}

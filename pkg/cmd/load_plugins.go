@@ -68,9 +68,8 @@ func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 	// Now we create commands for all of these.
 	for _, plug := range found {
 		plug := plug
-		config := plug.GetConfig()
 		var use, short, long string
-		if cliConfig, ok := config.(*plugin.ConfigCLI); ok {
+		if cliConfig, ok := plug.Metadata().GetConfig().(*plugin.ConfigCLI); ok {
 			use = cliConfig.Usage
 			short = cliConfig.ShortHelp
 			long = cliConfig.LongHelp
@@ -78,10 +77,10 @@ func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 
 		// Set defaults
 		if use == "" {
-			use = plug.GetName()
+			use = plug.Metadata().GetName()
 		}
 		if short == "" {
-			short = fmt.Sprintf("the %q plugin", plug.GetName())
+			short = fmt.Sprintf("the %q plugin", plug.Metadata().GetName())
 		}
 		// long has no default, empty is ok
 
@@ -95,7 +94,7 @@ func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 					return err
 				}
 				// Setup plugin environment
-				plugin.SetupPluginEnv(settings, plug.GetName(), plug.GetDir())
+				plugin.SetupPluginEnv(settings, plug.Metadata().GetName(), plug.GetDir())
 
 				// Get runtime instance
 				runtime, err := plug.GetRuntimeInstance()
@@ -327,9 +326,8 @@ func loadFile(path string) (*pluginCommand, error) {
 // to obtain the dynamic completion choices.  It must pass all the flags and sub-commands
 // specified in the command-line to the plugin.complete executable (except helm's global flags)
 func pluginDynamicComp(plug plugin.Plugin, cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	config := plug.GetConfig()
 	var ignoreFlags bool
-	if cliConfig, ok := config.(*plugin.ConfigCLI); ok {
+	if cliConfig, ok := plug.Metadata().GetConfig().(*plugin.ConfigCLI); ok {
 		ignoreFlags = cliConfig.IgnoreFlags
 	}
 
@@ -349,7 +347,7 @@ func pluginDynamicComp(plug plugin.Plugin, cmd *cobra.Command, args []string, to
 		argv = append(argv, u...)
 		argv = append(argv, toComplete)
 	}
-	plugin.SetupPluginEnv(settings, plug.GetName(), plug.GetDir())
+	plugin.SetupPluginEnv(settings, plug.Metadata().GetName(), plug.GetDir())
 
 	cobra.CompDebugln(fmt.Sprintf("calling %s with args %v", main, argv), settings.Debug)
 	buf := new(bytes.Buffer)
@@ -363,7 +361,7 @@ func pluginDynamicComp(plug plugin.Plugin, cmd *cobra.Command, args []string, to
 	// Get runtime instance for dynamic completion
 	runtime, err := plug.GetRuntimeInstance()
 	if err != nil {
-		cobra.CompDebugln(fmt.Sprintf("Unable to get runtime for %s: %v", plug.GetName(), err.Error()), settings.Debug)
+		cobra.CompDebugln(fmt.Sprintf("Unable to get runtime for %s: %v", plug.Metadata().GetName(), err.Error()), settings.Debug)
 		return nil, cobra.ShellCompDirectiveDefault
 	}
 
@@ -376,7 +374,7 @@ func pluginDynamicComp(plug plugin.Plugin, cmd *cobra.Command, args []string, to
 		}
 	} else {
 		// Non-subprocess runtimes don't support dynamic completion yet
-		cobra.CompDebugln(fmt.Sprintf("Dynamic completion not supported for runtime type of %s", plug.GetName()), settings.Debug)
+		cobra.CompDebugln(fmt.Sprintf("Dynamic completion not supported for runtime type of %s", plug.Metadata().GetName()), settings.Debug)
 		return nil, cobra.ShellCompDirectiveDefault
 	}
 

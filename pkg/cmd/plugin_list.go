@@ -58,7 +58,7 @@ func newPluginListCmd(out io.Writer) *cobra.Command {
 				if sourceURL == "" {
 					sourceURL = "unknown"
 				}
-				table.AddRow(p.GetName(), version, p.GetType(), p.GetAPIVersion(), sourceURL)
+				table.AddRow(p.Metadata().GetName(), version, p.Metadata().GetType(), p.Metadata().GetAPIVersion(), sourceURL)
 			}
 			fmt.Fprintln(out, table)
 			return nil
@@ -80,7 +80,7 @@ func filterPlugins(plugins []plugin.Plugin, ignoredPluginNames []string) []plugi
 
 	var filteredPlugins []plugin.Plugin
 	for _, plugin := range plugins {
-		found := slices.Contains(ignoredPluginNames, plugin.GetName())
+		found := slices.Contains(ignoredPluginNames, plugin.Metadata().GetName())
 		if !found {
 			filteredPlugins = append(filteredPlugins, plugin)
 		}
@@ -106,7 +106,7 @@ func compListPlugins(_ string, ignoredPluginNames []string) []string {
 			case *plugin.MetadataLegacy:
 				shortHelp = m.Usage
 			}
-			pNames = append(pNames, fmt.Sprintf("%s\t%s", p.GetName(), shortHelp))
+			pNames = append(pNames, fmt.Sprintf("%s\t%s", p.Metadata().GetName(), shortHelp))
 		}
 	}
 	return pNames

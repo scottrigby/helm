@@ -30,12 +30,7 @@ type Downloaders struct {
 // Plugin interface defines the common methods that all plugin versions must implement
 type Plugin interface {
 	GetDir() string
-	GetName() string
-	GetType() string
-	GetAPIVersion() string
-	Metadata() interface{}
-	GetConfig() Config
-	GetRuntimeConfig() RuntimeConfig
+	Metadata() Metadata
 	GetRuntimeInstance() (Runtime, error)
 	Validate() error
 	PrepareCommand(extraArgs []string) (string, []string, error)

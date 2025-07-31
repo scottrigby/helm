@@ -37,7 +37,7 @@ func collectPlugins(settings *cli.EnvSettings) (Providers, error) {
 	for _, p := range plugins {
 		// Get downloaders based on API version
 		var downloaders []plugin.Downloaders
-		switch p.GetAPIVersion() {
+		switch p.Metadata().GetAPIVersion() {
 		case "legacy":
 			if metadata, ok := p.Metadata().(*plugin.MetadataLegacy); ok {
 				downloaders = metadata.Downloaders
@@ -56,7 +56,7 @@ func collectPlugins(settings *cli.EnvSettings) (Providers, error) {
 				New: NewPluginGetter(
 					downloader.Command,
 					settings,
-					p.GetName(),
+					p.Metadata().GetName(),
 					p.GetDir(),
 				),
 			})

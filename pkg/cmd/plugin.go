@@ -46,7 +46,7 @@ func newPluginCmd(out io.Writer) *cobra.Command {
 
 // runHook will execute a plugin hook.
 func runHook(p plugin.Plugin, event string) error {
-	plugin.SetupPluginEnv(settings, p.GetName(), p.GetDir())
+	plugin.SetupPluginEnv(settings, p.Metadata().GetName(), p.GetDir())
 
 	// Get runtime instance
 	runtime, err := p.GetRuntimeInstance()
