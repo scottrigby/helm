@@ -340,8 +340,8 @@ func TestLoadDir(t *testing.T) {
 		},
 	}
 
-	if !reflect.DeepEqual(expect, plug.GetMetadata()) {
-		t.Fatalf("Expected plugin metadata %v, got %v", expect, plug.GetMetadata())
+	if !reflect.DeepEqual(expect, plug.Metadata()) {
+		t.Fatalf("Expected plugin metadata %v, got %v", expect, plug.Metadata())
 	}
 }
 
@@ -382,8 +382,8 @@ func TestDownloader(t *testing.T) {
 		},
 	}
 
-	if !reflect.DeepEqual(expect, plug.GetMetadata()) {
-		t.Fatalf("Expected metadata %v, got %v", expect, plug.GetMetadata())
+	if !reflect.DeepEqual(expect, plug.Metadata()) {
+		t.Fatalf("Expected metadata %v, got %v", expect, plug.Metadata())
 	}
 }
 
@@ -416,8 +416,8 @@ func TestPostRenderer(t *testing.T) {
 		},
 	}
 
-	if !reflect.DeepEqual(expect, plug.GetMetadata()) {
-		t.Fatalf("Expected metadata %v, got %v", expect, plug.GetMetadata())
+	if !reflect.DeepEqual(expect, plug.Metadata()) {
+		t.Fatalf("Expected metadata %v, got %v", expect, plug.Metadata())
 	}
 }
 

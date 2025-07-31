@@ -39,11 +39,11 @@ func collectPlugins(settings *cli.EnvSettings) (Providers, error) {
 		var downloaders []plugin.Downloaders
 		switch p.GetAPIVersion() {
 		case "legacy":
-			if metadata, ok := p.GetMetadata().(*plugin.MetadataLegacy); ok {
+			if metadata, ok := p.Metadata().(*plugin.MetadataLegacy); ok {
 				downloaders = metadata.Downloaders
 			}
 		case "v1":
-			if metadata, ok := p.GetMetadata().(*plugin.MetadataV1); ok {
+			if metadata, ok := p.Metadata().(*plugin.MetadataV1); ok {
 				if config, ok := metadata.Config.(*plugin.ConfigDownload); ok {
 					downloaders = config.Downloaders
 				}

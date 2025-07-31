@@ -44,7 +44,7 @@ func newPluginListCmd(out io.Writer) *cobra.Command {
 			table := uitable.New()
 			table.AddRow("NAME", "VERSION", "TYPE", "APIVERSION", "SOURCE")
 			for _, p := range plugins {
-				metadata := p.GetMetadata()
+				metadata := p.Metadata()
 				var version, sourceURL string
 				switch m := metadata.(type) {
 				case *plugin.MetadataV1:
@@ -96,7 +96,7 @@ func compListPlugins(_ string, ignoredPluginNames []string) []string {
 	if err == nil && len(plugins) > 0 {
 		filteredPlugins := filterPlugins(plugins, ignoredPluginNames)
 		for _, p := range filteredPlugins {
-			metadata := p.GetMetadata()
+			metadata := p.Metadata()
 			var shortHelp string
 			switch m := metadata.(type) {
 			case *plugin.MetadataV1:
