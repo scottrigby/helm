@@ -292,7 +292,12 @@ func runSubprocess(r *RuntimeSubprocess, input *Input) (*Output, error) {
 		cmds = []PlatformCommand{{Command: r.config.Command}}
 	}
 
-	command, args, err := PrepareCommands(cmds, true, r.extraArgs)
+	extraArgsIn := []string{}
+	if cliConfig, ok := r.plugin.Metadata.Config.(*ConfigCLI); ok && !cliConfig.IgnoreFlags {
+		extraArgsIn = r.extraArgs
+	}
+
+	command, args, err := PrepareCommands(cmds, true, extraArgsIn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare plugin command: %w", err)
 	}

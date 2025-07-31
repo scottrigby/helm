@@ -32,7 +32,7 @@ func LoadDir(dirname string) (Plugin, error) {
 		return nil, err
 	}
 
-	return p.GetRuntimeInstance()
+	return p.Metadata.RuntimeConfig.CreateRuntime(p)
 }
 
 func loadDir(dirname string) (*PluginV1, error) {
@@ -213,7 +213,7 @@ func LoadAll(basedir string) ([]Plugin, error) {
 
 	plugins := []Plugin{}
 	for _, p := range pluginsV1 {
-		r, err := p.GetRuntimeInstance()
+		r, err := p.Metadata.RuntimeConfig.CreateRuntime(p)
 		if err != nil {
 			return nil, err
 		}

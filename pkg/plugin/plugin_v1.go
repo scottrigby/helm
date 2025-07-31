@@ -28,43 +28,6 @@ type PluginV1 struct {
 	Dir string
 }
 
-func (p *PluginV1) GetRuntimeInstance() (Runtime, error) {
-	if p.Metadata.RuntimeConfig == nil {
-		return nil, fmt.Errorf("plugin has no runtime configuration")
-	}
-	return p.Metadata.RuntimeConfig.CreateRuntime(p)
-}
-
-func (p *PluginV1) PrepareCommand(extraArgs []string) (string, []string, error) {
-	config := p.Metadata.Config
-	runtimeConfig := p.Metadata.RuntimeConfig
-
-	// Only subprocess runtime uses PrepareCommand
-	if subprocessConfig, ok := runtimeConfig.(*RuntimeConfigSubprocess); ok {
-		var extraArgsIn []string
-
-		// For CLI plugins, check ignore flags
-		if config.GetType() == "cli/v1" {
-			if cliConfig, ok := config.(*ConfigCLI); ok && cliConfig.IgnoreFlags {
-				extraArgsIn = []string{}
-			} else {
-				extraArgsIn = extraArgs
-			}
-		} else {
-			extraArgsIn = extraArgs
-		}
-
-		cmds := subprocessConfig.PlatformCommand
-		if len(cmds) == 0 && len(subprocessConfig.Command) > 0 {
-			cmds = []PlatformCommand{{Command: subprocessConfig.Command}}
-		}
-
-		return PrepareCommands(cmds, true, extraArgsIn)
-	}
-
-	return "", nil, fmt.Errorf("PrepareCommand only supported for subprocess runtime")
-}
-
 func (p *PluginV1) Validate() error {
 
 	if !validPluginName.MatchString(p.Metadata.Name) {
