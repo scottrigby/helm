@@ -33,7 +33,6 @@ func (p *PluginV1) GetDir() string                  { return p.Dir }
 func (p *PluginV1) GetName() string                 { return p.MetadataV1.Name }
 func (p *PluginV1) GetType() string                 { return p.MetadataV1.Type }
 func (p *PluginV1) GetAPIVersion() string           { return p.MetadataV1.APIVersion }
-func (p *PluginV1) GetRuntime() string              { return p.MetadataV1.Runtime }
 func (p *PluginV1) GetMetadata() interface{}        { return p.MetadataV1 }
 func (p *PluginV1) GetConfig() Config               { return p.MetadataV1.Config }
 func (p *PluginV1) GetRuntimeConfig() RuntimeConfig { return p.MetadataV1.RuntimeConfig }

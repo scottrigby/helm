@@ -33,7 +33,6 @@ type Plugin interface {
 	GetName() string
 	GetType() string
 	GetAPIVersion() string
-	GetRuntime() string
 	GetMetadata() interface{}
 	GetConfig() Config
 	GetRuntimeConfig() RuntimeConfig

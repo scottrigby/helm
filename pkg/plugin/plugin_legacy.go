@@ -41,7 +41,6 @@ func (p *PluginLegacy) GetType() string {
 	return "cli"
 }
 func (p *PluginLegacy) GetAPIVersion() string    { return "legacy" }
-func (p *PluginLegacy) GetRuntime() string       { return "subprocess" }
 func (p *PluginLegacy) GetMetadata() interface{} { return p.MetadataLegacy }
 
 func (p *PluginLegacy) GetRuntimeConfig() RuntimeConfig {
