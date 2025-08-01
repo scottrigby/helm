@@ -497,14 +497,14 @@ func TestNewPostRendererWithTwoArgsRun(t *testing.T) {
 
 func TestLoadAll(t *testing.T) {
 	// Verify that empty dir loads:
-	if plugs, err := LoadAll("testdata", ""); err != nil {
+	if plugs, err := LoadAll("testdata"); err != nil {
 		t.Fatalf("error loading dir with no plugins: %s", err)
 	} else if len(plugs) > 0 {
 		t.Fatalf("expected empty dir to have 0 plugins")
 	}
 
 	basedir := "testdata/plugdir/good"
-	plugs, err := LoadAll(basedir, "")
+	plugs, err := LoadAll(basedir)
 	if err != nil {
 		t.Fatalf("Could not load %q: %s", basedir, err)
 	}
@@ -556,7 +556,7 @@ func TestFindPlugins(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(t.Name(), func(t *testing.T) {
-			plugin, _ := FindPlugins(c.plugdirs, "")
+			plugin, _ := LoadAll(c.plugdirs)
 			if len(plugin) != c.expected {
 				t.Errorf("expected: %v, got: %v", c.expected, len(plugin))
 			}

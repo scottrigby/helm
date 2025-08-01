@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"path/filepath"
 	"slices"
 
 	"github.com/gosuri/uitable"
@@ -36,7 +37,11 @@ func newPluginListCmd(out io.Writer) *cobra.Command {
 		ValidArgsFunction: noMoreArgsCompFunc,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			slog.Debug("pluginDirs", "directory", settings.PluginsDirectory)
-			plugins, err := plugin.FindPlugins(settings.PluginsDirectory, pluginType)
+			dirs := filepath.SplitList(settings.PluginsDirectory)
+			descriptor := plugin.PluginDescriptor{
+				Type: pluginType,
+			}
+			plugins, err := plugin.FindPlugins(dirs, descriptor)
 			if err != nil {
 				return err
 			}
@@ -92,7 +97,11 @@ func filterPlugins(plugins []plugin.Plugin, ignoredPluginNames []string) []plugi
 // Provide dynamic auto-completion for plugin names
 func compListPlugins(_ string, ignoredPluginNames []string) []string {
 	var pNames []string
-	plugins, err := plugin.FindPlugins(settings.PluginsDirectory, "cli")
+	dirs := filepath.SplitList(settings.PluginsDirectory)
+	descriptor := plugin.PluginDescriptor{
+		Type: "cli",
+	}
+	plugins, err := plugin.FindPlugins(dirs, descriptor)
 	if err == nil && len(plugins) > 0 {
 		filteredPlugins := filterPlugins(plugins, ignoredPluginNames)
 		for _, p := range filteredPlugins {

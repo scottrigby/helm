@@ -170,7 +170,7 @@ func LoadDir(dirname string) (Plugin, error) {
 // LoadAll loads all plugins found beneath the base directory.
 //
 // This scans only one directory level.
-func LoadAll(basedir, pluginType string) ([]Plugin, error) {
+func LoadAll(basedir string) ([]Plugin, error) {
 	var plugins []Plugin
 	// We want basedir/*/plugin.yaml
 	scanpath := filepath.Join(basedir, "*", PluginFileName)
@@ -190,39 +190,78 @@ func LoadAll(basedir, pluginType string) ([]Plugin, error) {
 		if err != nil {
 			return plugins, err
 		}
-		if pluginType == "" || p.Metadata().GetType() == pluginType {
-			plugins = append(plugins, p)
-		}
+		plugins = append(plugins, p)
 	}
 	return plugins, detectDuplicates(plugins)
 }
 
 // FindPlugins returns a list of YAML files that describe plugins.
-func FindPlugins(plugdirs string, pluginType string) ([]Plugin, error) {
+// findFunc is a function that finds plugins in a directory
+type findFunc func(pluginsDir string) ([]Plugin, error)
+
+// filterFunc is a function that filters plugins
+type filterFunc func(Plugin) bool
+
+// FindPlugins returns a list of plugins that match the descriptor
+func FindPlugins(pluginsDirs []string, descriptor PluginDescriptor) ([]Plugin, error) {
+	return findPlugins(pluginsDirs, LoadAll, makeDescriptorFilter(descriptor))
+}
+
+// findPlugins is the internal implementation that uses the find and filter functions
+func findPlugins(pluginsDirs []string, findFunc findFunc, filterFunc filterFunc) ([]Plugin, error) {
 	var found []Plugin
-	// Let's get all UNIXy and allow path separators
-	for _, p := range filepath.SplitList(plugdirs) {
-		matches, err := LoadAll(p, pluginType)
+	for _, pluginsDir := range pluginsDirs {
+		ps, err := findFunc(pluginsDir)
+
 		if err != nil {
-			return matches, err
+			return nil, err
 		}
-		found = append(found, matches...)
+
+		for _, p := range ps {
+			if filterFunc(p) {
+				found = append(found, p)
+			}
+		}
+
 	}
+
 	return found, nil
 }
 
-// FindPlugin returns a plugin by name and optionally by type
-// pluginType can be an empty string for any type
-// TODO disambiguate from [cmd.findPlugin] or merge with this public func?
-func FindPlugin(name, plugdirs, pluginType string) (Plugin, error) {
-	plugins, _ := FindPlugins(plugdirs, pluginType)
-	for _, p := range plugins {
-		if p.Metadata().GetName() == name {
-			return p, nil
+// makeDescriptorFilter creates a filter function from a descriptor
+// Additional plugin filter criteria we wish to support can be added here
+func makeDescriptorFilter(descriptor PluginDescriptor) filterFunc {
+	return func(p Plugin) bool {
+		// If name is specified, it must match
+		if descriptor.Name != "" && p.Metadata().GetName() != descriptor.Name {
+			return false
+
 		}
+		// If type is specified, it must match
+		if descriptor.Type != "" && p.Metadata().GetType() != descriptor.Type {
+			return false
+		}
+		return true
 	}
-	err := fmt.Errorf("plugin: %s not found", name)
-	return nil, err
+}
+
+// FindPlugin returns a plugin by name and type
+func FindPlugin(name, plugdirs, pluginType string) (Plugin, error) {
+	dirs := filepath.SplitList(plugdirs)
+	descriptor := PluginDescriptor{
+		Name: name,
+		Type: pluginType,
+	}
+	plugins, err := FindPlugins(dirs, descriptor)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(plugins) > 0 {
+		return plugins[0], nil
+	}
+
+	return nil, fmt.Errorf("plugin: %s not found", name)
 }
 
 func detectDuplicates(plugs []Plugin) error {
