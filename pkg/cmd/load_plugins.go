@@ -17,7 +17,9 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"helm.sh/helm/v4/pkg/plugin/schema"
 	"io"
 	"log"
 	"os"
@@ -48,12 +50,12 @@ type PluginError struct {
 	Code int
 }
 
-// loadPlugins loads plugins into the command list.
+// loadCLIPlugins loads CLI plugins into the command list.
 //
 // This follows a different pattern than the other commands because it has
 // to inspect its environment and then add commands to the base command
 // as it finds them.
-func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
+func loadCLIPlugins(baseCmd *cobra.Command, out io.Writer) {
 	// If HELM_NO_PLUGINS is set to 1, do not load plugins.
 	if os.Getenv("HELM_NO_PLUGINS") == "1" {
 		return
@@ -61,7 +63,7 @@ func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 
 	dirs := filepath.SplitList(settings.PluginsDirectory)
 	descriptor := plugin.PluginDescriptor{
-		Type: pluginType,
+		Type: "cli/v1",
 	}
 	found, err := plugin.FindPlugins(dirs, descriptor)
 	if err != nil {
@@ -115,8 +117,20 @@ func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 				}
 
 				// Invoke plugin
-				err = plug.Invoke(os.Stdin, out, os.Stderr, env, extraArgs, settings)
+				input := &plugin.Input{
+					Message: schema.CLIInputV1{
+						ExtraArgs: extraArgs,
+						Settings:  settings,
+					},
+					Env:    env,
+					Stdin:  os.Stdin,
+					Stdout: out,
+					Stderr: os.Stderr,
+				}
+				_, err = plug.Invoke(context.Background(), input)
+				// TODO do we want to keep execErr here?
 				if execErr, ok := err.(*plugin.Error); ok {
+					// TODO can we replace cmd.PluginError with plugin.Error?
 					return PluginError{
 						error: execErr.Err,
 						Code:  execErr.Code,

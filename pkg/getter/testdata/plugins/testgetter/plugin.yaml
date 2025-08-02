@@ -1,12 +1,15 @@
 name: "testgetter"
 version: "0.1.0"
-type: download
+type: getter/v1
 apiVersion: v1
 runtime: subprocess
 config:
-  downloaders:
+  protocols:
+    - "test"
+runtimeConfig:
+  # TODO should we remove runtimeConfig.command? should have no effect for getter/v1 plugins?
+  command: "$HELM_PLUGIN_DIR/get.sh"
+  protocolCommands:
     - command: "echo"
       protocols:
         - "test"
-runtimeConfig:
-  command: "$HELM_PLUGIN_DIR/get.sh"

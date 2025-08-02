@@ -90,6 +90,7 @@ func uninstallPlugin(p plugin.Plugin) error {
 	return runHook(p, plugin.Delete)
 }
 
+// TODO should this be in pkg/plugin/loader.go?
 func findPlugin(plugins []plugin.Plugin, name string) plugin.Plugin {
 	for _, p := range plugins {
 		if p.Metadata().GetName() == name {

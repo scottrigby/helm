@@ -16,6 +16,7 @@ limitations under the License.
 package plugin // import "helm.sh/helm/v4/pkg/plugin"
 import (
 	"bytes"
+	"context"
 	"io"
 
 	"helm.sh/helm/v4/pkg/cli"
@@ -37,20 +38,33 @@ type Downloaders struct {
 type Plugin interface {
 	GetDir() string
 	Metadata() Metadata
-	Invoke(stdin io.Reader, stdout, stderr io.Writer, env []string, extraArgs []string, settings *cli.EnvSettings) error
+	Invoke(ctx context.Context, input *Input) (*Output, error)
 	InvokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error
 	InvokeHook(event string) error
 	Postrender(renderedManifests *bytes.Buffer, args []string, extraArgs []string, settings *cli.EnvSettings) (*bytes.Buffer, error)
 }
 
-// Error is returned when a plugin exits with a non-zero status code
-type Error struct {
-	Err        error
-	PluginName string
-	Code       int
+// Input defines the input message and parameters to be passed to the plugin
+type Input struct {
+	// Message represents the type-elided value to be passed to the plugin.
+	// The plugin is expected to interpret the message according to its type/version
+	// The message object must be JSON-serializable
+	Message any
+
+	// Optional: Reader to be consumed plugin's "stdin"
+	Stdin io.Reader
+
+	// Optional: Writers to consume the plugin's "stdout" and "stderr"
+	Stdout, Stderr io.Writer
+
+	// Env represents the environment as a list of "key=value" strings
+	// see os.Environ
+	Env []string
 }
 
-// Error implements the error interface
-func (e *Error) Error() string {
-	return e.Err.Error()
+// Output defines the output message and parameters the passed from the plugin
+type Output struct {
+	// Message represents the type-elided value passed from the plugin
+	// The invoker is expected to interpret the message according to the plugins type/version
+	Message any
 }

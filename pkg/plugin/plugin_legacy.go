@@ -17,6 +17,7 @@ package plugin
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -38,15 +39,15 @@ func (p *PluginLegacy) Metadata() Metadata { return p.MetadataLegacy }
 
 func (p *PluginLegacy) Runtime() (Runtime, error) {
 	runtimeConfig := p.Metadata().GetRuntimeConfig()
-	return runtimeConfig.CreateRuntime(p.Dir, p.MetadataLegacy.Name)
+	return runtimeConfig.CreateRuntime(p.Dir, p.Metadata().GetName(), p.Metadata().GetType())
 }
 
-func (p *PluginLegacy) Invoke(stdin io.Reader, stdout, stderr io.Writer, env []string, extraArgs []string, settings *cli.EnvSettings) error {
+func (p *PluginLegacy) Invoke(ctx context.Context, input *Input) (*Output, error) {
 	r, err := p.Runtime()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return r.invoke(stdin, stdout, stderr, env, extraArgs, settings)
+	return r.invoke(ctx, input)
 }
 
 func (p *PluginLegacy) InvokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {

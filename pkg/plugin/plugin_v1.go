@@ -17,6 +17,7 @@ package plugin
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"regexp"
@@ -32,12 +33,12 @@ type PluginV1 struct {
 	Dir string
 }
 
-func (p *PluginV1) Invoke(stdin io.Reader, stdout, stderr io.Writer, env []string, extraArgs []string, settings *cli.EnvSettings) error {
+func (p *PluginV1) Invoke(ctx context.Context, input *Input) (*Output, error) {
 	r, err := p.Runtime()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return r.invoke(stdin, stdout, stderr, env, extraArgs, settings)
+	return r.invoke(ctx, input)
 }
 
 func (p *PluginV1) InvokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {
@@ -71,36 +72,37 @@ func (p *PluginV1) Runtime() (Runtime, error) {
 	if p.MetadataV1.RuntimeConfig == nil {
 		return nil, fmt.Errorf("plugin has no runtime configuration")
 	}
-	return p.MetadataV1.RuntimeConfig.CreateRuntime(p.Dir, p.MetadataV1.Name)
+	return p.MetadataV1.RuntimeConfig.CreateRuntime(p.GetDir(), p.Metadata().GetName(), p.Metadata().GetType())
 }
 
+// TODO move Metadata-specific validation to Metadata interface implementations
 func (p *PluginV1) Validate() error {
 	if p.MetadataV1 == nil {
 		return fmt.Errorf("plugin metadata is missing")
 	}
 
 	if !validPluginName.MatchString(p.MetadataV1.Name) {
-		return fmt.Errorf("invalid plugin name")
+		return fmt.Errorf("invalid name")
 	}
 
 	if p.MetadataV1.APIVersion != "v1" {
-		return fmt.Errorf("v1 plugin must have apiVersion: v1")
+		return fmt.Errorf("invalid apiVersion: %q", p.MetadataV1.APIVersion)
 	}
 
 	if p.MetadataV1.Type == "" {
-		return fmt.Errorf("v1 plugin must have a type field")
+		return fmt.Errorf("empty type field")
 	}
 
 	if p.MetadataV1.Runtime == "" {
-		return fmt.Errorf("v1 plugin must have a runtime field")
+		return fmt.Errorf("empty runtime field")
 	}
 
 	if p.MetadataV1.Config == nil {
-		return fmt.Errorf("v1 plugin must have a config field")
+		return fmt.Errorf("missing config field")
 	}
 
 	if p.MetadataV1.RuntimeConfig == nil {
-		return fmt.Errorf("v1 plugin must have a runtimeConfig field")
+		return fmt.Errorf("missing runtimeConfig field")
 	}
 
 	// Validate that config type matches plugin type

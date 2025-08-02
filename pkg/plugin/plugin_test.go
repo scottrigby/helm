@@ -38,7 +38,7 @@ func TestPrepareCommand(t *testing.T) {
 		Dir: "/tmp", // Unused
 		MetadataV1: &MetadataV1{
 			Name:       "test",
-			Type:       "cli",
+			Type:       "cli/v1",
 			APIVersion: "v1",
 			Runtime:    "subprocess",
 			Config: &ConfigCLI{
@@ -80,7 +80,7 @@ func TestPrepareCommandExtraArgs(t *testing.T) {
 		Dir: "/tmp", // Unused
 		MetadataV1: &MetadataV1{
 			Name:       "test",
-			Type:       "cli",
+			Type:       "cli/v1",
 			APIVersion: "v1",
 			Runtime:    "subprocess",
 			Config: &ConfigCLI{
@@ -130,7 +130,7 @@ func TestPrepareCommandExtraArgsIgnored(t *testing.T) {
 		Dir: "/tmp", // Unused
 		MetadataV1: &MetadataV1{
 			Name:       "test",
-			Type:       "cli",
+			Type:       "cli/v1",
 			APIVersion: "v1",
 			Runtime:    "subprocess",
 			Config: &ConfigCLI{
@@ -338,7 +338,7 @@ func TestLoadDir(t *testing.T) {
 	expect := &MetadataV1{
 		Name:       "hello",
 		Version:    "0.1.0",
-		Type:       "cli",
+		Type:       "cli/v1",
 		APIVersion: "v1",
 		Runtime:    "subprocess",
 		Config: &ConfigCLI{
@@ -371,54 +371,38 @@ func TestLoadDirDuplicateEntries(t *testing.T) {
 	}
 }
 
-func TestDownloader(t *testing.T) {
+func TestGetter(t *testing.T) {
 	dirname := "testdata/plugdir/good/downloader"
 	plug, err := LoadDir(dirname)
-	if err != nil {
-		t.Fatalf("error loading Hello plugin: %s", err)
-	}
-
-	if plug.GetDir() != dirname {
-		t.Fatalf("Expected dir %q, got %q", dirname, plug.GetDir())
-	}
+	assert.NoError(t, err)
 
 	expect := &MetadataV1{
 		Name:       "downloader",
 		Version:    "1.2.3",
-		Type:       "download",
+		Type:       "getter/v1",
 		APIVersion: "v1",
 		Runtime:    "subprocess",
-		Config: &ConfigDownload{
-			Downloaders: []Downloaders{
-				{
-					Protocols: []string{"myprotocol", "myprotocols"},
-					Command:   "echo Download",
-				},
-			},
+		Config: &ConfigGetter{
+			Protocols: []string{"myprotocol", "myprotocols"},
 		},
 		RuntimeConfig: &RuntimeConfigSubprocess{
 			Command: "echo Hello",
 		},
 	}
 
+	assert.Equal(t, dirname, plug.GetDir())
 	assert.Equal(t, expect, plug.Metadata())
 }
 
 func TestPostRenderer(t *testing.T) {
 	dirname := "testdata/plugdir/good/postrender"
 	plug, err := LoadDir(dirname)
-	if err != nil {
-		t.Fatalf("error loading postrender plugin: %s", err)
-	}
-
-	if plug.GetDir() != dirname {
-		t.Fatalf("Expected dir %q, got %q", dirname, plug.GetDir())
-	}
+	assert.NoError(t, err)
 
 	expect := &MetadataV1{
 		Name:       "postrender",
 		Version:    "1.2.3",
-		Type:       "postrender",
+		Type:       "postrender/v1",
 		APIVersion: "v1",
 		Runtime:    "subprocess",
 		Config: &ConfigPostrender{
@@ -433,6 +417,7 @@ func TestPostRenderer(t *testing.T) {
 		},
 	}
 
+	assert.Equal(t, dirname, plug.GetDir())
 	assert.Equal(t, expect, plug.Metadata())
 }
 
@@ -497,34 +482,21 @@ func TestNewPostRendererWithTwoArgsRun(t *testing.T) {
 
 func TestLoadAll(t *testing.T) {
 	// Verify that empty dir loads:
-	if plugs, err := LoadAll("testdata"); err != nil {
-		t.Fatalf("error loading dir with no plugins: %s", err)
-	} else if len(plugs) > 0 {
-		t.Fatalf("expected empty dir to have 0 plugins")
+	{
+		plugs, err := LoadAll("testdata")
+		require.NoError(t, err)
+		assert.Len(t, plugs, 0)
 	}
 
 	basedir := "testdata/plugdir/good"
 	plugs, err := LoadAll(basedir)
-	if err != nil {
-		t.Fatalf("Could not load %q: %s", basedir, err)
-	}
+	require.NoError(t, err)
 
-	if l := len(plugs); l != 4 {
-		t.Fatalf("expected 4 plugins, found %d", l)
-	}
-
-	if plugs[0].Metadata().GetName() != "downloader" {
-		t.Errorf("Expected first plugin to be downloader, got %q", plugs[0].Metadata().GetName())
-	}
-	if plugs[1].Metadata().GetName() != "echo" {
-		t.Errorf("Expected first plugin to be echo, got %q", plugs[1].Metadata().GetName())
-	}
-	if plugs[2].Metadata().GetName() != "hello" {
-		t.Errorf("Expected second plugin to be hello, got %q", plugs[2].Metadata().GetName())
-	}
-	if plugs[3].Metadata().GetName() != "postrender" {
-		t.Errorf("Expected second plugin to be postrender, got %q", plugs[3].Metadata().GetName())
-	}
+	assert.Len(t, plugs, 4)
+	assert.Equal(t, "downloader", plugs[0].Metadata().GetName())
+	assert.Equal(t, "echo", plugs[1].Metadata().GetName())
+	assert.Equal(t, "hello", plugs[2].Metadata().GetName())
+	assert.Equal(t, "postrender", plugs[3].Metadata().GetName())
 }
 
 func TestFindPlugins(t *testing.T) {
@@ -697,7 +669,7 @@ func mockPlugin(name string) *PluginV1 {
 		MetadataV1: &MetadataV1{
 			Name:       name,
 			Version:    "v0.1.2",
-			Type:       "cli",
+			Type:       "cli/v1",
 			APIVersion: "v1",
 			Runtime:    "subprocess",
 			Config: &ConfigCLI{

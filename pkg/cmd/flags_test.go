@@ -108,15 +108,15 @@ func TestPostRendererFlagSetOnce(t *testing.T) {
 			settings: settings,
 		},
 	}
-	// Set the binary once
+	// Set the plugin name once
 	err := str.Set("postrender")
 	require.NoError(t, err)
 
-	// Set the binary again to the same value is not ok
+	// Set the plugin name again to the same value is not ok
 	err = str.Set("postrender")
 	require.Error(t, err)
 
-	// Set the binary again to a different value is not ok
+	// Set the plugin name again to a different value is not ok
 	err = str.Set("cat")
 	require.Error(t, err)
 }

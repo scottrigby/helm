@@ -27,7 +27,7 @@ func TestCollectPlugins(t *testing.T) {
 	env := cli.New()
 	env.PluginsDirectory = pluginDir
 
-	p, err := collectPlugins(env)
+	p, err := collectGetterPlugins(env)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -69,18 +69,22 @@ func (m *MetadataLegacy) GetName() string { return m.Name }
 
 func (m *MetadataLegacy) GetType() string {
 	if len(m.Downloaders) > 0 {
-		return "download"
+		return "getter/v1"
 	}
-	return "cli"
+	return "cli/v1"
 }
 
 func (m *MetadataLegacy) GetConfig() Config {
 	switch m.GetType() {
-	case "download":
-		return &ConfigDownload{
-			Downloaders: m.Downloaders,
+	case "getter/v1":
+		var protocols []string
+		for _, d := range m.Downloaders {
+			protocols = append(protocols, d.Protocols...)
 		}
-	case "cli":
+		return &ConfigGetter{
+			Protocols: protocols,
+		}
+	case "cli/v1":
 		return &ConfigCLI{
 			Usage:       "",            // Legacy plugins don't have Usage field for command syntax
 			ShortHelp:   m.Usage,       // Map legacy usage to shortHelp

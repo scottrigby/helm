@@ -19,6 +19,7 @@ package plugin
 import (
 	"bytes"
 	"fmt"
+	"path/filepath"
 
 	"helm.sh/helm/v4/pkg/cli"
 )
@@ -34,7 +35,11 @@ type PostRenderer interface {
 
 // NewPostRenderer creates a PostRenderer that uses the plugin's Runtime
 func NewPostRenderer(settings *cli.EnvSettings, pluginName string, args ...string) (PostRenderer, error) {
-	p, err := FindPlugin(pluginName, settings.PluginsDirectory, "postrender")
+	descriptor := PluginDescriptor{
+		Name: pluginName,
+		Type: "postrender/v1",
+	}
+	p, err := FindPlugin(filepath.SplitList(settings.PluginsDirectory), descriptor)
 	if err != nil {
 		return nil, err
 	}

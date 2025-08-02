@@ -17,6 +17,7 @@ package plugin
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -26,11 +27,22 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"helm.sh/helm/v4/pkg/cli"
+	"helm.sh/helm/v4/pkg/plugin/schema"
 )
+
+// SubprocessProtocolCommand maps a given protocol to the getter command used to retrieve artifacts for that protcol
+type SubprocessProtocolCommand struct {
+	// Protocols are the list of schemes from the charts URL.
+	Protocols []string `json:"protocols"`
+	// Command is the executable path with which the plugin performs
+	// the actual download for the corresponding Protocols
+	Command string `json:"command"`
+}
 
 // RuntimeConfigSubprocess represents configuration for subprocess runtime
 type RuntimeConfigSubprocess struct {
-	// PlatformCommand is the plugin command, with a platform selector and support for args.
+	// PlatformCommand is a list containing a plugin command, with a platform selector and support for args.
+	// TODO rename to "PlatformCommands" plural to match other plural field names
 	PlatformCommand []PlatformCommand `json:"platformCommand"`
 	// Command is the plugin command, as a single string.
 	// DEPRECATED: Use PlatformCommand instead. Remove in Helm 4.
@@ -40,6 +52,11 @@ type RuntimeConfigSubprocess struct {
 	// Hooks are commands that will run on plugin events, as a single string.
 	// DEPRECATED: Use PlatformHooks instead. Remove in Helm 4.
 	Hooks Hooks `json:"hooks"`
+	// ProtocolCommands field is used if the plugin supply downloader mechanism
+	// for special protocols.
+	// (This is a compatibility handover from the old plugin downloader mechanism, which was extended to support multiple
+	// protocols in a given plugin)
+	ProtocolCommands []SubprocessProtocolCommand `json:"protocolCommands,omitempty"`
 	// UseTunnel indicates that this command needs a tunnel.
 	// DEPRECATED and unused, but retained for backwards compatibility. Remove in Helm 4.
 	UseTunnel bool `json:"useTunnel"`
@@ -62,32 +79,31 @@ type RuntimeSubprocess struct {
 	config     *RuntimeConfigSubprocess
 	pluginDir  string
 	pluginName string
+	pluginType string
 }
 
 // CreateRuntime implementation for RuntimeConfig
-// TODO should we pass cli settings and extra args as params, amd remove SetExtraArgs() and SetSettings() methods?
-func (r *RuntimeConfigSubprocess) CreateRuntime(pluginDir string, pluginName string) (Runtime, error) {
+func (r *RuntimeConfigSubprocess) CreateRuntime(pluginDir string, pluginName string, pluginType string) (Runtime, error) {
 	return &RuntimeSubprocess{
 		config:     r,
 		pluginDir:  pluginDir,
 		pluginName: pluginName,
+		pluginType: pluginType,
 	}, nil
 }
 
-func (r *RuntimeSubprocess) invoke(stdin io.Reader, stdout, stderr io.Writer, env []string, extraArgs []string, settings *cli.EnvSettings) error {
-	// Prepare command based on Runtime configuration
-	cmds := r.config.PlatformCommand
-	if len(cmds) == 0 && len(r.config.Command) > 0 {
-		cmds = []PlatformCommand{{Command: r.config.Command}}
+func (r *RuntimeSubprocess) invoke(_ context.Context, input *Input) (*Output, error) {
+	// TODO should we find a better way to do this?
+	// TODO add postrender message schema and case here
+	switch input.Message.(type) {
+	case schema.CLIInputV1:
+		return r.runCLI(input)
+	case schema.InputMessageGetterV1:
+		return r.runGetter(input)
+		//return runGetter(r, input)
+	default:
+		return nil, fmt.Errorf("unsupported subprocess plugin type %q", r.pluginType)
 	}
-
-	main, args, err := PrepareCommands(cmds, true, extraArgs)
-	if err != nil {
-		return fmt.Errorf("failed to prepare command: %w", err)
-	}
-
-	// Execute the command directly
-	return r.invokeWithEnv(main, args, env, stdin, stdout, stderr)
 }
 
 // InvokeWithEnv executes a plugin command with custom environment and I/O streams
@@ -229,6 +245,66 @@ func unmarshalRuntimeConfigSubprocess(runtimeData map[string]interface{}) (*Runt
 	}
 
 	return &config, nil
+}
+
+// TODO decide the best way to handle this code
+// right now we implement status and error return in 3 slightly different ways in this file
+// then replace the other three with a call to this func
+func executeCmd(prog *exec.Cmd, pluginName string) error {
+	if err := prog.Run(); err != nil {
+		if eerr, ok := err.(*exec.ExitError); ok {
+			os.Stderr.Write(eerr.Stderr)
+			return &Error{
+				Err:  fmt.Errorf("plugin %q exited with error", pluginName),
+				Code: eerr.ExitCode(),
+			}
+		}
+
+		return &Error{
+			Err: err,
+		}
+	}
+
+	return nil
+}
+
+func (r *RuntimeSubprocess) runCLI(input *Input) (*Output, error) {
+	if _, ok := input.Message.(schema.CLIInputV1); !ok {
+		return nil, fmt.Errorf("plugin %q input message does not implement CLIInputV1", r.pluginName)
+	}
+
+	extraArgs := input.Message.(schema.CLIInputV1).ExtraArgs
+
+	cmds := r.config.PlatformCommand
+	if len(cmds) == 0 && len(r.config.Command) > 0 {
+		cmds = []PlatformCommand{{Command: r.config.Command}}
+	}
+
+	command, args, err := PrepareCommands(cmds, true, extraArgs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare plugin command: %w", err)
+	}
+
+	// TODO can we use invokeWithEnv here?
+	//prog := exec.Command(
+	//	command,
+	//	args...)
+	////prog.Env = pluginExec.env
+	//prog.Stdin = input.Stdin
+	//prog.Stdout = input.Stdout
+	//prog.Stderr = input.Stderr
+	//if err := executeCmd(prog, r.pluginName); err != nil {
+	//	return nil, err
+	//}
+
+	err2 := r.invokeWithEnv(command, args, input.Env, input.Stdin, input.Stdout, input.Stderr)
+	if err2 != nil {
+		return nil, err2
+	}
+
+	return &Output{
+		Message: &schema.CLIOutputV1{},
+	}, nil
 }
 
 // ExecDownloader executes a plugin downloader command with custom environment

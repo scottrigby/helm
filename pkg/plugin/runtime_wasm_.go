@@ -17,6 +17,7 @@ package plugin
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 
@@ -72,18 +73,20 @@ type RuntimeWasm struct {
 	config     *RuntimeConfigWasm
 	pluginDir  string
 	pluginName string
+	pluginType string
 }
 
-func (r *RuntimeConfigWasm) CreateRuntime(pluginDir string, pluginName string) (Runtime, error) {
+func (r *RuntimeConfigWasm) CreateRuntime(pluginDir string, pluginName string, pluginType string) (Runtime, error) {
 	return &RuntimeWasm{
 		config:     r,
 		pluginDir:  pluginDir,
 		pluginName: pluginName,
+		pluginType: pluginType,
 	}, nil
 }
 
 // Invoke implementation for Runtime
-func (r *RuntimeWasm) invoke(stdin io.Reader, stdout, stderr io.Writer, env []string, extraArgs []string, settings *cli.EnvSettings) error {
+func (r *RuntimeWasm) invoke(_ context.Context, _ *Input) (*Output, error) {
 	// TODO: Implement WASM runtime execution
 	// This will include:
 	// - Loading the WASM module from r.config.WasmModule
@@ -92,7 +95,7 @@ func (r *RuntimeWasm) invoke(stdin io.Reader, stdout, stderr io.Writer, env []st
 	// - Applying security constraints (AllowedHosts, AllowedPaths)
 	// - Executing the WASM module with environment from 'env'
 	// - Reading input from 'stdin' and writing output to 'stdout'/'stderr'
-	return fmt.Errorf("WASM runtime not yet implemented")
+	return nil, fmt.Errorf("WASM runtime not yet implemented")
 }
 
 func (r *RuntimeWasm) invokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {

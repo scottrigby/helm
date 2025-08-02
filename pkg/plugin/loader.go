@@ -71,7 +71,7 @@ func LoadDir(dirname string) (Plugin, error) {
 
 		// Default type to cli if not specified
 		if tempMeta.Type == "" {
-			tempMeta.Type = "cli"
+			tempMeta.Type = "cli/v1"
 		}
 
 		// Create the MetadataV1 struct with base fields
@@ -90,11 +90,11 @@ func LoadDir(dirname string) (Plugin, error) {
 			var err error
 
 			switch tempMeta.Type {
-			case "cli":
+			case "cli/v1":
 				config, err = unmarshalConfigCLI(configData)
-			case "download":
-				config, err = unmarshalConfigDownload(configData)
-			case "postrender":
+			case "getter/v1":
+				config, err = unmarshalConfigGetter(configData)
+			case "postrender/v1":
 				config, err = unmarshalConfigPostrender(configData)
 			default:
 				return nil, fmt.Errorf("unsupported plugin type: %s", tempMeta.Type)
@@ -109,11 +109,11 @@ func LoadDir(dirname string) (Plugin, error) {
 			// Create default config based on plugin type
 			var config Config
 			switch tempMeta.Type {
-			case "cli":
+			case "cli/v1":
 				config = &ConfigCLI{}
-			case "download":
-				config = &ConfigDownload{}
-			case "postrender":
+			case "getter/v1":
+				config = &ConfigGetter{}
+			case "postrender/v1":
 				config = &ConfigPostrender{}
 			default:
 				return nil, fmt.Errorf("unsupported plugin type: %s", tempMeta.Type)
@@ -245,13 +245,8 @@ func makeDescriptorFilter(descriptor PluginDescriptor) filterFunc {
 	}
 }
 
-// FindPlugin returns a plugin by name and type
-func FindPlugin(name, plugdirs, pluginType string) (Plugin, error) {
-	dirs := filepath.SplitList(plugdirs)
-	descriptor := PluginDescriptor{
-		Name: name,
-		Type: pluginType,
-	}
+// FindPlugin returns a single plugin that matches the descriptor
+func FindPlugin(dirs []string, descriptor PluginDescriptor) (Plugin, error) {
 	plugins, err := FindPlugins(dirs, descriptor)
 	if err != nil {
 		return nil, err
@@ -261,7 +256,7 @@ func FindPlugin(name, plugdirs, pluginType string) (Plugin, error) {
 		return plugins[0], nil
 	}
 
-	return nil, fmt.Errorf("plugin: %s not found", name)
+	return nil, fmt.Errorf("plugin: %+v not found", descriptor)
 }
 
 func detectDuplicates(plugs []Plugin) error {

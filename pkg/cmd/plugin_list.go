@@ -99,7 +99,7 @@ func compListPlugins(_ string, ignoredPluginNames []string) []string {
 	var pNames []string
 	dirs := filepath.SplitList(settings.PluginsDirectory)
 	descriptor := plugin.PluginDescriptor{
-		Type: "cli",
+		Type: "cli/v1",
 	}
 	plugins, err := plugin.FindPlugins(dirs, descriptor)
 	if err == nil && len(plugins) > 0 {

@@ -1,13 +1,17 @@
 name: "downloader"
 version: "1.2.3"
-type: download
+type: getter/v1
 apiVersion: v1
 runtime: subprocess
 config:
-  downloaders:
-    - protocols:
+  - protocols:
       - "myprotocol"
       - "myprotocols"
-      command: "echo Download"
 runtimeConfig:
+  # TODO remove command?
   command: "echo Hello"
+  protocolCommands:
+    - protocols:
+        - "myprotocol"
+        - "myprotocols"
+      command: "echo Download"
