@@ -372,12 +372,12 @@ func TestLoadDirDuplicateEntries(t *testing.T) {
 }
 
 func TestGetter(t *testing.T) {
-	dirname := "testdata/plugdir/good/downloader"
+	dirname := "testdata/plugdir/good/getter"
 	plug, err := LoadDir(dirname)
 	assert.NoError(t, err)
 
 	expect := &MetadataV1{
-		Name:       "downloader",
+		Name:       "getter",
 		Version:    "1.2.3",
 		Type:       "getter/v1",
 		APIVersion: "v1",
@@ -386,7 +386,12 @@ func TestGetter(t *testing.T) {
 			Protocols: []string{"myprotocol", "myprotocols"},
 		},
 		RuntimeConfig: &RuntimeConfigSubprocess{
-			Command: "echo Hello",
+			ProtocolCommands: []SubprocessProtocolCommand{
+				{
+					Protocols: []string{"myprotocol", "myprotocols"},
+					Command:   "echo getter",
+				},
+			},
 		},
 	}
 
@@ -493,8 +498,8 @@ func TestLoadAll(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Len(t, plugs, 4)
-	assert.Equal(t, "downloader", plugs[0].Metadata().GetName())
-	assert.Equal(t, "echo", plugs[1].Metadata().GetName())
+	assert.Equal(t, "echo", plugs[0].Metadata().GetName())
+	assert.Equal(t, "getter", plugs[1].Metadata().GetName())
 	assert.Equal(t, "hello", plugs[2].Metadata().GetName())
 	assert.Equal(t, "postrender", plugs[3].Metadata().GetName())
 }

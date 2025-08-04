@@ -16,9 +16,16 @@ limitations under the License.
 package getter
 
 import (
-	"runtime"
-	"strings"
+	"bytes"
+	"context"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"helm.sh/helm/v4/pkg/plugin"
+	"helm.sh/helm/v4/pkg/plugin/schema"
+	"io"
 	"testing"
+	"time"
 
 	"helm.sh/helm/v4/pkg/cli"
 )
@@ -49,53 +56,106 @@ func TestCollectPlugins(t *testing.T) {
 	}
 }
 
-func TestPluginGetter(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("TODO: refactor this test to work on windows")
-	}
+func TestConvertOptions(t *testing.T) {
+	opts := convertOptions(
+		[]Option{
+			WithURL("example://foo"),
+			WithAcceptHeader("Accept-Header"),
+			WithBasicAuth("username", "password"),
+			WithPassCredentialsAll(true),
+			WithUserAgent("User-agent"),
+			WithInsecureSkipVerifyTLS(true),
+			WithTLSClientConfig("certFile.pem", "keyFile.pem", "caFile.pem"),
+			WithPlainHTTP(true),
+			WithTimeout(10),
+			WithTagName("1.2.3"),
+			WithUntar(),
+		},
+		[]Option{
+			WithTimeout(20),
+		},
+	)
 
-	env := cli.New()
-	env.PluginsDirectory = pluginDir
-	pg := NewPluginGetter("echo", env, "test", ".")
-	g, err := pg()
-	if err != nil {
-		t.Fatal(err)
+	expected := schema.GetterOptionsV1{
+		URL:                   "example://foo",
+		CertFile:              "certFile.pem",
+		KeyFile:               "keyFile.pem",
+		CAFile:                "caFile.pem",
+		UNTar:                 true,
+		Timeout:               20,
+		InsecureSkipVerifyTLS: true,
+		PlainHTTP:             true,
+		AcceptHeader:          "Accept-Header",
+		Username:              "username",
+		Password:              "password",
+		PassCredentialsAll:    true,
+		UserAgent:             "User-agent",
+		Version:               "1.2.3",
 	}
+	assert.Equal(t, expected, opts)
+}
 
-	data, err := g.Get("test://foo/bar")
-	if err != nil {
-		t.Fatal(err)
-	}
+type TestPlugin struct {
+	t   *testing.T
+	dir string
+}
 
-	expect := "test://foo/bar"
-	got := strings.TrimSpace(data.String())
-	if got != expect {
-		t.Errorf("Expected %q, got %q", expect, got)
+func (t *TestPlugin) GetDir() string {
+	return t.dir
+}
+
+func (t *TestPlugin) Metadata() plugin.Metadata {
+	return &plugin.MetadataV1{
+		Name:       "fake-plugin",
+		Type:       "cli/v1",
+		APIVersion: "v1",
+		Runtime:    "subprocess",
+		Config:     &plugin.ConfigGetter{},
+		RuntimeConfig: &plugin.RuntimeConfigSubprocess{
+			PlatformCommand: []plugin.PlatformCommand{
+				{
+					Command: "echo fake-plugin",
+				},
+			},
+		},
 	}
 }
 
-func TestPluginSubCommands(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("TODO: refactor this test to work on windows")
+func (t *TestPlugin) InvokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	//TODO implement me
+	return nil
+}
+
+func (t *TestPlugin) InvokeHook(event string) error {
+	// TODO implement me
+	return nil
+}
+
+func (t *TestPlugin) Postrender(renderedManifests *bytes.Buffer, args []string, extraArgs []string, settings *cli.EnvSettings) (*bytes.Buffer, error) {
+	// TODO implement me
+	return renderedManifests, nil
+}
+
+func (t *TestPlugin) Invoke(_ context.Context, _ *plugin.Input) (*plugin.Output, error) {
+	// Simulate a plugin invocation
+	output := &plugin.Output{
+		Message: &schema.GetterOutputV1{
+			Data: bytes.NewBuffer([]byte("fake-plugin output")),
+		},
+	}
+	return output, nil
+}
+
+var _ plugin.Plugin = (*TestPlugin)(nil)
+
+func TestGetterPlugin(t *testing.T) {
+	gp := getterPlugin{
+		options: []Option{},
+		plg:     &TestPlugin{t: t, dir: "fake/dir"},
 	}
 
-	env := cli.New()
-	env.PluginsDirectory = pluginDir
+	buf, err := gp.Get("test://example.com", WithTimeout(5*time.Second))
+	require.NoError(t, err)
 
-	pg := NewPluginGetter("echo -n", env, "test", ".")
-	g, err := pg()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	data, err := g.Get("test://foo/bar")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	expect := "   test://foo/bar"
-	got := data.String()
-	if got != expect {
-		t.Errorf("Expected %q, got %q", expect, got)
-	}
+	assert.Equal(t, "fake-plugin output", buf.String())
 }

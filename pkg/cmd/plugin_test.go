@@ -116,7 +116,6 @@ func TestLoadCLIPlugins(t *testing.T) {
 		{"env", "env stuff", "show the env", "env\n", []string{}, 0},
 		{"exitwith", "exitwith code", "This exits with the specified exit code", "", []string{"2"}, 2},
 		{"fullenv", "show env vars", "show all env vars", envs + "\n", []string{}, 0},
-		{"postrender/v1", "the \"postrender\" plugin", "", "", []string{}, 0},
 	}
 
 	plugins := cmd.Commands()
@@ -265,7 +264,6 @@ func TestLoadCLIPluginsForCompletion(t *testing.T) {
 				{"more", []string{"one", "two"}, []string{"b", "ball"}, []staticCompletionDetails{}},
 			}},
 		}},
-		{"postrender", []string{}, []string{}, []staticCompletionDetails{}},
 	}
 	checkCommand(t, cmd.Commands(), tests)
 }

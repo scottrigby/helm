@@ -93,14 +93,12 @@ func (r *RuntimeConfigSubprocess) CreateRuntime(pluginDir string, pluginName str
 }
 
 func (r *RuntimeSubprocess) invoke(_ context.Context, input *Input) (*Output, error) {
-	// TODO should we find a better way to do this?
 	// TODO add postrender message schema and case here
 	switch input.Message.(type) {
 	case schema.CLIInputV1:
 		return r.runCLI(input)
 	case schema.InputMessageGetterV1:
 		return r.runGetter(input)
-		//return runGetter(r, input)
 	default:
 		return nil, fmt.Errorf("unsupported subprocess plugin type %q", r.pluginType)
 	}

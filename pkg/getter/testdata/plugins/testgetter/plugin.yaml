@@ -7,8 +7,6 @@ config:
   protocols:
     - "test"
 runtimeConfig:
-  # TODO should we remove runtimeConfig.command? should have no effect for getter/v1 plugins?
-  command: "$HELM_PLUGIN_DIR/get.sh"
   protocolCommands:
     - command: "echo"
       protocols:

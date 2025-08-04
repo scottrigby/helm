@@ -17,6 +17,7 @@ package plugin
 
 import (
 	"fmt"
+
 	"sigs.k8s.io/yaml"
 )
 
@@ -53,11 +54,9 @@ type ConfigPostrender struct {
 	PostrenderArgs []string `json:"postrenderArgs"`
 }
 
-func (c *ConfigCLI) Type() string    { return "cli/v1" }
-func (c *ConfigGetter) Type() string { return "getter/v1" }
-func (c *ConfigPostrender) Type() string {
-	return "postrender/v1"
-}
+func (c *ConfigCLI) Type() string        { return "cli/v1" }
+func (c *ConfigGetter) Type() string     { return "getter/v1" }
+func (c *ConfigPostrender) Type() string { return "postrender/v1" }
 
 func (c *ConfigCLI) Validate() error {
 	// Config validation for CLI plugins
