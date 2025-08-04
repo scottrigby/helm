@@ -19,12 +19,12 @@ import (
 	"helm.sh/helm/v4/pkg/cli"
 )
 
-type CLIInputV1 struct {
+type InputMessageCLIV1 struct {
 	//Env       []string         `json:"env"`
 	ExtraArgs []string         `json:"extraArgs"`
 	Settings  *cli.EnvSettings `json:"settings"`
 }
 
-type CLIOutputV1 struct {
+type OutputMessageCLIV1 struct {
 	Data *bytes.Buffer `json:"data"`
 }

@@ -19,13 +19,14 @@ import (
 	"bytes"
 	"context"
 
+	"io"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"helm.sh/helm/v4/pkg/plugin"
 	"helm.sh/helm/v4/pkg/plugin/schema"
-	"io"
-	"testing"
-	"time"
 
 	"helm.sh/helm/v4/pkg/cli"
 )
@@ -139,7 +140,7 @@ func (t *TestPlugin) Postrender(renderedManifests *bytes.Buffer, args []string, 
 func (t *TestPlugin) Invoke(_ context.Context, _ *plugin.Input) (*plugin.Output, error) {
 	// Simulate a plugin invocation
 	output := &plugin.Output{
-		Message: &schema.GetterOutputV1{
+		Message: &schema.OutputMessageGetterV1{
 			Data: bytes.NewBuffer([]byte("fake-plugin output")),
 		},
 	}

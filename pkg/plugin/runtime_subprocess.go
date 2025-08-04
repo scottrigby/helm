@@ -20,13 +20,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"syscall"
 
 	"sigs.k8s.io/yaml"
 
-	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/plugin/schema"
 )
 
@@ -95,10 +95,12 @@ func (r *RuntimeConfigSubprocess) CreateRuntime(pluginDir string, pluginName str
 func (r *RuntimeSubprocess) invoke(_ context.Context, input *Input) (*Output, error) {
 	// TODO add postrender message schema and case here
 	switch input.Message.(type) {
-	case schema.CLIInputV1:
+	case schema.InputMessageCLIV1:
 		return r.runCLI(input)
 	case schema.InputMessageGetterV1:
 		return r.runGetter(input)
+	case schema.InputMessagePostRendererV1:
+		return r.runPostrender(input)
 	default:
 		return nil, fmt.Errorf("unsupported subprocess plugin type %q", r.pluginType)
 	}
@@ -119,9 +121,8 @@ func (r *RuntimeSubprocess) invokeWithEnv(main string, argv []string, env []stri
 			os.Stderr.Write(eerr.Stderr)
 			status := eerr.Sys().(syscall.WaitStatus)
 			return &Error{
-				Err:        fmt.Errorf("plugin %q exited with error", r.pluginName),
-				PluginName: r.pluginName,
-				Code:       status.ExitStatus(),
+				Err:  fmt.Errorf("plugin %q exited with error", r.pluginName),
+				Code: status.ExitStatus(),
 			}
 		}
 		return err
@@ -166,71 +167,6 @@ func (r *RuntimeSubprocess) invokeHook(event string) error {
 	return nil
 }
 
-func (r *RuntimeSubprocess) postrender(renderedManifests *bytes.Buffer, args []string, extraArgs []string, settings *cli.EnvSettings) (*bytes.Buffer, error) {
-	// Setup plugin environment
-	SetupPluginEnv(settings, r.pluginName, r.pluginDir)
-
-	// Prepare command with the provided args
-	originalExtraArgs := extraArgs
-	extraArgs = args
-	defer func() { extraArgs = originalExtraArgs }()
-
-	cmds := r.config.PlatformCommand
-	if len(cmds) == 0 && len(r.config.Command) > 0 {
-		cmds = []PlatformCommand{{Command: r.config.Command}}
-	}
-
-	main, argv, err := PrepareCommands(cmds, true, extraArgs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to prepare command: %w", err)
-	}
-
-	// Execute the postrender command
-	mainCmdExp := os.ExpandEnv(main)
-	cmd := exec.Command(mainCmdExp, argv...)
-
-	// Set up environment
-	env := os.Environ()
-	for k, v := range settings.EnvVars() {
-		env = append(env, fmt.Sprintf("%s=%s", k, v))
-	}
-	cmd.Env = env
-
-	// Set up stdin pipe
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return nil, err
-	}
-
-	var postRendered bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &postRendered
-	cmd.Stderr = &stderr
-
-	// Start the command
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-
-	// Write input to stdin
-	go func() {
-		defer stdin.Close()
-		io.Copy(stdin, renderedManifests)
-	}()
-
-	// Wait for command to complete
-	if err := cmd.Wait(); err != nil {
-		return nil, fmt.Errorf("error while running postrender %s. error output:\n%s: %w", r.pluginName, stderr.String(), err)
-	}
-
-	// Check for empty output
-	if len(bytes.TrimSpace(postRendered.Bytes())) == 0 {
-		return nil, fmt.Errorf("post-renderer %q produced empty output", r.pluginName)
-	}
-
-	return &postRendered, nil
-}
-
 func unmarshalRuntimeConfigSubprocess(runtimeData map[string]interface{}) (*RuntimeConfigSubprocess, error) {
 	data, err := yaml.Marshal(runtimeData)
 	if err != nil {
@@ -267,11 +203,11 @@ func executeCmd(prog *exec.Cmd, pluginName string) error {
 }
 
 func (r *RuntimeSubprocess) runCLI(input *Input) (*Output, error) {
-	if _, ok := input.Message.(schema.CLIInputV1); !ok {
-		return nil, fmt.Errorf("plugin %q input message does not implement CLIInputV1", r.pluginName)
+	if _, ok := input.Message.(schema.InputMessageCLIV1); !ok {
+		return nil, fmt.Errorf("plugin %q input message does not implement InputMessageCLIV1", r.pluginName)
 	}
 
-	extraArgs := input.Message.(schema.CLIInputV1).ExtraArgs
+	extraArgs := input.Message.(schema.InputMessageCLIV1).ExtraArgs
 
 	cmds := r.config.PlatformCommand
 	if len(cmds) == 0 && len(r.config.Command) > 0 {
@@ -283,43 +219,68 @@ func (r *RuntimeSubprocess) runCLI(input *Input) (*Output, error) {
 		return nil, fmt.Errorf("failed to prepare plugin command: %w", err)
 	}
 
-	// TODO can we use invokeWithEnv here?
-	//prog := exec.Command(
-	//	command,
-	//	args...)
-	////prog.Env = pluginExec.env
-	//prog.Stdin = input.Stdin
-	//prog.Stdout = input.Stdout
-	//prog.Stderr = input.Stderr
-	//if err := executeCmd(prog, r.pluginName); err != nil {
-	//	return nil, err
-	//}
-
 	err2 := r.invokeWithEnv(command, args, input.Env, input.Stdin, input.Stdout, input.Stderr)
 	if err2 != nil {
 		return nil, err2
 	}
 
 	return &Output{
-		Message: &schema.CLIOutputV1{},
+		Message: &schema.OutputMessageCLIV1{},
 	}, nil
 }
 
-// ExecDownloader executes a plugin downloader command with custom environment
-func ExecDownloader(base string, command string, argv []string, env []string) (*bytes.Buffer, error) {
-	prog := exec.Command(command, argv...)
-	prog.Env = env
+func (r *RuntimeSubprocess) runPostrender(input *Input) (*Output, error) {
+	if _, ok := input.Message.(schema.InputMessagePostRendererV1); !ok {
+		return nil, fmt.Errorf("plugin %q input message does not implement InputMessagePostRendererV1", r.pluginName)
+	}
 
-	buf := bytes.NewBuffer(nil)
-	prog.Stdout = buf
-	prog.Stderr = os.Stderr
+	msg := input.Message.(schema.InputMessagePostRendererV1)
+	extraArgs := msg.ExtraArgs
+	settings := msg.Settings
 
-	if err := prog.Run(); err != nil {
-		if eerr, ok := err.(*exec.ExitError); ok {
-			os.Stderr.Write(eerr.Stderr)
-			return nil, fmt.Errorf("plugin %q exited with error", command)
-		}
+	// Setup plugin environment
+	SetupPluginEnv(settings, r.pluginName, r.pluginDir)
+
+	cmds := r.config.PlatformCommand
+	if len(cmds) == 0 && len(r.config.Command) > 0 {
+		cmds = []PlatformCommand{{Command: r.config.Command}}
+	}
+
+	command, args, err := PrepareCommands(cmds, true, extraArgs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare plugin command: %w", err)
+	}
+
+	// TODO de-duplicate code here by calling RuntimeSubprocess.invokeWithEnv()
+	cmd := exec.Command(
+		command,
+		args...)
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
 		return nil, err
 	}
-	return buf, nil
+
+	go func() {
+		defer stdin.Close()
+		io.Copy(stdin, msg.Manifests)
+	}()
+
+	postRendered := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	//cmd.Env = pluginExec.env
+	cmd.Stdout = postRendered
+	cmd.Stderr = stderr
+
+	if err := executeCmd(cmd, r.pluginName); err != nil {
+		slog.Info("plugin execution failed", slog.String("stderr", stderr.String()))
+		return nil, err
+	}
+
+	return &Output{
+		Message: &schema.OutputMessagePostRendererV1{
+			Manifests: postRendered,
+		},
+	}, nil
 }

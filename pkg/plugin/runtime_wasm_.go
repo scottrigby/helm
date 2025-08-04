@@ -16,14 +16,11 @@ limitations under the License.
 package plugin
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
 
 	"sigs.k8s.io/yaml"
-
-	"helm.sh/helm/v4/pkg/cli"
 )
 
 // this filename underscore suffix is a workaround to Go treating files ending
@@ -104,10 +101,6 @@ func (r *RuntimeWasm) invokeWithEnv(main string, argv []string, env []string, st
 
 func (r *RuntimeWasm) invokeHook(event string) error {
 	return fmt.Errorf("WASM runtime not yet implemented")
-}
-
-func (r *RuntimeWasm) postrender(renderedManifests *bytes.Buffer, args []string, extraArgs []string, settings *cli.EnvSettings) (*bytes.Buffer, error) {
-	return nil, fmt.Errorf("WASM postrender not yet implemented")
 }
 
 func unmarshalRuntimeConfigWasm(runtimeData map[string]interface{}) (*RuntimeConfigWasm, error) {

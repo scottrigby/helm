@@ -16,13 +16,10 @@ limitations under the License.
 package plugin
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"regexp"
-
-	"helm.sh/helm/v4/pkg/cli"
 )
 
 // PluginV1 represents a V1 plugin
@@ -55,14 +52,6 @@ func (p *PluginV1) InvokeHook(event string) error {
 		return err
 	}
 	return r.invokeHook(event)
-}
-
-func (p *PluginV1) Postrender(renderedManifests *bytes.Buffer, args []string, extraArgs []string, settings *cli.EnvSettings) (*bytes.Buffer, error) {
-	r, err := p.Runtime()
-	if err != nil {
-		return nil, err
-	}
-	return r.postrender(renderedManifests, args, extraArgs, settings)
 }
 
 func (p *PluginV1) GetDir() string     { return p.Dir }

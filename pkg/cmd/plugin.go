@@ -16,8 +16,9 @@ limitations under the License.
 package cmd
 
 import (
-	"github.com/spf13/cobra"
 	"io"
+
+	"github.com/spf13/cobra"
 
 	"helm.sh/helm/v4/pkg/plugin"
 )

@@ -16,14 +16,11 @@ limitations under the License.
 package plugin
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"strings"
 	"unicode"
-
-	"helm.sh/helm/v4/pkg/cli"
 )
 
 // PluginLegacy represents a legacy plugin
@@ -63,14 +60,6 @@ func (p *PluginLegacy) InvokeHook(event string) error {
 		return err
 	}
 	return r.invokeHook(event)
-}
-
-func (p *PluginLegacy) Postrender(renderedManifests *bytes.Buffer, args []string, extraArgs []string, settings *cli.EnvSettings) (*bytes.Buffer, error) {
-	r, err := p.Runtime()
-	if err != nil {
-		return nil, err
-	}
-	return r.postrender(renderedManifests, args, extraArgs, settings)
 }
 
 // Validate validates a legacy plugin's metadata.

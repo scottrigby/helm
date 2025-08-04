@@ -15,11 +15,8 @@ limitations under the License.
 
 package plugin // import "helm.sh/helm/v4/pkg/plugin"
 import (
-	"bytes"
 	"context"
 	"io"
-
-	"helm.sh/helm/v4/pkg/cli"
 )
 
 const PluginFileName = "plugin.yaml"
@@ -41,7 +38,6 @@ type Plugin interface {
 	Invoke(ctx context.Context, input *Input) (*Output, error)
 	InvokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error
 	InvokeHook(event string) error
-	Postrender(renderedManifests *bytes.Buffer, args []string, extraArgs []string, settings *cli.EnvSettings) (*bytes.Buffer, error)
 }
 
 // Input defines the input message and parameters to be passed to the plugin

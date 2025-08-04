@@ -33,6 +33,8 @@ import (
 	"text/template"
 	"time"
 
+	"helm.sh/helm/v4/pkg/postrender"
+
 	"github.com/Masterminds/sprig/v3"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -48,7 +50,6 @@ import (
 	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/kube"
 	kubefake "helm.sh/helm/v4/pkg/kube/fake"
-	"helm.sh/helm/v4/pkg/plugin"
 	"helm.sh/helm/v4/pkg/registry"
 	releaseutil "helm.sh/helm/v4/pkg/release/util"
 	release "helm.sh/helm/v4/pkg/release/v1"
@@ -114,7 +115,7 @@ type Install struct {
 	UseReleaseName bool
 	// TakeOwnership will ignore the check for helm annotations and take ownership of the resources.
 	TakeOwnership bool
-	PostRenderer  plugin.PostRenderer
+	PostRenderer  postrender.PostRenderer
 	// Lock to control raceconditions when the process receives a SIGTERM
 	Lock sync.Mutex
 }

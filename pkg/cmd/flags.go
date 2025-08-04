@@ -19,15 +19,17 @@ package cmd
 import (
 	"flag"
 	"fmt"
+
 	"log"
 	"log/slog"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"helm.sh/helm/v4/pkg/postrender"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"k8s.io/klog/v2"
 
 	"helm.sh/helm/v4/pkg/action"
 	"helm.sh/helm/v4/pkg/cli"
@@ -35,8 +37,8 @@ import (
 	"helm.sh/helm/v4/pkg/cli/values"
 	"helm.sh/helm/v4/pkg/helmpath"
 	"helm.sh/helm/v4/pkg/kube"
-	"helm.sh/helm/v4/pkg/plugin"
 	"helm.sh/helm/v4/pkg/repo"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -165,14 +167,14 @@ func (o *outputValue) Set(s string) error {
 }
 
 // TODO there is probably a better way to pass cobra settings than as a param
-func bindPostRenderFlag(cmd *cobra.Command, varRef *plugin.PostRenderer, settings *cli.EnvSettings) {
+func bindPostRenderFlag(cmd *cobra.Command, varRef *postrender.PostRenderer, settings *cli.EnvSettings) {
 	p := &postRendererOptions{varRef, "", []string{}, settings}
 	cmd.Flags().Var(&postRendererString{p}, postRenderFlag, "the name of a postrender type plugin to be used for post rendering. If it exists, the plugin will be used")
 	cmd.Flags().Var(&postRendererArgsSlice{p}, postRenderArgsFlag, "an argument to the post-renderer (can specify multiple)")
 }
 
 type postRendererOptions struct {
-	renderer   *plugin.PostRenderer
+	renderer   *postrender.PostRenderer
 	pluginName string
 	args       []string
 	settings   *cli.EnvSettings
@@ -198,7 +200,7 @@ func (p *postRendererString) Set(val string) error {
 		return fmt.Errorf("cannot specify --post-renderer flag more than once")
 	}
 	p.options.pluginName = val
-	pr, err := plugin.NewPostRenderer(p.options.settings, p.options.pluginName, p.options.args...)
+	pr, err := postrender.NewPostRenderPlugin(p.options.settings, p.options.pluginName, p.options.args...)
 	if err != nil {
 		return err
 	}
@@ -227,7 +229,7 @@ func (p *postRendererArgsSlice) Set(val string) error {
 		return nil
 	}
 	// overwrite if already create PostRenderer by `post-renderer` flags
-	pr, err := plugin.NewPostRenderer(p.options.settings, p.options.pluginName, p.options.args...)
+	pr, err := postrender.NewPostRenderPlugin(p.options.settings, p.options.pluginName, p.options.args...)
 	if err != nil {
 		return err
 	}

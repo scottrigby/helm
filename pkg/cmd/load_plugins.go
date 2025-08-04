@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"helm.sh/helm/v4/pkg/plugin/schema"
 	"io"
 	"log"
 	"os"
@@ -27,6 +26,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"helm.sh/helm/v4/pkg/plugin/schema"
 
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
@@ -118,7 +119,7 @@ func loadCLIPlugins(baseCmd *cobra.Command, out io.Writer) {
 
 				// Invoke plugin
 				input := &plugin.Input{
-					Message: schema.CLIInputV1{
+					Message: schema.InputMessageCLIV1{
 						ExtraArgs: extraArgs,
 						Settings:  settings,
 					},
