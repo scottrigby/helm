@@ -22,15 +22,15 @@ import (
 	"regexp"
 )
 
-// PluginV1 represents a V1 plugin
-type PluginV1 struct {
+// V1 represents a V1 plugin
+type V1 struct {
 	// MetadataV1 is a parsed representation of a plugin.yaml
 	MetadataV1 *MetadataV1
 	// Dir is the string path to the directory that holds the plugin.
 	Dir string
 }
 
-func (p *PluginV1) Invoke(ctx context.Context, input *Input) (*Output, error) {
+func (p *V1) Invoke(ctx context.Context, input *Input) (*Output, error) {
 	r, err := p.Runtime()
 	if err != nil {
 		return nil, err
@@ -38,7 +38,7 @@ func (p *PluginV1) Invoke(ctx context.Context, input *Input) (*Output, error) {
 	return r.invoke(ctx, input)
 }
 
-func (p *PluginV1) InvokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {
+func (p *V1) InvokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	r, err := p.Runtime()
 	if err != nil {
 		return err
@@ -46,7 +46,7 @@ func (p *PluginV1) InvokeWithEnv(main string, argv []string, env []string, stdin
 	return r.invokeWithEnv(main, argv, env, stdin, stdout, stderr)
 }
 
-func (p *PluginV1) InvokeHook(event string) error {
+func (p *V1) InvokeHook(event string) error {
 	r, err := p.Runtime()
 	if err != nil {
 		return err
@@ -54,10 +54,10 @@ func (p *PluginV1) InvokeHook(event string) error {
 	return r.invokeHook(event)
 }
 
-func (p *PluginV1) GetDir() string     { return p.Dir }
-func (p *PluginV1) Metadata() Metadata { return p.MetadataV1 }
+func (p *V1) GetDir() string     { return p.Dir }
+func (p *V1) Metadata() Metadata { return p.MetadataV1 }
 
-func (p *PluginV1) Runtime() (Runtime, error) {
+func (p *V1) Runtime() (Runtime, error) {
 	if p.MetadataV1.RuntimeConfig == nil {
 		return nil, fmt.Errorf("plugin has no runtime configuration")
 	}
@@ -65,7 +65,7 @@ func (p *PluginV1) Runtime() (Runtime, error) {
 }
 
 // TODO move Metadata-specific validation to Metadata interface implementations
-func (p *PluginV1) Validate() error {
+func (p *V1) Validate() error {
 	if p.MetadataV1 == nil {
 		return fmt.Errorf("plugin metadata is missing")
 	}

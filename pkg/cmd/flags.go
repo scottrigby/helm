@@ -19,7 +19,6 @@ package cmd
 import (
 	"flag"
 	"fmt"
-
 	"log"
 	"log/slog"
 	"path/filepath"
@@ -31,6 +30,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	"k8s.io/klog/v2"
+
 	"helm.sh/helm/v4/pkg/action"
 	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/cli/output"
@@ -38,7 +39,6 @@ import (
 	"helm.sh/helm/v4/pkg/helmpath"
 	"helm.sh/helm/v4/pkg/kube"
 	"helm.sh/helm/v4/pkg/repo"
-	"k8s.io/klog/v2"
 )
 
 const (

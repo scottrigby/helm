@@ -37,7 +37,7 @@ import (
 
 // TODO: move pluginDynamicCompletionExecutable pkg/plugin/runtime_subprocess.go
 // any references to executables should be for [plugin.RuntimeSubprocess] only
-// this should also be for backwards compatibility in [plugin.PluginLegacy] only
+// this should also be for backwards compatibility in [plugin.Legacy] only
 //
 // TODO: for v1 make this configurable with a new CompletionCommand field for
 // [plugin.RuntimeConfigSubprocess]

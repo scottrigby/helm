@@ -23,23 +23,23 @@ import (
 	"unicode"
 )
 
-// PluginLegacy represents a legacy plugin
-type PluginLegacy struct {
+// Legacy represents a legacy plugin
+type Legacy struct {
 	// MetadataLegacy is a parsed representation of a plugin.yaml
 	MetadataLegacy *MetadataLegacy
 	// Dir is the string path to the directory that holds the plugin.
 	Dir string
 }
 
-func (p *PluginLegacy) GetDir() string     { return p.Dir }
-func (p *PluginLegacy) Metadata() Metadata { return p.MetadataLegacy }
+func (p *Legacy) GetDir() string     { return p.Dir }
+func (p *Legacy) Metadata() Metadata { return p.MetadataLegacy }
 
-func (p *PluginLegacy) Runtime() (Runtime, error) {
+func (p *Legacy) Runtime() (Runtime, error) {
 	runtimeConfig := p.Metadata().GetRuntimeConfig()
 	return runtimeConfig.CreateRuntime(p.Dir, p.Metadata().GetName(), p.Metadata().GetType())
 }
 
-func (p *PluginLegacy) Invoke(ctx context.Context, input *Input) (*Output, error) {
+func (p *Legacy) Invoke(ctx context.Context, input *Input) (*Output, error) {
 	r, err := p.Runtime()
 	if err != nil {
 		return nil, err
@@ -47,14 +47,14 @@ func (p *PluginLegacy) Invoke(ctx context.Context, input *Input) (*Output, error
 	return r.invoke(ctx, input)
 }
 
-func (p *PluginLegacy) InvokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {
+func (p *Legacy) InvokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	r, err := p.Runtime()
 	if err != nil {
 		return err
 	}
 	return r.invokeWithEnv(main, argv, env, stdin, stdout, stderr)
 }
-func (p *PluginLegacy) InvokeHook(event string) error {
+func (p *Legacy) InvokeHook(event string) error {
 	r, err := p.Runtime()
 	if err != nil {
 		return err
@@ -63,7 +63,7 @@ func (p *PluginLegacy) InvokeHook(event string) error {
 }
 
 // Validate validates a legacy plugin's metadata.
-func (p *PluginLegacy) Validate() error {
+func (p *Legacy) Validate() error {
 	if !validPluginName.MatchString(p.MetadataLegacy.Name) {
 		return fmt.Errorf("invalid plugin name")
 	}

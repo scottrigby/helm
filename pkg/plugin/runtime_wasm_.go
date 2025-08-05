@@ -95,11 +95,11 @@ func (r *RuntimeWasm) invoke(_ context.Context, _ *Input) (*Output, error) {
 	return nil, fmt.Errorf("WASM runtime not yet implemented")
 }
 
-func (r *RuntimeWasm) invokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {
+func (r *RuntimeWasm) invokeWithEnv(_ string, _ []string, _ []string, _ io.Reader, _, _ io.Writer) error {
 	return fmt.Errorf("WASM runtime not yet implemented")
 }
 
-func (r *RuntimeWasm) invokeHook(event string) error {
+func (r *RuntimeWasm) invokeHook(_ string) error {
 	return fmt.Errorf("WASM runtime not yet implemented")
 }
 

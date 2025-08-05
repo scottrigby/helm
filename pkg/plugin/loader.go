@@ -48,7 +48,7 @@ func LoadDir(dirname string) (Plugin, error) {
 	switch apiVersion {
 	case "v1":
 		// Load as V1 plugin with new structure
-		plug := &PluginV1{Dir: dirname}
+		plug := &V1{Dir: dirname}
 
 		// First, unmarshal the base metadata without the config and runtimeConfig fields
 		tempMeta := &struct {
@@ -157,7 +157,7 @@ func LoadDir(dirname string) (Plugin, error) {
 		return plug, plug.Validate()
 	case "legacy":
 		// Load as legacy plugin
-		plug := &PluginLegacy{Dir: dirname}
+		plug := &Legacy{Dir: dirname}
 		if err := yaml.UnmarshalStrict(data, &plug.MetadataLegacy); err != nil {
 			return nil, fmt.Errorf("failed to load legacy plugin at %q: %w", pluginfile, err)
 		}

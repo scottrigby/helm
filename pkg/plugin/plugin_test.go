@@ -33,7 +33,7 @@ func TestPrepareCommand(t *testing.T) {
 	cmdMain := "sh"
 	cmdArgs := []string{"-c", "echo \"test\""}
 
-	p := &PluginV1{
+	p := &V1{
 		Dir: "/tmp", // Unused
 		MetadataV1: &MetadataV1{
 			Name:       "test",
@@ -75,7 +75,7 @@ func TestPrepareCommandExtraArgs(t *testing.T) {
 	cmdArgs := []string{"-c", "echo \"test\""}
 	extraArgs := []string{"--debug", "--foo", "bar"}
 
-	p := &PluginV1{
+	p := &V1{
 		Dir: "/tmp", // Unused
 		MetadataV1: &MetadataV1{
 			Name:       "test",
@@ -125,7 +125,7 @@ func TestPrepareCommandExtraArgsIgnored(t *testing.T) {
 	cmdArgs := []string{"-c", "echo \"test\""}
 	extraArgs := []string{"--debug", "--foo", "bar"}
 
-	p := &PluginV1{
+	p := &V1{
 		Dir: "/tmp", // Unused
 		MetadataV1: &MetadataV1{
 			Name:       "test",
@@ -582,7 +582,7 @@ func TestSetupEnvWithSpace(t *testing.T) {
 
 func TestValidatePluginData(t *testing.T) {
 	// A mock plugin missing any metadata.
-	mockMissingMeta := &PluginV1{
+	mockMissingMeta := &V1{
 		Dir: "no-such-dir",
 	}
 
@@ -631,7 +631,7 @@ func TestValidatePluginData(t *testing.T) {
 
 	for i, item := range []struct {
 		pass bool
-		plug *PluginV1
+		plug *V1
 	}{
 		{true, mockPlugin("abcdefghijklmnopqrstuvwxyz0123456789_-ABC")},
 		{true, mockPlugin("foo-bar-FOO-BAR_1234")},
@@ -668,8 +668,8 @@ func TestDetectDuplicates(t *testing.T) {
 	}
 }
 
-func mockPlugin(name string) *PluginV1 {
-	return &PluginV1{
+func mockPlugin(name string) *V1 {
+	return &V1{
 		MetadataV1: &MetadataV1{
 			Name:       name,
 			Version:    "v0.1.2",

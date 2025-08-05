@@ -25,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"helm.sh/helm/v4/pkg/plugin"
 	"helm.sh/helm/v4/pkg/plugin/schema"
 
@@ -122,12 +123,12 @@ func (t *TestPlugin) Metadata() plugin.Metadata {
 	}
 }
 
-func (t *TestPlugin) InvokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {
+func (t *TestPlugin) InvokeWithEnv(_ string, _ []string, _ []string, _ io.Reader, _, _ io.Writer) error {
 	//TODO implement me
 	return nil
 }
 
-func (t *TestPlugin) InvokeHook(event string) error {
+func (t *TestPlugin) InvokeHook(_ string) error {
 	// TODO implement me
 	return nil
 }
