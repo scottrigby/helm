@@ -19,6 +19,6 @@ package plugin
 type PluginDescriptor struct {
 	// Name is the name of the plugin
 	Name string
-	// Type is the type of the plugin (cli, download, postrender)
+	// Type is the type of the plugin (cli, getter, postrenderer)
 	Type string
 }

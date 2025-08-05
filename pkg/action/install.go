@@ -33,7 +33,7 @@ import (
 	"text/template"
 	"time"
 
-	"helm.sh/helm/v4/pkg/postrender"
+	"helm.sh/helm/v4/pkg/postrenderer"
 
 	"github.com/Masterminds/sprig/v3"
 	v1 "k8s.io/api/core/v1"
@@ -115,7 +115,7 @@ type Install struct {
 	UseReleaseName bool
 	// TakeOwnership will ignore the check for helm annotations and take ownership of the resources.
 	TakeOwnership bool
-	PostRenderer  postrender.PostRenderer
+	PostRenderer  postrenderer.PostRenderer
 	// Lock to control raceconditions when the process receives a SIGTERM
 	Lock sync.Mutex
 }
@@ -232,7 +232,7 @@ func (i *Install) Run(chrt *chart.Chart, vals map[string]interface{}) (*release.
 	return i.RunWithContext(ctx, chrt, vals)
 }
 
-// Run executes the installation with Context
+// RunWithContext executes the installation with Context
 //
 // When the task is cancelled through ctx, the function returns and the install
 // proceeds in the background.

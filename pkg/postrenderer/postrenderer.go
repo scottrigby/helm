@@ -14,14 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package postrender
+package postrenderer
 
 import (
 	"bytes"
 	"context"
 	"fmt"
-	"helm.sh/helm/v4/pkg/plugin/schema"
 	"path/filepath"
+
+	"helm.sh/helm/v4/pkg/plugin/schema"
 
 	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/plugin"
@@ -36,11 +37,11 @@ type PostRenderer interface {
 	Run(renderedManifests *bytes.Buffer) (modifiedManifests *bytes.Buffer, err error)
 }
 
-// NewPostRenderPlugin creates a PostRenderer that uses the plugin's Runtime
-func NewPostRenderPlugin(settings *cli.EnvSettings, pluginName string, args ...string) (PostRenderer, error) {
+// NewPostRendererPlugin creates a PostRenderer that uses the plugin's Runtime
+func NewPostRendererPlugin(settings *cli.EnvSettings, pluginName string, args ...string) (PostRenderer, error) {
 	descriptor := plugin.PluginDescriptor{
 		Name: pluginName,
-		Type: "postrender/v1",
+		Type: "postrenderer/v1",
 	}
 	p, err := plugin.FindPlugin(filepath.SplitList(settings.PluginsDirectory), descriptor)
 	if err != nil {

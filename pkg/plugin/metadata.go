@@ -114,7 +114,7 @@ type MetadataV1 struct {
 	// Name is the name of the plugin
 	Name string `json:"name"`
 
-	// Type of plugin (eg, cli, download, postrender)
+	// Type of plugin (eg, cli, getter, postrenderer)
 	Type string `json:"type"`
 
 	// Runtime specifies the runtime type (subprocess, wasm)

@@ -94,8 +94,8 @@ func LoadDir(dirname string) (Plugin, error) {
 				config, err = unmarshalConfigCLI(configData)
 			case "getter/v1":
 				config, err = unmarshalConfigGetter(configData)
-			case "postrender/v1":
-				config, err = unmarshalConfigPostrender(configData)
+			case "postrenderer/v1":
+				config, err = unmarshalConfigPostrenderer(configData)
 			default:
 				return nil, fmt.Errorf("unsupported plugin type: %s", tempMeta.Type)
 			}
@@ -113,8 +113,8 @@ func LoadDir(dirname string) (Plugin, error) {
 				config = &ConfigCLI{}
 			case "getter/v1":
 				config = &ConfigGetter{}
-			case "postrender/v1":
-				config = &ConfigPostrender{}
+			case "postrenderer/v1":
+				config = &ConfigPostrenderer{}
 			default:
 				return nil, fmt.Errorf("unsupported plugin type: %s", tempMeta.Type)
 			}

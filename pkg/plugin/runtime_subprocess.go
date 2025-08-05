@@ -93,14 +93,13 @@ func (r *RuntimeConfigSubprocess) CreateRuntime(pluginDir string, pluginName str
 }
 
 func (r *RuntimeSubprocess) invoke(_ context.Context, input *Input) (*Output, error) {
-	// TODO add postrender message schema and case here
 	switch input.Message.(type) {
 	case schema.InputMessageCLIV1:
 		return r.runCLI(input)
 	case schema.InputMessageGetterV1:
 		return r.runGetter(input)
 	case schema.InputMessagePostRendererV1:
-		return r.runPostrender(input)
+		return r.runPostrenderer(input)
 	default:
 		return nil, fmt.Errorf("unsupported subprocess plugin type %q", r.pluginType)
 	}
@@ -229,7 +228,7 @@ func (r *RuntimeSubprocess) runCLI(input *Input) (*Output, error) {
 	}, nil
 }
 
-func (r *RuntimeSubprocess) runPostrender(input *Input) (*Output, error) {
+func (r *RuntimeSubprocess) runPostrenderer(input *Input) (*Output, error) {
 	if _, ok := input.Message.(schema.InputMessagePostRendererV1); !ok {
 		return nil, fmt.Errorf("plugin %q input message does not implement InputMessagePostRendererV1", r.pluginName)
 	}

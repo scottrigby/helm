@@ -132,11 +132,6 @@ func (t *TestPlugin) InvokeHook(event string) error {
 	return nil
 }
 
-func (t *TestPlugin) Postrender(renderedManifests *bytes.Buffer, args []string, extraArgs []string, settings *cli.EnvSettings) (*bytes.Buffer, error) {
-	// TODO implement me
-	return renderedManifests, nil
-}
-
 func (t *TestPlugin) Invoke(_ context.Context, _ *plugin.Input) (*plugin.Output, error) {
 	// Simulate a plugin invocation
 	output := &plugin.Output{

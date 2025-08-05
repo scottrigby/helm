@@ -399,18 +399,18 @@ func TestGetter(t *testing.T) {
 }
 
 func TestPostRenderer(t *testing.T) {
-	dirname := "testdata/plugdir/good/postrender"
+	dirname := "testdata/plugdir/good/postrenderer"
 	plug, err := LoadDir(dirname)
 	assert.NoError(t, err)
 
 	expect := &MetadataV1{
-		Name:       "postrender",
+		Name:       "postrenderer",
 		Version:    "1.2.3",
-		Type:       "postrender/v1",
+		Type:       "postrenderer/v1",
 		APIVersion: "v1",
 		Runtime:    "subprocess",
-		Config: &ConfigPostrender{
-			PostrenderArgs: []string{},
+		Config: &ConfigPostrenderer{
+			PostrendererArgs: []string{},
 		},
 		RuntimeConfig: &RuntimeConfigSubprocess{
 			PlatformCommand: []PlatformCommand{
@@ -433,11 +433,11 @@ func TestPostRenderer(t *testing.T) {
 //	is := assert.New(t)
 //	s := cli.New()
 //	s.PluginsDirectory = "testdata/plugdir/good"
-//	name := "postrender"
+//	name := "postrenderer"
 //	base := filepath.Join(s.PluginsDirectory, name)
 //	SetupPluginEnv(s, name, base)
 //
-//	renderer, err := postrender.NewPostRenderPlugin(s, name, "")
+//	renderer, err := postrenderer.NewPostRendererPlugin(s, name, "")
 //	require.NoError(t, err)
 //
 //	_, err = renderer.Run(bytes.NewBufferString(""))
@@ -452,11 +452,11 @@ func TestPostRenderer(t *testing.T) {
 //	is := assert.New(t)
 //	s := cli.New()
 //	s.PluginsDirectory = "testdata/plugdir/good"
-//	name := "postrender"
+//	name := "postrenderer"
 //	base := filepath.Join(s.PluginsDirectory, name)
 //	SetupPluginEnv(s, name, base)
 //
-//	renderer, err := postrender.NewPostRenderPlugin(s, name, "ARG1")
+//	renderer, err := postrenderer.NewPostRendererPlugin(s, name, "ARG1")
 //	require.NoError(t, err)
 //
 //	output, err := renderer.Run(bytes.NewBufferString("FOOTEST"))
@@ -472,11 +472,11 @@ func TestPostRenderer(t *testing.T) {
 //	is := assert.New(t)
 //	s := cli.New()
 //	s.PluginsDirectory = "testdata/plugdir/good"
-//	name := "postrender"
+//	name := "postrenderer"
 //	base := filepath.Join(s.PluginsDirectory, name)
 //	SetupPluginEnv(s, name, base)
 //
-//	renderer, err := postrender.NewPostRenderPlugin(s, name, "ARG1", "ARG2")
+//	renderer, err := postrenderer.NewPostRendererPlugin(s, name, "ARG1", "ARG2")
 //	require.NoError(t, err)
 //
 //	output, err := renderer.Run(bytes.NewBufferString("FOOTEST"))
@@ -500,7 +500,7 @@ func TestLoadAll(t *testing.T) {
 	assert.Equal(t, "echo", plugs[0].Metadata().GetName())
 	assert.Equal(t, "getter", plugs[1].Metadata().GetName())
 	assert.Equal(t, "hello", plugs[2].Metadata().GetName())
-	assert.Equal(t, "postrender", plugs[3].Metadata().GetName())
+	assert.Equal(t, "postrenderer", plugs[3].Metadata().GetName())
 }
 
 func TestFindPlugins(t *testing.T) {

@@ -47,16 +47,16 @@ type ConfigGetter struct {
 	Protocols []string `json:"protocols"`
 }
 
-// ConfigPostrender represents the configuration for postrender plugins
-type ConfigPostrender struct {
-	// PostrenderArgs are arguments passed to the postrender command
+// ConfigPostrenderer represents the configuration for postrenderer plugins
+type ConfigPostrenderer struct {
+	// PostrendererArgs are arguments passed to the post-renderer plugin
 	// TODO: remove this field. it is not needed as args are passed from CLI to the plugin
-	PostrenderArgs []string `json:"postrenderArgs"`
+	PostrendererArgs []string `json:"postrendererArgs"`
 }
 
-func (c *ConfigCLI) Type() string        { return "cli/v1" }
-func (c *ConfigGetter) Type() string     { return "getter/v1" }
-func (c *ConfigPostrender) Type() string { return "postrender/v1" }
+func (c *ConfigCLI) Type() string          { return "cli/v1" }
+func (c *ConfigGetter) Type() string       { return "getter/v1" }
+func (c *ConfigPostrenderer) Type() string { return "postrenderer/v1" }
 
 func (c *ConfigCLI) Validate() error {
 	// Config validation for CLI plugins
@@ -75,8 +75,8 @@ func (c *ConfigGetter) Validate() error {
 	return nil
 }
 
-func (c *ConfigPostrender) Validate() error {
-	// Config validation for postrender plugins
+func (c *ConfigPostrenderer) Validate() error {
+	// Config validation for postrenderer plugins
 	return nil
 }
 
@@ -108,13 +108,13 @@ func unmarshalConfigGetter(configData map[string]interface{}) (*ConfigGetter, er
 	return &config, nil
 }
 
-func unmarshalConfigPostrender(configData map[string]interface{}) (*ConfigPostrender, error) {
+func unmarshalConfigPostrenderer(configData map[string]interface{}) (*ConfigPostrenderer, error) {
 	data, err := yaml.Marshal(configData)
 	if err != nil {
 		return nil, err
 	}
 
-	var config ConfigPostrender
+	var config ConfigPostrenderer
 	if err := yaml.UnmarshalStrict(data, &config); err != nil {
 		return nil, err
 	}
