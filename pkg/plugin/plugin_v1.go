@@ -95,13 +95,13 @@ func (p *PluginV1) Validate() error {
 	}
 
 	// Validate that config type matches plugin type
-	if p.MetadataV1.Config.Type() != p.MetadataV1.Type {
-		return fmt.Errorf("config type %s does not match plugin type %s", p.MetadataV1.Config.Type(), p.MetadataV1.Type)
+	if p.MetadataV1.Config.GetType() != p.MetadataV1.Type {
+		return fmt.Errorf("config type %s does not match plugin type %s", p.MetadataV1.Config.GetType(), p.MetadataV1.Type)
 	}
 
 	// Validate that runtime config type matches runtime type
-	if p.MetadataV1.RuntimeConfig.Type() != p.MetadataV1.Runtime {
-		return fmt.Errorf("runtime config type %s does not match runtime %s", p.MetadataV1.RuntimeConfig.Type(), p.MetadataV1.Runtime)
+	if p.MetadataV1.RuntimeConfig.GetType() != p.MetadataV1.Runtime {
+		return fmt.Errorf("runtime config type %s does not match runtime %s", p.MetadataV1.RuntimeConfig.GetType(), p.MetadataV1.Runtime)
 	}
 
 	// Validate the config itself

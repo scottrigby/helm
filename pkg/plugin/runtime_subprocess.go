@@ -62,7 +62,7 @@ type RuntimeConfigSubprocess struct {
 	UseTunnel bool `json:"useTunnel"`
 }
 
-func (r *RuntimeConfigSubprocess) Type() string { return "subprocess" }
+func (r *RuntimeConfigSubprocess) GetType() string { return "subprocess" }
 
 func (r *RuntimeConfigSubprocess) Validate() error {
 	if len(r.PlatformCommand) > 0 && len(r.Command) > 0 {

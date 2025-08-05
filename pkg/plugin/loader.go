@@ -195,7 +195,6 @@ func LoadAll(basedir string) ([]Plugin, error) {
 	return plugins, detectDuplicates(plugins)
 }
 
-// FindPlugins returns a list of YAML files that describe plugins.
 // findFunc is a function that finds plugins in a directory
 type findFunc func(pluginsDir string) ([]Plugin, error)
 
@@ -203,7 +202,7 @@ type findFunc func(pluginsDir string) ([]Plugin, error)
 type filterFunc func(Plugin) bool
 
 // FindPlugins returns a list of plugins that match the descriptor
-func FindPlugins(pluginsDirs []string, descriptor PluginDescriptor) ([]Plugin, error) {
+func FindPlugins(pluginsDirs []string, descriptor Descriptor) ([]Plugin, error) {
 	return findPlugins(pluginsDirs, LoadAll, makeDescriptorFilter(descriptor))
 }
 
@@ -230,7 +229,7 @@ func findPlugins(pluginsDirs []string, findFunc findFunc, filterFunc filterFunc)
 
 // makeDescriptorFilter creates a filter function from a descriptor
 // Additional plugin filter criteria we wish to support can be added here
-func makeDescriptorFilter(descriptor PluginDescriptor) filterFunc {
+func makeDescriptorFilter(descriptor Descriptor) filterFunc {
 	return func(p Plugin) bool {
 		// If name is specified, it must match
 		if descriptor.Name != "" && p.Metadata().GetName() != descriptor.Name {
@@ -246,7 +245,7 @@ func makeDescriptorFilter(descriptor PluginDescriptor) filterFunc {
 }
 
 // FindPlugin returns a single plugin that matches the descriptor
-func FindPlugin(dirs []string, descriptor PluginDescriptor) (Plugin, error) {
+func FindPlugin(dirs []string, descriptor Descriptor) (Plugin, error) {
 	plugins, err := FindPlugins(dirs, descriptor)
 	if err != nil {
 		return nil, err

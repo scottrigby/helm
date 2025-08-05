@@ -47,7 +47,7 @@ type WasmMemorySettings struct {
 	MaxPages     int `json:"maxPages"`
 }
 
-func (r *RuntimeConfigWasm) Type() string { return "wasm" }
+func (r *RuntimeConfigWasm) GetType() string { return "wasm" }
 
 func (r *RuntimeConfigWasm) Validate() error {
 	if r.WasmModule == "" {

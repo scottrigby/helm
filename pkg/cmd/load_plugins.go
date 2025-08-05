@@ -63,7 +63,7 @@ func loadCLIPlugins(baseCmd *cobra.Command, out io.Writer) {
 	}
 
 	dirs := filepath.SplitList(settings.PluginsDirectory)
-	descriptor := plugin.PluginDescriptor{
+	descriptor := plugin.Descriptor{
 		Type: "cli/v1",
 	}
 	found, err := plugin.FindPlugins(dirs, descriptor)

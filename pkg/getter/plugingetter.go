@@ -30,7 +30,7 @@ import (
 // collectGetterPlugins scans for getter plugins.
 // This will load plugins according to the cli.
 func collectGetterPlugins(settings *cli.EnvSettings) (Providers, error) {
-	d := plugin.PluginDescriptor{
+	d := plugin.Descriptor{
 		Type: "getter/v1",
 	}
 	plgs, err := plugin.FindPlugins([]string{settings.PluginsDirectory}, d)

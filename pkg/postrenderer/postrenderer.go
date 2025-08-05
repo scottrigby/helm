@@ -39,7 +39,7 @@ type PostRenderer interface {
 
 // NewPostRendererPlugin creates a PostRenderer that uses the plugin's Runtime
 func NewPostRendererPlugin(settings *cli.EnvSettings, pluginName string, args ...string) (PostRenderer, error) {
-	descriptor := plugin.PluginDescriptor{
+	descriptor := plugin.Descriptor{
 		Name: pluginName,
 		Type: "postrenderer/v1",
 	}
