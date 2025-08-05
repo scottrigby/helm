@@ -225,9 +225,7 @@ func TestLoadPluginsWithSpace(t *testing.T) {
 					t.Errorf("Error running %s: %+v", tt.use, err)
 				}
 			}
-			if out.String() != tt.expect {
-				t.Errorf("Expected %s to output:\n%s\ngot\n%s", tt.use, tt.expect, out.String())
-			}
+			assert.Equal(t, tt.expect, out.String(), "expected output for %s", tt.use)
 		}
 	}
 }
@@ -247,7 +245,6 @@ func TestLoadCLIPluginsForCompletion(t *testing.T) {
 	cmd := &cobra.Command{
 		Use: "completion",
 	}
-
 	loadCLIPlugins(cmd, &out)
 
 	tests := []staticCompletionDetails{
@@ -273,7 +270,6 @@ func TestLoadCLIPluginsForCompletion(t *testing.T) {
 
 func checkCommand(t *testing.T, plugins []*cobra.Command, tests []staticCompletionDetails) {
 	t.Helper()
-
 	require.Len(t, plugins, len(tests), "Expected commands %v, got %v", tests, plugins)
 
 	is := assert.New(t)
@@ -285,10 +281,6 @@ func checkCommand(t *testing.T, plugins []*cobra.Command, tests []staticCompleti
 		targs := tt.validArgs
 		pargs := pp.ValidArgs
 		is.ElementsMatch(targs, pargs)
-
-		if len(targs) != len(pargs) {
-			t.Fatalf("%s: expected args %v, got %v", pp.Name(), targs, pargs)
-		}
 
 		tflags := tt.flags
 		var pflags []string

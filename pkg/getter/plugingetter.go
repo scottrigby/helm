@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 
+	"net/url"
+
 	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/plugin"
 	"helm.sh/helm/v4/pkg/plugin/schema"
@@ -28,16 +30,13 @@ import (
 // collectGetterPlugins scans for getter plugins.
 // This will load plugins according to the cli.
 func collectGetterPlugins(settings *cli.EnvSettings) (Providers, error) {
-
 	d := plugin.Descriptor{
 		Type: "getter/v1",
 	}
-
 	plgs, err := plugin.FindPlugins([]string{settings.PluginsDirectory}, d)
 	if err != nil {
 		return nil, err
 	}
-
 	pluginConstructorBuilder := func(plg plugin.Plugin) Constructor {
 		return func(option ...Option) (Getter, error) {
 
@@ -47,17 +46,14 @@ func collectGetterPlugins(settings *cli.EnvSettings) (Providers, error) {
 			}, nil
 		}
 	}
-
 	results := make([]Provider, 0, len(plgs))
-
 	for _, plg := range plgs {
-
-		config := (plg.Metadata().Config).(*plugin.ConfigGetter)
-
-		results = append(results, Provider{
-			Schemes: config.Protocols,
-			New:     pluginConstructorBuilder(plg),
-		})
+		if c, ok := plg.Metadata().GetConfig().(*plugin.ConfigGetter); ok {
+			results = append(results, Provider{
+				Schemes: c.Protocols,
+				New:     pluginConstructorBuilder(plg),
+			})
+		}
 	}
 	return results, nil
 }
@@ -97,23 +93,31 @@ type getterPlugin struct {
 }
 
 func (g *getterPlugin) Get(href string, options ...Option) (*bytes.Buffer, error) {
-
 	opts := convertOptions(g.options, options)
+
+	// TODO optimization: pass this along to Get() instead of re-parsing here
+	u, err := url.Parse(href)
+	if err != nil {
+		return nil, err
+	}
 
 	input := &plugin.Input{
 		Message: schema.InputMessageGetterV1{
-			Href:    href,
-			Options: opts,
+			Href:     href,
+			Options:  opts,
+			Protocol: u.Scheme,
 		},
+		// TODO should we pass Stdin, Stdout, and Stderr through Input here to getter plugins?
+		//Stdout: os.Stdout,
 	}
 	output, err := g.plg.Invoke(context.Background(), input)
 	if err != nil {
 		return nil, fmt.Errorf("plugin %q failed to invoke: %w", g.plg, err)
 	}
 
-	outputMessage, ok := output.Message.(schema.GetterOutputV1)
+	outputMessage, ok := output.Message.(*schema.OutputMessageGetterV1)
 	if !ok {
-		return nil, fmt.Errorf("invalid output message type from plugin %q", g.plg.Metadata().Name)
+		return nil, fmt.Errorf("invalid output message type from plugin %q", g.plg.Metadata().GetName())
 	}
 
 	return outputMessage.Data, nil

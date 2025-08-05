@@ -7,4 +7,7 @@ config:
   protocols:
     - "test2"
 runtimeConfig:
-  command: "$HELM_PLUGIN_DIR/get.sh"
+  protocolCommands:
+    - command: "echo"
+      protocols:
+        - "test2"

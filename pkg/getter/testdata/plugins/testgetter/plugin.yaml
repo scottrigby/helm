@@ -1,11 +1,13 @@
----
-apiVersion: v1
 name: "testgetter"
 version: "0.1.0"
 type: getter/v1
+apiVersion: v1
 runtime: subprocess
 config:
   protocols:
-  - "test"
+    - "test"
 runtimeConfig:
-  command: "$HELM_PLUGIN_DIR/get.sh"
+  protocolCommands:
+    - command: "echo"
+      protocols:
+        - "test"

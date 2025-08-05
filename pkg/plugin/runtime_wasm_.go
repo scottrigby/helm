@@ -16,13 +16,11 @@ limitations under the License.
 package plugin
 
 import (
-	"bytes"
 	"context"
 	"fmt"
+	"io"
 
 	"sigs.k8s.io/yaml"
-
-	"helm.sh/helm/v4/pkg/cli"
 )
 
 // this filename underscore suffix is a workaround to Go treating files ending
@@ -49,10 +47,8 @@ type WasmMemorySettings struct {
 	MaxPages     int `json:"maxPages"`
 }
 
-// GetRuntimeType implementation for RuntimeConfig
-func (r *RuntimeConfigWasm) GetRuntimeType() string { return "wasm" }
+func (r *RuntimeConfigWasm) GetType() string { return "wasm" }
 
-// Validate implementation for RuntimeConfig
 func (r *RuntimeConfigWasm) Validate() error {
 	if r.WasmModule == "" {
 		return fmt.Errorf("wasmModule is required for WASM runtime")
@@ -71,30 +67,23 @@ func (r *RuntimeConfigWasm) Validate() error {
 
 // RuntimeWasm implements the Runtime interface for WASM execution
 type RuntimeWasm struct {
-	config   *RuntimeConfigWasm
-	plugin   *PluginV1
-	settings *cli.EnvSettings
+	config     *RuntimeConfigWasm
+	pluginDir  string
+	pluginName string
+	pluginType string
 }
 
-// CreateRuntime implementation for RuntimeConfig
-func (r *RuntimeConfigWasm) CreateRuntime(p *PluginV1) (Runtime, error) {
+func (r *RuntimeConfigWasm) CreateRuntime(pluginDir string, pluginName string, pluginType string) (Runtime, error) {
 	return &RuntimeWasm{
-		config:   r,
-		plugin:   p,
-		settings: cli.New(),
+		config:     r,
+		pluginDir:  pluginDir,
+		pluginName: pluginName,
+		pluginType: pluginType,
 	}, nil
 }
 
-func (r *RuntimeWasm) Metadata() MetadataV1 {
-	return r.plugin.Metadata
-}
-
-func (r *RuntimeWasm) Dir() string {
-	return r.plugin.Dir
-}
-
 // Invoke implementation for Runtime
-func (r *RuntimeWasm) Invoke(_ context.Context, _ *Input) (*Output, error) {
+func (r *RuntimeWasm) invoke(_ context.Context, _ *Input) (*Output, error) {
 	// TODO: Implement WASM runtime execution
 	// This will include:
 	// - Loading the WASM module from r.config.WasmModule
@@ -106,17 +95,14 @@ func (r *RuntimeWasm) Invoke(_ context.Context, _ *Input) (*Output, error) {
 	return nil, fmt.Errorf("WASM runtime not yet implemented")
 }
 
-// InvokeHook implementation for RuntimeWasm (not yet implemented)
-func (r *RuntimeWasm) InvokeHook(_ string) error {
+func (r *RuntimeWasm) invokeWithEnv(_ string, _ []string, _ []string, _ io.Reader, _, _ io.Writer) error {
 	return fmt.Errorf("WASM runtime not yet implemented")
 }
 
-// Postrender implementation for RuntimeWasm
-func (r *RuntimeWasm) Postrender(_ *bytes.Buffer, _ []string) (*bytes.Buffer, error) {
-	return nil, fmt.Errorf("WASM postrender not yet implemented")
+func (r *RuntimeWasm) invokeHook(_ string) error {
+	return fmt.Errorf("WASM runtime not yet implemented")
 }
 
-// unmarshalRuntimeConfigWasm unmarshals a runtime config map into a RuntimeConfigWasm struct
 func unmarshalRuntimeConfigWasm(runtimeData map[string]interface{}) (*RuntimeConfigWasm, error) {
 	data, err := yaml.Marshal(runtimeData)
 	if err != nil {

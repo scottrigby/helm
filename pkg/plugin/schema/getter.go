@@ -43,12 +43,6 @@ type InputMessageGetterV1 struct {
 	Options  GetterOptionsV1 `json:"options"`
 }
 
-type GetterOutputV1 struct {
+type OutputMessageGetterV1 struct {
 	Data *bytes.Buffer `json:"data"`
-}
-
-type CLIInputV1 struct {
-}
-
-type CLIOutputV1 struct {
 }

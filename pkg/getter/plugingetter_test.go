@@ -18,15 +18,18 @@ package getter
 import (
 	"bytes"
 	"context"
+
+	"io"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/plugin"
 	"helm.sh/helm/v4/pkg/plugin/schema"
+
+	"helm.sh/helm/v4/pkg/cli"
 )
 
 func TestCollectPlugins(t *testing.T) {
@@ -99,27 +102,41 @@ type TestPlugin struct {
 	dir string
 }
 
-func (t *TestPlugin) Metadata() plugin.MetadataV1 {
-	return plugin.MetadataV1{
+func (t *TestPlugin) GetDir() string {
+	return t.dir
+}
+
+func (t *TestPlugin) Metadata() plugin.Metadata {
+	return &plugin.MetadataV1{
 		Name:       "fake-plugin",
 		Type:       "cli/v1",
 		APIVersion: "v1",
 		Runtime:    "subprocess",
 		Config:     &plugin.ConfigGetter{},
 		RuntimeConfig: &plugin.RuntimeConfigSubprocess{
-			Command: "echo fake-plugin",
+			PlatformCommand: []plugin.PlatformCommand{
+				{
+					Command: "echo fake-plugin",
+				},
+			},
 		},
 	}
 }
 
-func (t *TestPlugin) Dir() string {
-	return t.dir
+func (t *TestPlugin) InvokeWithEnv(_ string, _ []string, _ []string, _ io.Reader, _, _ io.Writer) error {
+	//TODO implement me
+	return nil
+}
+
+func (t *TestPlugin) InvokeHook(_ string) error {
+	// TODO implement me
+	return nil
 }
 
 func (t *TestPlugin) Invoke(_ context.Context, _ *plugin.Input) (*plugin.Output, error) {
 	// Simulate a plugin invocation
 	output := &plugin.Output{
-		Message: schema.GetterOutputV1{
+		Message: &schema.OutputMessageGetterV1{
 			Data: bytes.NewBuffer([]byte("fake-plugin output")),
 		},
 	}
@@ -129,7 +146,6 @@ func (t *TestPlugin) Invoke(_ context.Context, _ *plugin.Input) (*plugin.Output,
 var _ plugin.Plugin = (*TestPlugin)(nil)
 
 func TestGetterPlugin(t *testing.T) {
-
 	gp := getterPlugin{
 		options: []Option{},
 		plg:     &TestPlugin{t: t, dir: "fake/dir"},

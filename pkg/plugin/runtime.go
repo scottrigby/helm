@@ -16,24 +16,20 @@ limitations under the License.
 package plugin
 
 import (
-	"bytes"
 	"context"
+	"io"
 )
 
 // Runtime interface defines the methods that all plugin runtimes must implement
 type Runtime interface {
-	Invoke(ctx context.Context, input *Input) (*Output, error)
-	InvokeHook(event string) error
-	// Postrender executes the plugin as a post-renderer with rendered manifests
-	// This method should only be called when the plugin type is "postrender"
-	Postrender(renderedManifests *bytes.Buffer, args []string) (*bytes.Buffer, error)
-	Metadata() MetadataV1
-	Dir() string
+	invoke(ctx context.Context, input *Input) (*Output, error)
+	invokeHook(event string) error
+	invokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error
 }
 
 // RuntimeConfig interface defines the methods that all runtime configurations must implement
 type RuntimeConfig interface {
-	GetRuntimeType() string
+	GetType() string
 	Validate() error
-	CreateRuntime(*PluginV1) (Runtime, error)
+	CreateRuntime(pluginDir string, pluginName string, pluginType string) (Runtime, error)
 }

@@ -28,7 +28,170 @@ import (
 	"helm.sh/helm/v4/pkg/cli"
 )
 
+// TODO add tests for both legacy and v1 plugins
+func TestPrepareCommand(t *testing.T) {
+	cmdMain := "sh"
+	cmdArgs := []string{"-c", "echo \"test\""}
+
+	p := &V1{
+		Dir: "/tmp", // Unused
+		MetadataV1: &MetadataV1{
+			Name:       "test",
+			Type:       "cli/v1",
+			APIVersion: "v1",
+			Runtime:    "subprocess",
+			Config: &ConfigCLI{
+				IgnoreFlags: false,
+			},
+			RuntimeConfig: &RuntimeConfigSubprocess{
+				Command: "echo \"error\"",
+				PlatformCommand: []PlatformCommand{
+					{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+					{OperatingSystem: runtime.GOOS, Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+					{OperatingSystem: runtime.GOOS, Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+					{OperatingSystem: runtime.GOOS, Architecture: runtime.GOARCH, Command: cmdMain, Args: cmdArgs},
+				},
+			},
+		},
+	}
+
+	if subprocessConfig, ok := p.MetadataV1.RuntimeConfig.(*RuntimeConfigSubprocess); ok {
+		cmds := subprocessConfig.PlatformCommand
+		cmd, args, err := PrepareCommands(cmds, true, []string{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cmd != cmdMain {
+			t.Fatalf("Expected %q, got %q", cmdMain, cmd)
+		}
+		if !reflect.DeepEqual(args, cmdArgs) {
+			t.Fatalf("Expected %v, got %v", cmdArgs, args)
+		}
+	}
+}
+
+func TestPrepareCommandExtraArgs(t *testing.T) {
+	cmdMain := "sh"
+	cmdArgs := []string{"-c", "echo \"test\""}
+	extraArgs := []string{"--debug", "--foo", "bar"}
+
+	p := &V1{
+		Dir: "/tmp", // Unused
+		MetadataV1: &MetadataV1{
+			Name:       "test",
+			Type:       "cli/v1",
+			APIVersion: "v1",
+			Runtime:    "subprocess",
+			Config: &ConfigCLI{
+				IgnoreFlags: false,
+			},
+			RuntimeConfig: &RuntimeConfigSubprocess{
+				Command: "echo \"error\"",
+				PlatformCommand: []PlatformCommand{
+					{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+					{OperatingSystem: runtime.GOOS, Architecture: runtime.GOARCH, Command: cmdMain, Args: cmdArgs},
+					{OperatingSystem: runtime.GOOS, Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+					{OperatingSystem: runtime.GOOS, Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+				},
+			},
+		},
+	}
+
+	expectedArgs := append(cmdArgs, extraArgs...)
+
+	// extra args are expected when ignoreFlags is unset or false
+	if cliConfig, ok := p.Metadata().GetConfig().(*ConfigCLI); ok {
+		if cliConfig.IgnoreFlags {
+			extraArgs = []string{}
+		}
+	}
+	if subprocessConfig, ok := p.MetadataV1.RuntimeConfig.(*RuntimeConfigSubprocess); ok {
+		cmds := subprocessConfig.PlatformCommand
+		cmd, args, err := PrepareCommands(cmds, true, extraArgs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cmd != cmdMain {
+			t.Fatalf("Expected %q, got %q", cmdMain, cmd)
+		}
+		if !reflect.DeepEqual(args, expectedArgs) {
+			t.Fatalf("Expected %v, got %v", expectedArgs, args)
+		}
+	}
+}
+
+func TestPrepareCommandExtraArgsIgnored(t *testing.T) {
+	cmdMain := "sh"
+	cmdArgs := []string{"-c", "echo \"test\""}
+	extraArgs := []string{"--debug", "--foo", "bar"}
+
+	p := &V1{
+		Dir: "/tmp", // Unused
+		MetadataV1: &MetadataV1{
+			Name:       "test",
+			Type:       "cli/v1",
+			APIVersion: "v1",
+			Runtime:    "subprocess",
+			Config: &ConfigCLI{
+				IgnoreFlags: true,
+			},
+			RuntimeConfig: &RuntimeConfigSubprocess{
+				Command: "echo \"error\"",
+				PlatformCommand: []PlatformCommand{
+					{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+					{OperatingSystem: runtime.GOOS, Architecture: runtime.GOARCH, Command: cmdMain, Args: cmdArgs},
+					{OperatingSystem: runtime.GOOS, Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+					{OperatingSystem: runtime.GOOS, Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+				},
+			},
+		},
+	}
+
+	// no extra args if ignoreFlags is set
+	if cliConfig, ok := p.Metadata().GetConfig().(*ConfigCLI); ok {
+		if cliConfig.IgnoreFlags {
+			extraArgs = []string{}
+		}
+	}
+	if subprocessConfig, ok := p.Metadata().GetRuntimeConfig().(*RuntimeConfigSubprocess); ok {
+		cmds := subprocessConfig.PlatformCommand
+		cmd, args, err := PrepareCommands(cmds, true, extraArgs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cmd != cmdMain {
+			t.Fatalf("Expected %q, got %q", cmdMain, cmd)
+		}
+		if !reflect.DeepEqual(args, cmdArgs) {
+			t.Fatalf("Expected %v, got %v", cmdArgs, args)
+		}
+	}
+}
+
 func TestPrepareCommands(t *testing.T) {
+	cmdMain := "sh"
+	cmdArgs := []string{"-c", "echo \"test\""}
+
+	cmds := []PlatformCommand{
+		{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+		{OperatingSystem: runtime.GOOS, Architecture: runtime.GOARCH, Command: cmdMain, Args: cmdArgs},
+		{OperatingSystem: runtime.GOOS, Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+		{OperatingSystem: runtime.GOOS, Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+	}
+
+	cmd, args, err := PrepareCommands(cmds, true, []string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cmd != cmdMain {
+		t.Fatalf("Expected %q, got %q", cmdMain, cmd)
+	}
+	if !reflect.DeepEqual(args, cmdArgs) {
+		t.Fatalf("Expected %v, got %v", cmdArgs, args)
+	}
+}
+
+func TestPrepareCommandsExtraArgs(t *testing.T) {
 	cmdMain := "sh"
 	cmdArgs := []string{"-c", "echo \"test\""}
 	extraArgs := []string{"--debug", "--foo", "bar"}
@@ -162,16 +325,16 @@ func TestPrepareCommandsNoExpand(t *testing.T) {
 
 func TestLoadDir(t *testing.T) {
 	dirname := "testdata/plugdir/good/hello"
-	plug, err := loadDir(dirname)
+	plug, err := LoadDir(dirname)
 	if err != nil {
 		t.Fatalf("error loading Hello plugin: %s", err)
 	}
 
-	if plug.Dir != dirname {
-		t.Fatalf("Expected dir %q, got %q", dirname, plug.Dir)
+	if plug.GetDir() != dirname {
+		t.Fatalf("Expected dir %q, got %q", dirname, plug.GetDir())
 	}
 
-	expect := MetadataV1{
+	expect := &MetadataV1{
 		Name:       "hello",
 		Version:    "0.1.0",
 		Type:       "cli/v1",
@@ -197,7 +360,7 @@ func TestLoadDir(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, expect, plug.Metadata)
+	assert.Equal(t, expect, plug.Metadata())
 }
 
 func TestLoadDirDuplicateEntries(t *testing.T) {
@@ -208,200 +371,118 @@ func TestLoadDirDuplicateEntries(t *testing.T) {
 }
 
 func TestGetter(t *testing.T) {
-	dirname := "testdata/plugdir/good/downloader"
-	plug, err := loadDir(dirname)
+	dirname := "testdata/plugdir/good/getter"
+	plug, err := LoadDir(dirname)
 	assert.NoError(t, err)
 
-	expect := MetadataV1{
-		Name:       "downloadertest",
+	expect := &MetadataV1{
+		Name:       "getter",
 		Version:    "1.2.3",
 		Type:       "getter/v1",
 		APIVersion: "v1",
 		Runtime:    "subprocess",
 		Config: &ConfigGetter{
-			Protocols: []string{"myprotocol", "myprotocol2"},
+			Protocols: []string{"myprotocol", "myprotocols"},
 		},
 		RuntimeConfig: &RuntimeConfigSubprocess{
 			ProtocolCommands: []SubprocessProtocolCommand{
 				{
-					Protocols: []string{"myprotocol", "myprotocol2"},
-					Command:   "echo Hello",
+					Protocols: []string{"myprotocol", "myprotocols"},
+					Command:   "echo getter",
 				},
 			},
 		},
 	}
 
-	assert.Equal(t, dirname, plug.Dir)
-	assert.Equal(t, expect, plug.Metadata)
+	assert.Equal(t, dirname, plug.GetDir())
+	assert.Equal(t, expect, plug.Metadata())
 }
 
-//	func TestPostRenderer(t *testing.T) {
-//		dirname := "testdata/plugdir/good/postrender"
-//		plug, err := loadDir(dirname)
-//		if err != nil {
-//			t.Fatalf("error loading postrender plugin: %s", err)
-//		}
-//
-//		if plug.Dir != dirname {
-//			t.Fatalf("Expected dir %q, got %q", dirname, plug.Dir)
-//		}
-//
-//		expect := &MetadataV1{
-//			Name:       "postrender",
-//			Version:    "1.2.3",
-//			Type:       "postrender",
-//			APIVersion: "v1",
-//			Runtime:    "subprocess",
-//			Config: &ConfigPostrender{
-//				PostrenderArgs: []string{},
-//			},
-//			RuntimeConfig: &RuntimeConfigSubprocess{
-//				PlatformCommand: []PlatformCommand{
-//					{
-//						Command: "${HELM_PLUGIN_DIR}/sed-test.sh",
-//					},
-//				},
-//			},
-//		}
-//
-//		if !reflect.DeepEqual(expect, plug.Metadata) {
-//			t.Fatalf("Expected metadata %v, got %v", expect, plug.Metadata)
-//		}
+func TestPostRenderer(t *testing.T) {
+	dirname := "testdata/plugdir/good/postrenderer"
+	plug, err := LoadDir(dirname)
+	assert.NoError(t, err)
+
+	expect := &MetadataV1{
+		Name:       "postrenderer",
+		Version:    "1.2.3",
+		Type:       "postrenderer/v1",
+		APIVersion: "v1",
+		Runtime:    "subprocess",
+		Config: &ConfigPostrenderer{
+			PostrendererArgs: []string{},
+		},
+		RuntimeConfig: &RuntimeConfigSubprocess{
+			PlatformCommand: []PlatformCommand{
+				{
+					Command: "${HELM_PLUGIN_DIR}/sed-test.sh",
+				},
+			},
+		},
+	}
+
+	assert.Equal(t, dirname, plug.GetDir())
+	assert.Equal(t, expect, plug.Metadata())
+}
+
+//func TestNewPostRenderPluginRunWithNoOutput(t *testing.T) {
+//	if runtime.GOOS == "windows" {
+//		// the actual Run test uses a basic sed example, so skip this test on windows
+//		t.Skip("skipping on windows")
 //	}
-
-// func TestNewPostRendererRunWithNoOutput(t *testing.T) {
-// 	if runtime.GOOS == "windows" {
-// 		// the actual Run test uses a basic sed example, so skip this test on windows
-// 		t.Skip("skipping on windows")
-// 	}
-// 	is := assert.New(t)
-// 	s := cli.New()
-// 	s.PluginsDirectory = "testdata/plugdir/good"
-// 	name := "postrender"
-// 	base := filepath.Join(s.PluginsDirectory, name)
-// 	SetupPluginEnv(s, name, base)
+//	is := assert.New(t)
+//	s := cli.New()
+//	s.PluginsDirectory = "testdata/plugdir/good"
+//	name := "postrenderer"
+//	base := filepath.Join(s.PluginsDirectory, name)
+//	SetupPluginEnv(s, name, base)
 //
-// 	renderer, err := NewPostRenderer(s, name, "")
-// 	require.NoError(t, err)
+//	renderer, err := postrenderer.NewPostRendererPlugin(s, name, "")
+//	require.NoError(t, err)
 //
-// 	_, err = renderer.Run(bytes.NewBufferString(""))
-// 	is.Error(err)
-// }
-
-// func TestNewPostRendererWithOneArgsRun(t *testing.T) {
-// 	if runtime.GOOS == "windows" {
-// 		// the actual Run test uses a basic sed example, so skip this test on windows
-// 		t.Skip("skipping on windows")
-// 	}
-// 	is := assert.New(t)
-// 	s := cli.New()
-// 	s.PluginsDirectory = "testdata/plugdir/good"
-// 	name := "postrender"
-// 	base := filepath.Join(s.PluginsDirectory, name)
-// 	SetupPluginEnv(s, name, base)
+//	_, err = renderer.Run(bytes.NewBufferString(""))
+//	is.Error(err)
+//}
 //
-// 	renderer, err := NewPostRenderer(s, name, "ARG1")
-// 	require.NoError(t, err)
+//func TestNewPostRenderPluginWithOneArgsRun(t *testing.T) {
+//	if runtime.GOOS == "windows" {
+//		// the actual Run test uses a basic sed example, so skip this test on windows
+//		t.Skip("skipping on windows")
+//	}
+//	is := assert.New(t)
+//	s := cli.New()
+//	s.PluginsDirectory = "testdata/plugdir/good"
+//	name := "postrenderer"
+//	base := filepath.Join(s.PluginsDirectory, name)
+//	SetupPluginEnv(s, name, base)
 //
-// 	output, err := renderer.Run(bytes.NewBufferString("FOOTEST"))
-// 	is.NoError(err)
-// 	is.Contains(output.String(), "ARG1")
-// }
-
-// func TestNewPostRendererWithTwoArgsRun(t *testing.T) {
-// 	if runtime.GOOS == "windows" {
-// 		// the actual Run test uses a basic sed example, so skip this test on windows
-// 		t.Skip("skipping on windows")
-// 	}
-// 	is := assert.New(t)
-// 	s := cli.New()
-// 	s.PluginsDirectory = "testdata/plugdir/good"
-// 	name := "postrender"
-// 	base := filepath.Join(s.PluginsDirectory, name)
-// 	SetupPluginEnv(s, name, base)
+//	renderer, err := postrenderer.NewPostRendererPlugin(s, name, "ARG1")
+//	require.NoError(t, err)
 //
-// 	renderer, err := NewPostRenderer(s, name, "ARG1", "ARG2")
-// 	require.NoError(t, err)
+//	output, err := renderer.Run(bytes.NewBufferString("FOOTEST"))
+//	is.NoError(err)
+//	is.Contains(output.String(), "ARG1")
+//}
 //
-// 	output, err := renderer.Run(bytes.NewBufferString("FOOTEST"))
-// 	is.NoError(err)
-// 	is.Contains(output.String(), "ARG1 ARG2")
-// }
-
-// func TestPostRenderer(t *testing.T) {
-// 	dirname := "testdata/plugdir/good/postrender"
-// 	plug, err := loadDir(dirname)
-// 	if err != nil {
-// 		t.Fatalf("error loading postrender plugin: %s", err)
-// 	}
+//func TestNewPostRenderPluginWithTwoArgsRun(t *testing.T) {
+//	if runtime.GOOS == "windows" {
+//		// the actual Run test uses a basic sed example, so skip this test on windows
+//		t.Skip("skipping on windows")
+//	}
+//	is := assert.New(t)
+//	s := cli.New()
+//	s.PluginsDirectory = "testdata/plugdir/good"
+//	name := "postrenderer"
+//	base := filepath.Join(s.PluginsDirectory, name)
+//	SetupPluginEnv(s, name, base)
 //
-// 	if plug.Dir != dirname {
-// 		t.Fatalf("Expected dir %q, got %q", dirname, plug.Dir)
-// 	}
+//	renderer, err := postrenderer.NewPostRendererPlugin(s, name, "ARG1", "ARG2")
+//	require.NoError(t, err)
 //
-// 	if !reflect.DeepEqual(expect, plug.Metadata) {
-// 		t.Fatalf("Expected metadata %v, got %v", expect, plug.Metadata)
-// 	}
-// }
-//
-// func TestNewPostRendererRunWithNoOutput(t *testing.T) {
-// 	if runtime.GOOS == "windows" {
-// 		// the actual Run test uses a basic sed example, so skip this test on windows
-// 		t.Skip("skipping on windows")
-// 	}
-// 	is := assert.New(t)
-// 	s := cli.New()
-// 	s.PluginsDirectory = "testdata/plugdir/good"
-// 	name := "postrender"
-// 	base := filepath.Join(s.PluginsDirectory, name)
-// 	SetupPluginEnv(s, name, base)
-//
-// 	renderer, err := NewPostRenderer(s, name, "")
-// 	require.NoError(t, err)
-//
-// 	_, err = renderer.Run(bytes.NewBufferString(""))
-// 	is.Error(err)
-// }
-//
-// func TestNewPostRendererWithOneArgsRun(t *testing.T) {
-// 	if runtime.GOOS == "windows" {
-// 		// the actual Run test uses a basic sed example, so skip this test on windows
-// 		t.Skip("skipping on windows")
-// 	}
-// 	is := assert.New(t)
-// 	s := cli.New()
-// 	s.PluginsDirectory = "testdata/plugdir/good"
-// 	name := "postrender"
-// 	base := filepath.Join(s.PluginsDirectory, name)
-// 	SetupPluginEnv(s, name, base)
-//
-// 	renderer, err := NewPostRenderer(s, name, "ARG1")
-// 	require.NoError(t, err)
-//
-// 	output, err := renderer.Run(bytes.NewBufferString("FOOTEST"))
-// 	is.NoError(err)
-// 	is.Contains(output.String(), "ARG1")
-// }
-//
-// func TestNewPostRendererWithTwoArgsRun(t *testing.T) {
-// 	if runtime.GOOS == "windows" {
-// 		// the actual Run test uses a basic sed example, so skip this test on windows
-// 		t.Skip("skipping on windows")
-// 	}
-// 	is := assert.New(t)
-// 	s := cli.New()
-// 	s.PluginsDirectory = "testdata/plugdir/good"
-// 	name := "postrender"
-// 	base := filepath.Join(s.PluginsDirectory, name)
-// 	SetupPluginEnv(s, name, base)
-//
-// 	renderer, err := NewPostRenderer(s, name, "ARG1", "ARG2")
-// 	require.NoError(t, err)
-//
-// 	output, err := renderer.Run(bytes.NewBufferString("FOOTEST"))
-// 	is.NoError(err)
-// 	is.Contains(output.String(), "ARG1 ARG2")
-// }
+//	output, err := renderer.Run(bytes.NewBufferString("FOOTEST"))
+//	is.NoError(err)
+//	is.Contains(output.String(), "ARG1 ARG2")
+//}
 
 func TestLoadAll(t *testing.T) {
 	// Verify that empty dir loads:
@@ -416,11 +497,10 @@ func TestLoadAll(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Len(t, plugs, 4)
-
-	assert.Equal(t, "downloadertest", plugs[0].Metadata().Name)
-	assert.Equal(t, "echo", plugs[1].Metadata().Name)
-	assert.Equal(t, "hello", plugs[2].Metadata().Name)
-	assert.Equal(t, "postrender", plugs[3].Metadata().Name)
+	assert.Equal(t, "echo", plugs[0].Metadata().GetName())
+	assert.Equal(t, "getter", plugs[1].Metadata().GetName())
+	assert.Equal(t, "hello", plugs[2].Metadata().GetName())
+	assert.Equal(t, "postrenderer", plugs[3].Metadata().GetName())
 }
 
 func TestFindPlugins(t *testing.T) {
@@ -502,20 +582,20 @@ func TestSetupEnvWithSpace(t *testing.T) {
 
 func TestValidatePluginData(t *testing.T) {
 	// A mock plugin missing any metadata.
-	mockMissingMeta := &PluginV1{
+	mockMissingMeta := &V1{
 		Dir: "no-such-dir",
 	}
 
 	// A mock plugin with no commands
 	mockNoCommand := mockPlugin("foo")
-	mockNoCommand.Metadata.RuntimeConfig = &RuntimeConfigSubprocess{
+	mockNoCommand.MetadataV1.RuntimeConfig = &RuntimeConfigSubprocess{
 		PlatformCommand: []PlatformCommand{},
 		PlatformHooks:   map[string][]PlatformCommand{},
 	}
 
 	// A mock plugin with legacy commands
 	mockLegacyCommand := mockPlugin("foo")
-	mockLegacyCommand.Metadata.RuntimeConfig = &RuntimeConfigSubprocess{
+	mockLegacyCommand.MetadataV1.RuntimeConfig = &RuntimeConfigSubprocess{
 		PlatformCommand: []PlatformCommand{},
 		Command:         "echo \"mock plugin\"",
 		PlatformHooks:   map[string][]PlatformCommand{},
@@ -526,7 +606,7 @@ func TestValidatePluginData(t *testing.T) {
 
 	// A mock plugin with a command also set
 	mockWithCommand := mockPlugin("foo")
-	mockWithCommand.Metadata.RuntimeConfig = &RuntimeConfigSubprocess{
+	mockWithCommand.MetadataV1.RuntimeConfig = &RuntimeConfigSubprocess{
 		PlatformCommand: []PlatformCommand{
 			{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"mock plugin\""}},
 		},
@@ -535,7 +615,7 @@ func TestValidatePluginData(t *testing.T) {
 
 	// A mock plugin with a hooks also set
 	mockWithHooks := mockPlugin("foo")
-	mockWithHooks.Metadata.RuntimeConfig = &RuntimeConfigSubprocess{
+	mockWithHooks.MetadataV1.RuntimeConfig = &RuntimeConfigSubprocess{
 		PlatformCommand: []PlatformCommand{
 			{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"mock plugin\""}},
 		},
@@ -551,7 +631,7 @@ func TestValidatePluginData(t *testing.T) {
 
 	for i, item := range []struct {
 		pass bool
-		plug *PluginV1
+		plug *V1
 	}{
 		{true, mockPlugin("abcdefghijklmnopqrstuvwxyz0123456789_-ABC")},
 		{true, mockPlugin("foo-bar-FOO-BAR_1234")},
@@ -575,7 +655,7 @@ func TestValidatePluginData(t *testing.T) {
 }
 
 func TestDetectDuplicates(t *testing.T) {
-	plugs := []*PluginV1{
+	plugs := []Plugin{
 		mockPlugin("foo"),
 		mockPlugin("bar"),
 	}
@@ -588,9 +668,9 @@ func TestDetectDuplicates(t *testing.T) {
 	}
 }
 
-func mockPlugin(name string) *PluginV1 {
-	return &PluginV1{
-		Metadata: MetadataV1{
+func mockPlugin(name string) *V1 {
+	return &V1{
+		MetadataV1: &MetadataV1{
 			Name:       name,
 			Version:    "v0.1.2",
 			Type:       "cli/v1",

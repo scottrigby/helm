@@ -37,14 +37,14 @@ func getProtocolCommand(commands []SubprocessProtocolCommand, protocol string) *
 	return nil
 }
 
-func runGetter(r *RuntimeSubprocess, input *Input) (*Output, error) {
-
-	msg, ok := (input.Message).(*schema.InputMessageGetterV1)
+// TODO can we replace a lot of this func with RuntimeSubprocess.invokeWithEnv?
+func (r *RuntimeSubprocess) runGetter(input *Input) (*Output, error) {
+	msg, ok := (input.Message).(schema.InputMessageGetterV1)
 	if !ok {
 		return nil, fmt.Errorf("expected input type schema.InputMessageGetterV1, got %T", input)
 	}
 
-	tmpDir, err := os.MkdirTemp(os.TempDir(), fmt.Sprintf("helm-plugin-%s-", r.plugin.Metadata.Name))
+	tmpDir, err := os.MkdirTemp(os.TempDir(), fmt.Sprintf("helm-plugin-%s-", r.pluginName))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temporary directory: %w", err)
 	}
@@ -63,27 +63,35 @@ func runGetter(r *RuntimeSubprocess, input *Input) (*Output, error) {
 		msg.Options.CAFile,
 		msg.Href)
 
+	// TODO should we append to input.Env too?
+	//env := append(os.Environ(), input.Env...)
+	//env = append(env,
+	//	fmt.Sprintf("HELM_PLUGIN_USERNAME=%s", msg.Options.Username),
+	//	fmt.Sprintf("HELM_PLUGIN_PASSWORD=%s", msg.Options.Password),
+	//	fmt.Sprintf("HELM_PLUGIN_PASS_CREDENTIALS_ALL=%t", msg.Options.PassCredentialsAll))
+
 	env := append(
 		os.Environ(),
 		fmt.Sprintf("HELM_PLUGIN_USERNAME=%s", msg.Options.Username),
 		fmt.Sprintf("HELM_PLUGIN_PASSWORD=%s", msg.Options.Password),
 		fmt.Sprintf("HELM_PLUGIN_PASS_CREDENTIALS_ALL=%t", msg.Options.PassCredentialsAll))
 
+	// TODO should we pass along input.Stdout?
 	buf := bytes.Buffer{} // subprocess getters are expected to write content to stdout
 
-	pluginCommand := filepath.Join(r.plugin.Dir, commands[0])
+	pluginCommand := filepath.Join(r.pluginDir, commands[0])
 	prog := exec.Command(
 		pluginCommand,
 		args...)
 	prog.Env = env
 	prog.Stdout = &buf
 	prog.Stderr = os.Stderr
-	if err := executeCmd(prog, r.plugin.Metadata.Name); err != nil {
+	if err := executeCmd(prog, r.pluginName); err != nil {
 		return nil, err
 	}
 
 	return &Output{
-		Message: &schema.GetterOutputV1{
+		Message: &schema.OutputMessageGetterV1{
 			Data: &buf,
 		},
 	}, nil

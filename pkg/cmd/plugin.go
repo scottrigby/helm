@@ -17,7 +17,6 @@ package cmd
 
 import (
 	"io"
-	"log/slog"
 
 	"github.com/spf13/cobra"
 
@@ -45,15 +44,6 @@ func newPluginCmd(out io.Writer) *cobra.Command {
 
 // runHook will execute a plugin hook.
 func runHook(p plugin.Plugin, event string) error {
-	plugin.SetupPluginEnv(settings, p.Metadata().Name, p.Dir())
-
-	// For subprocess runtime, set settings
-	if subprocessRuntime, ok := p.(*plugin.RuntimeSubprocess); ok {
-		subprocessRuntime.SetSettings(settings)
-
-		slog.Debug("running hook", "event", event)
-		return subprocessRuntime.InvokeHook(event)
-	}
-
-	return nil
+	plugin.SetupPluginEnv(settings, p.Metadata().GetName(), p.GetDir())
+	return p.InvokeHook(event)
 }

@@ -15,6 +15,14 @@ limitations under the License.
 
 package plugin
 
+type Metadata interface {
+	GetAPIVersion() string
+	GetName() string
+	GetType() string
+	GetConfig() Config
+	GetRuntimeConfig() RuntimeConfig
+}
+
 // MetadataLegacy describes a legacy plugin (no APIVersion field)
 type MetadataLegacy struct {
 	// Name is the name of the plugin
@@ -55,6 +63,49 @@ type MetadataLegacy struct {
 	UseTunnelDeprecated bool `json:"useTunnel,omitempty"`
 }
 
+func (m *MetadataLegacy) GetAPIVersion() string { return "legacy" }
+
+func (m *MetadataLegacy) GetName() string { return m.Name }
+
+func (m *MetadataLegacy) GetType() string {
+	if len(m.Downloaders) > 0 {
+		return "getter/v1"
+	}
+	return "cli/v1"
+}
+
+func (m *MetadataLegacy) GetConfig() Config {
+	switch m.GetType() {
+	case "getter/v1":
+		var protocols []string
+		for _, d := range m.Downloaders {
+			protocols = append(protocols, d.Protocols...)
+		}
+		return &ConfigGetter{
+			Protocols: protocols,
+		}
+	case "cli/v1":
+		return &ConfigCLI{
+			Usage:       "",            // Legacy plugins don't have Usage field for command syntax
+			ShortHelp:   m.Usage,       // Map legacy usage to shortHelp
+			LongHelp:    m.Description, // Map legacy description to longHelp
+			IgnoreFlags: m.IgnoreFlags,
+		}
+	default:
+		return nil
+	}
+}
+
+func (m *MetadataLegacy) GetRuntimeConfig() RuntimeConfig {
+	return &RuntimeConfigSubprocess{
+		PlatformCommand: m.PlatformCommand,
+		Command:         m.Command,
+		PlatformHooks:   m.PlatformHooks,
+		Hooks:           m.Hooks,
+		UseTunnel:       m.UseTunnelDeprecated,
+	}
+}
+
 // MetadataV1 describes a V1 plugin (APIVersion: v1)
 type MetadataV1 struct {
 	// APIVersion specifies the plugin API version
@@ -63,7 +114,7 @@ type MetadataV1 struct {
 	// Name is the name of the plugin
 	Name string `json:"name"`
 
-	// Type of plugin (eg, cli, download, postrender)
+	// Type of plugin (eg, cli, getter, postrenderer)
 	Type string `json:"type"`
 
 	// Runtime specifies the runtime type (subprocess, wasm)
@@ -82,37 +133,12 @@ type MetadataV1 struct {
 	RuntimeConfig RuntimeConfig `json:"runtimeConfig"`
 }
 
-func ConvertMetadataLegacy(m MetadataLegacy) MetadataV1 {
-	pluginType := "cli/v1"
+func (m *MetadataV1) GetAPIVersion() string { return m.APIVersion }
 
-	var config Config
-	if len(m.Downloaders) > 0 {
-		pluginType = "getter/v1"
+func (m *MetadataV1) GetName() string { return m.Name }
 
-		protocols := make([]string, 0, len(m.Downloaders))
-		for _, d := range m.Downloaders {
-			protocols = append(protocols, d.Protocols...)
-		}
-		config = &ConfigGetter{
-			Protocols: protocols,
-		}
-	}
+func (m *MetadataV1) GetType() string { return m.Type }
 
-	runtimeConfig := &RuntimeConfigSubprocess{
-		PlatformCommand: m.PlatformCommand,
-		Command:         m.Command,
-		PlatformHooks:   m.PlatformHooks,
-		Hooks:           m.Hooks,
-	}
+func (m *MetadataV1) GetConfig() Config { return m.Config }
 
-	return MetadataV1{
-		APIVersion: "v1",
-		Name:       m.Name,
-		Version:    m.Version,
-		// Description:  m.Description,
-		Type:          pluginType,
-		Runtime:       "subprocess",
-		Config:        config,
-		RuntimeConfig: runtimeConfig,
-	}
-}
+func (m *MetadataV1) GetRuntimeConfig() RuntimeConfig { return m.RuntimeConfig }

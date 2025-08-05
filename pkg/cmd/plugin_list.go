@@ -49,14 +49,21 @@ func newPluginListCmd(out io.Writer) *cobra.Command {
 			table := uitable.New()
 			table.AddRow("NAME", "VERSION", "TYPE", "APIVERSION", "SOURCE")
 			for _, p := range plugins {
-				m := p.Metadata()
-				version := m.Version
-				sourceURL := m.SourceURL
-
+				metadata := p.Metadata()
+				var version, sourceURL string
+				switch m := metadata.(type) {
+				case *plugin.MetadataV1:
+					version = m.Version
+					sourceURL = m.SourceURL
+				case *plugin.MetadataLegacy:
+					version = m.Version
+					// Legacy plugins don't have sourceURL field
+				}
+				// Set sourceURL to "unknown" if empty
 				if sourceURL == "" {
 					sourceURL = "unknown"
 				}
-				table.AddRow(m.Name, version, m.Type, m.APIVersion, sourceURL)
+				table.AddRow(p.Metadata().GetName(), version, p.Metadata().GetType(), p.Metadata().GetAPIVersion(), sourceURL)
 			}
 			fmt.Fprintln(out, table)
 			return nil
@@ -77,10 +84,10 @@ func filterPlugins(plugins []plugin.Plugin, ignoredPluginNames []string) []plugi
 	}
 
 	var filteredPlugins []plugin.Plugin
-	for _, p := range plugins {
-		found := slices.Contains(ignoredPluginNames, p.Metadata().Name)
+	for _, plugin := range plugins {
+		found := slices.Contains(ignoredPluginNames, plugin.Metadata().GetName())
 		if !found {
-			filteredPlugins = append(filteredPlugins, p)
+			filteredPlugins = append(filteredPlugins, plugin)
 		}
 	}
 
@@ -98,14 +105,17 @@ func compListPlugins(_ string, ignoredPluginNames []string) []string {
 	if err == nil && len(plugins) > 0 {
 		filteredPlugins := filterPlugins(plugins, ignoredPluginNames)
 		for _, p := range filteredPlugins {
-			m := p.Metadata()
-
-			shortHelp := ""
-			if config, ok := m.Config.(*plugin.ConfigCLI); ok {
-				shortHelp = config.ShortHelp
+			metadata := p.Metadata()
+			var shortHelp string
+			switch m := metadata.(type) {
+			case *plugin.MetadataV1:
+				if config, ok := m.Config.(*plugin.ConfigCLI); ok {
+					shortHelp = config.ShortHelp
+				}
+			case *plugin.MetadataLegacy:
+				shortHelp = m.Usage
 			}
-
-			pNames = append(pNames, fmt.Sprintf("%s\t%s", m.Name, shortHelp))
+			pNames = append(pNames, fmt.Sprintf("%s\t%s", p.Metadata().GetName(), shortHelp))
 		}
 	}
 	return pNames

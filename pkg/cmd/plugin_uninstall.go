@@ -84,15 +84,16 @@ func (o *pluginUninstallOptions) run(out io.Writer) error {
 }
 
 func uninstallPlugin(p plugin.Plugin) error {
-	if err := os.RemoveAll(p.Dir()); err != nil {
+	if err := os.RemoveAll(p.GetDir()); err != nil {
 		return err
 	}
 	return runHook(p, plugin.Delete)
 }
 
+// TODO should this be in pkg/plugin/loader.go?
 func findPlugin(plugins []plugin.Plugin, name string) plugin.Plugin {
 	for _, p := range plugins {
-		if p.Metadata().Name == name {
+		if p.Metadata().GetName() == name {
 			return p
 		}
 	}

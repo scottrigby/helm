@@ -41,25 +41,23 @@ type ConfigCLI struct {
 	IgnoreFlags bool `json:"ignoreFlags"`
 }
 
-// ConfigDownload represents the configuration for download plugins
+// ConfigGetter represents the configuration for download plugins
 type ConfigGetter struct {
 	// Protocols are the list of URL schemes supported by this downloader
 	Protocols []string `json:"protocols"`
 }
 
-// ConfigPostrender represents the configuration for postrender plugins
-type ConfigPostrender struct {
-	// PostrenderArgs are arguments passed to the postrender command
+// ConfigPostrenderer represents the configuration for postrenderer plugins
+type ConfigPostrenderer struct {
+	// PostrendererArgs are arguments passed to the post-renderer plugin
 	// TODO: remove this field. it is not needed as args are passed from CLI to the plugin
-	PostrenderArgs []string `json:"postrenderArgs"`
+	PostrendererArgs []string `json:"postrendererArgs"`
 }
 
-// GetType implementations for Config types
-func (c *ConfigCLI) GetType() string        { return "cli/v1" }
-func (c *ConfigGetter) GetType() string     { return "getter/v1" }
-func (c *ConfigPostrender) GetType() string { return "postrenderer/v1" }
+func (c *ConfigCLI) GetType() string          { return "cli/v1" }
+func (c *ConfigGetter) GetType() string       { return "getter/v1" }
+func (c *ConfigPostrenderer) GetType() string { return "postrenderer/v1" }
 
-// Validate implementations for Config types
 func (c *ConfigCLI) Validate() error {
 	// Config validation for CLI plugins
 	return nil
@@ -74,16 +72,14 @@ func (c *ConfigGetter) Validate() error {
 			return fmt.Errorf("getter has empty protocol at index %d", i)
 		}
 	}
-
 	return nil
 }
 
-func (c *ConfigPostrender) Validate() error {
-	// Config validation for postrender plugins
+func (c *ConfigPostrenderer) Validate() error {
+	// Config validation for postrenderer plugins
 	return nil
 }
 
-// unmarshalConfigCLI unmarshals a config map into a ConfigCLI struct
 func unmarshalConfigCLI(configData map[string]interface{}) (*ConfigCLI, error) {
 	data, err := yaml.Marshal(configData)
 	if err != nil {
@@ -98,7 +94,6 @@ func unmarshalConfigCLI(configData map[string]interface{}) (*ConfigCLI, error) {
 	return &config, nil
 }
 
-// unmarshalConfigGetter unmarshals a config map into a ConfigGetter struct
 func unmarshalConfigGetter(configData map[string]interface{}) (*ConfigGetter, error) {
 	data, err := yaml.Marshal(configData)
 	if err != nil {
@@ -113,14 +108,13 @@ func unmarshalConfigGetter(configData map[string]interface{}) (*ConfigGetter, er
 	return &config, nil
 }
 
-// unmarshalConfigPostrender unmarshals a config map into a ConfigPostrender struct
-func unmarshalConfigPostrender(configData map[string]interface{}) (*ConfigPostrender, error) {
+func unmarshalConfigPostrenderer(configData map[string]interface{}) (*ConfigPostrenderer, error) {
 	data, err := yaml.Marshal(configData)
 	if err != nil {
 		return nil, err
 	}
 
-	var config ConfigPostrender
+	var config ConfigPostrenderer
 	if err := yaml.UnmarshalStrict(data, &config); err != nil {
 		return nil, err
 	}

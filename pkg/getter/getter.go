@@ -30,6 +30,7 @@ import (
 // getterOptions are generic parameters to be provided to the getter during instantiation.
 //
 // Getters may or may not ignore these parameters as they are passed in.
+// TODO what is the difference between this and schema.GetterOptionsV1?
 type getterOptions struct {
 	url                   string
 	certFile              string

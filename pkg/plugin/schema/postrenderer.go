@@ -1,10 +1,11 @@
 /*
 Copyright The Helm Authors.
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,17 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package plugin
+package schema
 
-// Error is returned when a plugin invocation returns a non-zero status/exit code
-// - subprocess plugins: child process exit code
-type Error struct {
-	// Underlying error
-	Err  error
-	Code int
+import (
+	"bytes"
+
+	"helm.sh/helm/v4/pkg/cli"
+)
+
+// TODO remove ExtraArgs from here and elsewhere? There are --post-renderer-args but there are no "extra args"
+type InputMessagePostRendererV1 struct {
+	Args      []string
+	Manifests *bytes.Buffer    `json:"manifests"`
+	ExtraArgs []string         `json:"extraArgs"`
+	Settings  *cli.EnvSettings `json:"settings"`
 }
 
-// Error implements the error interface
-func (e *Error) Error() string {
-	return e.Err.Error()
+type OutputMessagePostRendererV1 struct {
+	Manifests *bytes.Buffer `json:"manifests"`
 }

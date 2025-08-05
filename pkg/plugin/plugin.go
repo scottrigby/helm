@@ -14,7 +14,6 @@ limitations under the License.
 */
 
 package plugin // import "helm.sh/helm/v4/pkg/plugin"
-
 import (
 	"context"
 	"io"
@@ -32,9 +31,18 @@ type Downloaders struct {
 	Command string `json:"command"`
 }
 
-// Input defined the input message and parameters to be passed to the plugin
+// Plugin interface defines the common methods that all plugin versions must implement
+type Plugin interface {
+	GetDir() string
+	Metadata() Metadata
+	Invoke(ctx context.Context, input *Input) (*Output, error)
+	InvokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error
+	InvokeHook(event string) error
+}
+
+// Input defines the input message and parameters to be passed to the plugin
 type Input struct {
-	// Message represents the type-elided value to be passed to the plugin
+	// Message represents the type-elided value to be passed to the plugin.
 	// The plugin is expected to interpret the message according to its type/version
 	// The message object must be JSON-serializable
 	Message any
@@ -44,19 +52,15 @@ type Input struct {
 
 	// Optional: Writers to consume the plugin's "stdout" and "stderr"
 	Stdout, Stderr io.Writer
+
+	// Env represents the environment as a list of "key=value" strings
+	// see os.Environ
+	Env []string
 }
 
-// Input defined the output message and parameters the passed from the plugin
+// Output defines the output message and parameters the passed from the plugin
 type Output struct {
 	// Message represents the type-elided value passed from the plugin
 	// The invoker is expected to interpret the message according to the plugins type/version
 	Message any
-}
-
-// Plugin defines the "invokable" interface for a plugin, as well a getter for the plugin's describing manifest
-// The invoke method can be thought of request/response message passing between the plugin invoker and the plugin itself
-type Plugin interface {
-	Metadata() MetadataV1
-	Dir() string
-	Invoke(ctx context.Context, input *Input) (*Output, error)
 }
