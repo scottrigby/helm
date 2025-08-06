@@ -19,8 +19,6 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
-	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -28,16 +26,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-	"oras.land/oras-go/v2"
-	"oras.land/oras-go/v2/content"
-	"oras.land/oras-go/v2/content/memory"
-	"oras.land/oras-go/v2/registry/remote"
-	"oras.land/oras-go/v2/registry/remote/auth"
-	"oras.land/oras-go/v2/registry/remote/credentials"
-
 	"helm.sh/helm/v4/internal/third_party/dep/fs"
 	"helm.sh/helm/v4/pkg/cli"
+	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/helmpath"
 	"helm.sh/helm/v4/pkg/plugin/cache"
 	"helm.sh/helm/v4/pkg/registry"
@@ -49,10 +40,11 @@ type OCIInstaller struct {
 	PluginName string
 	base
 	settings *cli.EnvSettings
+	getter   getter.Getter
 }
 
-// NewOCIInstaller creates a new OCIInstaller
-func NewOCIInstaller(source string) (*OCIInstaller, error) {
+// NewOCIInstaller creates a new OCIInstaller with optional getter options
+func NewOCIInstaller(source string, options ...getter.Option) (*OCIInstaller, error) {
 	ref := strings.TrimPrefix(source, fmt.Sprintf("%s://", registry.OCIScheme))
 
 	// Extract plugin name from OCI reference
@@ -77,11 +69,19 @@ func NewOCIInstaller(source string) (*OCIInstaller, error) {
 
 	settings := cli.New()
 
+	// Always add plugin artifact type and any provided options
+	pluginOptions := append([]getter.Option{getter.WithArtifactType("plugin")}, options...)
+	getterProvider, err := getter.NewOCIGetter(pluginOptions...)
+	if err != nil {
+		return nil, err
+	}
+
 	i := &OCIInstaller{
 		CacheDir:   helmpath.CachePath("plugins", key),
 		PluginName: pluginName,
 		base:       newBase(source),
 		settings:   settings,
+		getter:     getterProvider,
 	}
 	return i, nil
 }
@@ -89,54 +89,12 @@ func NewOCIInstaller(source string) (*OCIInstaller, error) {
 // Install downloads and installs a plugin from OCI registry
 // Implements Installer.
 func (i *OCIInstaller) Install() error {
-	ref := strings.TrimPrefix(i.Source, fmt.Sprintf("%s://", registry.OCIScheme))
+	slog.Debug("pulling OCI plugin", "source", i.Source)
 
-	// Pull the OCI artifact
-	slog.Debug("pulling OCI plugin", "ref", ref)
-
-	// Create memory store for the pull operation
-	memoryStore := memory.New()
-
-	// Create repository
-	repository, err := remote.NewRepository(ref)
+	// Use getter to download the plugin
+	pluginData, err := i.getter.Get(i.Source)
 	if err != nil {
-		return err
-	}
-
-	// Configure authentication using Docker config
-	dockerStore, err := credentials.NewStoreFromDocker(credentials.StoreOptions{})
-	if err != nil {
-		// If docker config is not available, continue without auth
-		slog.Debug("unable to load docker config", "error", err)
-	} else {
-		// Create auth client with docker credentials
-		authClient := &auth.Client{
-			Credential: credentials.Credential(dockerStore),
-		}
-		repository.Client = authClient
-	}
-
-	// Set PlainHTTP to false for secure registries
-	repository.PlainHTTP = false
-
-	ctx := context.Background()
-
-	// Copy the artifact from registry to memory store
-	manifest, err := oras.Copy(ctx, repository, ref, memoryStore, "", oras.CopyOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to pull plugin from %s: %w", ref, err)
-	}
-
-	// Fetch the manifest
-	manifestData, err := content.FetchAll(ctx, memoryStore, manifest)
-	if err != nil {
-		return fmt.Errorf("failed to fetch manifest: %w", err)
-	}
-
-	// Parse manifest to get layers
-	var imageManifest ocispec.Manifest
-	if err := json.Unmarshal(manifestData, &imageManifest); err != nil {
-		return fmt.Errorf("failed to parse manifest: %w", err)
+		return fmt.Errorf("failed to pull plugin from %s: %w", i.Source, err)
 	}
 
 	// Create cache directory
@@ -144,23 +102,15 @@ func (i *OCIInstaller) Install() error {
 		return fmt.Errorf("failed to create cache directory: %w", err)
 	}
 
-	// Extract each layer to the cache directory
-	// Only support compressed tar archives to preserve file permissions
-	for _, layer := range imageManifest.Layers {
-		layerData, err := content.FetchAll(ctx, memoryStore, layer)
-		if err != nil {
-			return fmt.Errorf("failed to fetch layer %s: %w", layer.Digest, err)
-		}
+	// Check if this is a gzip compressed file
+	pluginBytes := pluginData.Bytes()
+	if len(pluginBytes) < 2 || pluginBytes[0] != 0x1f || pluginBytes[1] != 0x8b {
+		return fmt.Errorf("plugin data is not a gzip compressed archive")
+	}
 
-		// Check if this is a gzip compressed file
-		if len(layerData) < 2 || layerData[0] != 0x1f || layerData[1] != 0x8b {
-			return fmt.Errorf("layer %s is not a gzip compressed archive", layer.Digest)
-		}
-
-		// Extract as gzipped tar
-		if err := extractTarGz(bytes.NewReader(layerData), i.CacheDir); err != nil {
-			return fmt.Errorf("failed to extract layer %s: %w", layer.Digest, err)
-		}
+	// Extract as gzipped tar
+	if err := extractTarGz(bytes.NewReader(pluginBytes), i.CacheDir); err != nil {
+		return fmt.Errorf("failed to extract plugin: %w", err)
 	}
 
 	// Verify plugin.yaml exists - check root and subdirectories
@@ -215,7 +165,7 @@ func (i OCIInstaller) Path() string {
 	if i.Source == "" {
 		return ""
 	}
-	return helmpath.DataPath("plugins", i.PluginName)
+	return filepath.Join(i.settings.PluginsDirectory, i.PluginName)
 }
 
 // extractTarGz extracts a gzipped tar archive to a directory
