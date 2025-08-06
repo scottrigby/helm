@@ -27,7 +27,7 @@ import (
 
 // LoadDir loads a plugin from the given directory.
 func LoadDir(dirname string) (Plugin, error) {
-	pluginfile := filepath.Join(dirname, PluginFileName)
+	pluginfile := filepath.Join(dirname, FileName)
 	data, err := os.ReadFile(pluginfile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read plugin at %q: %w", pluginfile, err)
@@ -129,7 +129,7 @@ func LoadDir(dirname string) (Plugin, error) {
 			switch tempMeta.Runtime {
 			case "subprocess":
 				runtimeConfig, err = unmarshalRuntimeConfigSubprocess(runtimeConfigData)
-			case "wasm":
+			case "extism/v1":
 				runtimeConfig, err = unmarshalRuntimeConfigWasm(runtimeConfigData)
 			default:
 				return nil, fmt.Errorf("unsupported runtime type: %s", tempMeta.Runtime)
@@ -146,8 +146,8 @@ func LoadDir(dirname string) (Plugin, error) {
 			switch tempMeta.Runtime {
 			case "subprocess":
 				runtimeConfig = &RuntimeConfigSubprocess{}
-			case "wasm":
-				runtimeConfig = &RuntimeConfigWasm{}
+			case "extism/v1":
+				runtimeConfig = &RuntimeConfigExtismV1{}
 			default:
 				return nil, fmt.Errorf("unsupported runtime type: %s", tempMeta.Runtime)
 			}
@@ -173,7 +173,7 @@ func LoadDir(dirname string) (Plugin, error) {
 func LoadAll(basedir string) ([]Plugin, error) {
 	var plugins []Plugin
 	// We want basedir/*/plugin.yaml
-	scanpath := filepath.Join(basedir, "*", PluginFileName)
+	scanpath := filepath.Join(basedir, "*", FileName)
 	matches, err := filepath.Glob(scanpath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search for plugins in %q: %w", scanpath, err)

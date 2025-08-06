@@ -19,7 +19,7 @@ import (
 	"io"
 )
 
-const PluginFileName = "plugin.yaml"
+const FileName = "plugin.yaml"
 
 // Downloaders represents the plugins capability if it can retrieve
 // charts from special sources

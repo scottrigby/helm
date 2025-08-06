@@ -117,7 +117,7 @@ type MetadataV1 struct {
 	// Type of plugin (eg, cli, getter, postrenderer)
 	Type string `json:"type"`
 
-	// Runtime specifies the runtime type (subprocess, wasm)
+	// Runtime specifies the runtime type (subprocess, extism/v1)
 	Runtime string `json:"runtime"`
 
 	// Version is a SemVer 2 version of the plugin.
