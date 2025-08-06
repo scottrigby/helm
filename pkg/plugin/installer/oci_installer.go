@@ -48,7 +48,8 @@ type OCIInstaller struct {
 	CacheDir   string
 	PluginName string
 	base
-	settings *cli.EnvSettings
+	repository *remote.Repository
+	settings   *cli.EnvSettings
 }
 
 // NewOCIInstaller creates a new OCIInstaller
@@ -98,26 +99,31 @@ func (i *OCIInstaller) Install() error {
 	memoryStore := memory.New()
 
 	// Create repository
-	repository, err := remote.NewRepository(ref)
-	if err != nil {
-		return err
-	}
-
-	// Configure authentication using Docker config
-	dockerStore, err := credentials.NewStoreFromDocker(credentials.StoreOptions{})
-	if err != nil {
-		// If docker config is not available, continue without auth
-		slog.Debug("unable to load docker config", "error", err)
-	} else {
-		// Create auth client with docker credentials
-		authClient := &auth.Client{
-			Credential: credentials.Credential(dockerStore),
+	var repository *remote.Repository
+	if i.repository == nil {
+		repository, err := remote.NewRepository(ref)
+		if err != nil {
+			return err
 		}
-		repository.Client = authClient
-	}
 
-	// Set PlainHTTP to false for secure registries
-	repository.PlainHTTP = false
+		// Configure authentication using Docker config
+		dockerStore, err := credentials.NewStoreFromDocker(credentials.StoreOptions{})
+		if err != nil {
+			// If docker config is not available, continue without auth
+			slog.Debug("unable to load docker config", "error", err)
+		} else {
+			// Create auth client with docker credentials
+			authClient := &auth.Client{
+				Credential: credentials.Credential(dockerStore),
+			}
+			repository.Client = authClient
+		}
+
+		// Set PlainHTTP to false for secure registries
+		repository.PlainHTTP = false
+	} else {
+		repository = i.repository
+	}
 
 	ctx := context.Background()
 
