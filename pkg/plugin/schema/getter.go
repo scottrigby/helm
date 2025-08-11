@@ -14,7 +14,6 @@
 package schema
 
 import (
-	"bytes"
 	"time"
 )
 
@@ -44,5 +43,5 @@ type InputMessageGetterV1 struct {
 }
 
 type OutputMessageGetterV1 struct {
-	Data *bytes.Buffer `json:"data"`
+	Data []byte `json:"data"`
 }

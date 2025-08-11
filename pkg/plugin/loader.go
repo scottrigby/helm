@@ -107,6 +107,7 @@ func newPrototypePluginManager() *prototypePluginManager {
 	return &prototypePluginManager{
 		runtimes: map[string]Runtime{
 			"subprocess": &RuntimeSubprocess{},
+			"extism/v1":  &RuntimeExtismV1{},
 		},
 	}
 }
