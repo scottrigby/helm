@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package plugin // import "helm.sh/helm/v4/pkg/plugin"
+package plugin
 
 import (
 	"os"
@@ -28,143 +28,82 @@ import (
 	"helm.sh/helm/v4/pkg/cli"
 )
 
-// TODO add tests for both legacy and v1 plugins
 func TestPrepareCommand(t *testing.T) {
 	cmdMain := "sh"
 	cmdArgs := []string{"-c", "echo \"test\""}
 
-	p := &V1{
-		Dir: "/tmp", // Unused
-		MetadataV1: &MetadataV1{
-			Name:       "test",
-			Type:       "cli/v1",
-			APIVersion: "v1",
-			Runtime:    "subprocess",
-			Config: &ConfigCLI{
-				IgnoreFlags: false,
-			},
-			RuntimeConfig: &RuntimeConfigSubprocess{
-				Command: "echo \"error\"",
-				PlatformCommand: []PlatformCommand{
-					{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
-					{OperatingSystem: runtime.GOOS, Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
-					{OperatingSystem: runtime.GOOS, Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
-					{OperatingSystem: runtime.GOOS, Architecture: runtime.GOARCH, Command: cmdMain, Args: cmdArgs},
-				},
-			},
-		},
+	platformCommands := []PlatformCommand{
+		{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+		{OperatingSystem: runtime.GOOS, Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+		{OperatingSystem: runtime.GOOS, Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+		{OperatingSystem: runtime.GOOS, Architecture: runtime.GOARCH, Command: cmdMain, Args: cmdArgs},
 	}
 
-	if subprocessConfig, ok := p.MetadataV1.RuntimeConfig.(*RuntimeConfigSubprocess); ok {
-		cmds := subprocessConfig.PlatformCommand
-		cmd, args, err := PrepareCommands(cmds, true, []string{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if cmd != cmdMain {
-			t.Fatalf("Expected %q, got %q", cmdMain, cmd)
-		}
-		if !reflect.DeepEqual(args, cmdArgs) {
-			t.Fatalf("Expected %v, got %v", cmdArgs, args)
-		}
+	cmd, args, err := PrepareCommands(platformCommands, true, []string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cmd != cmdMain {
+		t.Fatalf("Expected %q, got %q", cmdMain, cmd)
+	}
+	if !reflect.DeepEqual(args, cmdArgs) {
+		t.Fatalf("Expected %v, got %v", cmdArgs, args)
 	}
 }
 
 func TestPrepareCommandExtraArgs(t *testing.T) {
+
 	cmdMain := "sh"
 	cmdArgs := []string{"-c", "echo \"test\""}
+	platformCommands := []PlatformCommand{
+		{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+		{OperatingSystem: runtime.GOOS, Architecture: runtime.GOARCH, Command: cmdMain, Args: cmdArgs},
+		{OperatingSystem: runtime.GOOS, Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+		{OperatingSystem: runtime.GOOS, Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
+	}
+
 	extraArgs := []string{"--debug", "--foo", "bar"}
 
-	p := &V1{
-		Dir: "/tmp", // Unused
-		MetadataV1: &MetadataV1{
-			Name:       "test",
-			Type:       "cli/v1",
-			APIVersion: "v1",
-			Runtime:    "subprocess",
-			Config: &ConfigCLI{
-				IgnoreFlags: false,
+	type testCaseExpected struct {
+		cmdMain string
+		args    []string
+	}
+
+	testCases := map[string]struct {
+		ignoreFlags bool
+		expected    testCaseExpected
+	}{
+		"ignoreFlags false": {
+			ignoreFlags: false,
+			expected: testCaseExpected{
+				cmdMain: cmdMain,
+				args:    []string{"-c", "echo \"test\"", "--debug", "--foo", "bar"},
 			},
-			RuntimeConfig: &RuntimeConfigSubprocess{
-				Command: "echo \"error\"",
-				PlatformCommand: []PlatformCommand{
-					{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
-					{OperatingSystem: runtime.GOOS, Architecture: runtime.GOARCH, Command: cmdMain, Args: cmdArgs},
-					{OperatingSystem: runtime.GOOS, Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
-					{OperatingSystem: runtime.GOOS, Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
-				},
+		},
+		"ignoreFlags true": {
+			ignoreFlags: true,
+			expected: testCaseExpected{
+				cmdMain: cmdMain,
+				args:    []string{"-c", "echo \"test\""},
 			},
 		},
 	}
 
-	expectedArgs := append(cmdArgs, extraArgs...)
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			//expectedArgs := append(cmdArgs, extraArgs...)
 
-	// extra args are expected when ignoreFlags is unset or false
-	if cliConfig, ok := p.Metadata().GetConfig().(*ConfigCLI); ok {
-		if cliConfig.IgnoreFlags {
-			extraArgs = []string{}
-		}
-	}
-	if subprocessConfig, ok := p.MetadataV1.RuntimeConfig.(*RuntimeConfigSubprocess); ok {
-		cmds := subprocessConfig.PlatformCommand
-		cmd, args, err := PrepareCommands(cmds, true, extraArgs)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if cmd != cmdMain {
-			t.Fatalf("Expected %q, got %q", cmdMain, cmd)
-		}
-		if !reflect.DeepEqual(args, expectedArgs) {
-			t.Fatalf("Expected %v, got %v", expectedArgs, args)
-		}
-	}
-}
-
-func TestPrepareCommandExtraArgsIgnored(t *testing.T) {
-	cmdMain := "sh"
-	cmdArgs := []string{"-c", "echo \"test\""}
-	extraArgs := []string{"--debug", "--foo", "bar"}
-
-	p := &V1{
-		Dir: "/tmp", // Unused
-		MetadataV1: &MetadataV1{
-			Name:       "test",
-			Type:       "cli/v1",
-			APIVersion: "v1",
-			Runtime:    "subprocess",
-			Config: &ConfigCLI{
-				IgnoreFlags: true,
-			},
-			RuntimeConfig: &RuntimeConfigSubprocess{
-				Command: "echo \"error\"",
-				PlatformCommand: []PlatformCommand{
-					{OperatingSystem: "no-os", Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
-					{OperatingSystem: runtime.GOOS, Architecture: runtime.GOARCH, Command: cmdMain, Args: cmdArgs},
-					{OperatingSystem: runtime.GOOS, Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
-					{OperatingSystem: runtime.GOOS, Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
-				},
-			},
-		},
-	}
-
-	// no extra args if ignoreFlags is set
-	if cliConfig, ok := p.Metadata().GetConfig().(*ConfigCLI); ok {
-		if cliConfig.IgnoreFlags {
-			extraArgs = []string{}
-		}
-	}
-	if subprocessConfig, ok := p.Metadata().GetRuntimeConfig().(*RuntimeConfigSubprocess); ok {
-		cmds := subprocessConfig.PlatformCommand
-		cmd, args, err := PrepareCommands(cmds, true, extraArgs)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if cmd != cmdMain {
-			t.Fatalf("Expected %q, got %q", cmdMain, cmd)
-		}
-		if !reflect.DeepEqual(args, cmdArgs) {
-			t.Fatalf("Expected %v, got %v", cmdArgs, args)
-		}
+			// extra args are expected when ignoreFlags is unset or false
+			if tc.ignoreFlags {
+				extraArgs = []string{}
+			}
+			cmd, args, err := PrepareCommands(platformCommands, true, extraArgs)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assert.Equal(t, tc.expected.cmdMain, cmd, "Expected command to match")
+			assert.Equal(t, tc.expected.args, args, "Expected args to match")
+		})
 	}
 }
 
@@ -325,16 +264,8 @@ func TestPrepareCommandsNoExpand(t *testing.T) {
 
 func TestLoadDir(t *testing.T) {
 	dirname := "testdata/plugdir/good/hello"
-	plug, err := LoadDir(dirname)
-	if err != nil {
-		t.Fatalf("error loading Hello plugin: %s", err)
-	}
 
-	if plug.GetDir() != dirname {
-		t.Fatalf("Expected dir %q, got %q", dirname, plug.GetDir())
-	}
-
-	expect := &MetadataV1{
+	expect := Metadata{
 		Name:       "hello",
 		Version:    "0.1.0",
 		Type:       "cli/v1",
@@ -360,7 +291,11 @@ func TestLoadDir(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, expect, plug.Metadata())
+	plug, err := LoadDir(dirname)
+	require.NoError(t, err, "error loading plugin from %s", dirname)
+
+	assert.Equal(t, dirname, plug.Dir())
+	assert.EqualValues(t, expect, plug.Metadata())
 }
 
 func TestLoadDirDuplicateEntries(t *testing.T) {
@@ -370,12 +305,10 @@ func TestLoadDirDuplicateEntries(t *testing.T) {
 	}
 }
 
-func TestGetter(t *testing.T) {
+func TestLoadDirGetter(t *testing.T) {
 	dirname := "testdata/plugdir/good/getter"
-	plug, err := LoadDir(dirname)
-	assert.NoError(t, err)
 
-	expect := &MetadataV1{
+	expect := Metadata{
 		Name:       "getter",
 		Version:    "1.2.3",
 		Type:       "getter/v1",
@@ -394,16 +327,16 @@ func TestGetter(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, dirname, plug.GetDir())
+	plug, err := LoadDir(dirname)
+	require.NoError(t, err)
+	assert.Equal(t, dirname, plug.Dir())
 	assert.Equal(t, expect, plug.Metadata())
 }
 
 func TestPostRenderer(t *testing.T) {
 	dirname := "testdata/plugdir/good/postrenderer"
-	plug, err := LoadDir(dirname)
-	assert.NoError(t, err)
 
-	expect := &MetadataV1{
+	expect := Metadata{
 		Name:       "postrenderer",
 		Version:    "1.2.3",
 		Type:       "postrenderer/v1",
@@ -421,7 +354,9 @@ func TestPostRenderer(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, dirname, plug.GetDir())
+	plug, err := LoadDir(dirname)
+	require.NoError(t, err)
+	assert.Equal(t, dirname, plug.Dir())
 	assert.Equal(t, expect, plug.Metadata())
 }
 
@@ -497,10 +432,10 @@ func TestLoadAll(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Len(t, plugs, 4)
-	assert.Equal(t, "echo", plugs[0].Metadata().GetName())
-	assert.Equal(t, "getter", plugs[1].Metadata().GetName())
-	assert.Equal(t, "hello", plugs[2].Metadata().GetName())
-	assert.Equal(t, "postrenderer", plugs[3].Metadata().GetName())
+	assert.Equal(t, "echo", plugs[0].Metadata().Name)
+	assert.Equal(t, "getter", plugs[1].Metadata().Name)
+	assert.Equal(t, "hello", plugs[2].Metadata().Name)
+	assert.Equal(t, "postrenderer", plugs[3].Metadata().Name)
 }
 
 func TestFindPlugins(t *testing.T) {
@@ -581,21 +516,17 @@ func TestSetupEnvWithSpace(t *testing.T) {
 }
 
 func TestValidatePluginData(t *testing.T) {
-	// A mock plugin missing any metadata.
-	mockMissingMeta := &V1{
-		Dir: "no-such-dir",
-	}
 
 	// A mock plugin with no commands
-	mockNoCommand := mockPlugin("foo")
-	mockNoCommand.MetadataV1.RuntimeConfig = &RuntimeConfigSubprocess{
+	mockNoCommand := mockSubprocessCLIPlugin(t, "foo")
+	mockNoCommand.metadata.RuntimeConfig = &RuntimeConfigSubprocess{
 		PlatformCommand: []PlatformCommand{},
 		PlatformHooks:   map[string][]PlatformCommand{},
 	}
 
 	// A mock plugin with legacy commands
-	mockLegacyCommand := mockPlugin("foo")
-	mockLegacyCommand.MetadataV1.RuntimeConfig = &RuntimeConfigSubprocess{
+	mockLegacyCommand := mockSubprocessCLIPlugin(t, "foo")
+	mockLegacyCommand.metadata.RuntimeConfig = &RuntimeConfigSubprocess{
 		PlatformCommand: []PlatformCommand{},
 		Command:         "echo \"mock plugin\"",
 		PlatformHooks:   map[string][]PlatformCommand{},
@@ -605,8 +536,8 @@ func TestValidatePluginData(t *testing.T) {
 	}
 
 	// A mock plugin with a command also set
-	mockWithCommand := mockPlugin("foo")
-	mockWithCommand.MetadataV1.RuntimeConfig = &RuntimeConfigSubprocess{
+	mockWithCommand := mockSubprocessCLIPlugin(t, "foo")
+	mockWithCommand.metadata.RuntimeConfig = &RuntimeConfigSubprocess{
 		PlatformCommand: []PlatformCommand{
 			{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"mock plugin\""}},
 		},
@@ -614,8 +545,8 @@ func TestValidatePluginData(t *testing.T) {
 	}
 
 	// A mock plugin with a hooks also set
-	mockWithHooks := mockPlugin("foo")
-	mockWithHooks.MetadataV1.RuntimeConfig = &RuntimeConfigSubprocess{
+	mockWithHooks := mockSubprocessCLIPlugin(t, "foo")
+	mockWithHooks.metadata.RuntimeConfig = &RuntimeConfigSubprocess{
 		PlatformCommand: []PlatformCommand{
 			{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"mock plugin\""}},
 		},
@@ -631,21 +562,20 @@ func TestValidatePluginData(t *testing.T) {
 
 	for i, item := range []struct {
 		pass bool
-		plug *V1
+		plug Plugin
 	}{
-		{true, mockPlugin("abcdefghijklmnopqrstuvwxyz0123456789_-ABC")},
-		{true, mockPlugin("foo-bar-FOO-BAR_1234")},
-		{false, mockPlugin("foo -bar")},
-		{false, mockPlugin("$foo -bar")}, // Test leading chars
-		{false, mockPlugin("foo -bar ")}, // Test trailing chars
-		{false, mockPlugin("foo\nbar")},  // Test newline
-		{false, mockMissingMeta},         // Test if the metadata section missing
-		{true, mockNoCommand},            // Test no command metadata works
-		{true, mockLegacyCommand},        // Test legacy command metadata works
-		{false, mockWithCommand},         // Test platformCommand and command both set fails
-		{false, mockWithHooks},           // Test platformHooks and hooks both set fails
+		{true, mockSubprocessCLIPlugin(t, "abcdefghijklmnopqrstuvwxyz0123456789_-ABC")},
+		{true, mockSubprocessCLIPlugin(t, "foo-bar-FOO-BAR_1234")},
+		{false, mockSubprocessCLIPlugin(t, "foo -bar")},
+		{false, mockSubprocessCLIPlugin(t, "$foo -bar")}, // Test leading chars
+		{false, mockSubprocessCLIPlugin(t, "foo -bar ")}, // Test trailing chars
+		{false, mockSubprocessCLIPlugin(t, "foo\nbar")},  // Test newline
+		{true, mockNoCommand},     // Test no command metadata works
+		{true, mockLegacyCommand}, // Test legacy command metadata works
+		{false, mockWithCommand},  // Test platformCommand and command both set fails
+		{false, mockWithHooks},    // Test platformHooks and hooks both set fails
 	} {
-		err := item.plug.Validate()
+		err := item.plug.Metadata().Validate()
 		if item.pass && err != nil {
 			t.Errorf("failed to validate case %d: %s", i, err)
 		} else if !item.pass && err == nil {
@@ -656,22 +586,37 @@ func TestValidatePluginData(t *testing.T) {
 
 func TestDetectDuplicates(t *testing.T) {
 	plugs := []Plugin{
-		mockPlugin("foo"),
-		mockPlugin("bar"),
+		mockSubprocessCLIPlugin(t, "foo"),
+		mockSubprocessCLIPlugin(t, "bar"),
 	}
 	if err := detectDuplicates(plugs); err != nil {
 		t.Error("no duplicates in the first set")
 	}
-	plugs = append(plugs, mockPlugin("foo"))
+	plugs = append(plugs, mockSubprocessCLIPlugin(t, "foo"))
 	if err := detectDuplicates(plugs); err == nil {
 		t.Error("duplicates in the second set")
 	}
 }
 
-func mockPlugin(name string) *V1 {
-	return &V1{
-		MetadataV1: &MetadataV1{
-			Name:       name,
+func mockSubprocessCLIPlugin(t *testing.T, pluginName string) *PluginRuntimeSubprocess {
+	rc := RuntimeConfigSubprocess{
+		PlatformCommand: []PlatformCommand{
+			{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"mock plugin\""}},
+			{OperatingSystem: "windows", Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"mock plugin\""}},
+		},
+		PlatformHooks: map[string][]PlatformCommand{
+			Install: {
+				{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"installing...\""}},
+				{OperatingSystem: "windows", Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"installing...\""}},
+			},
+		},
+	}
+
+	pluginDir := t.TempDir()
+
+	return &PluginRuntimeSubprocess{
+		metadata: Metadata{
+			Name:       pluginName,
 			Version:    "v0.1.2",
 			Type:       "cli/v1",
 			APIVersion: "v1",
@@ -682,19 +627,9 @@ func mockPlugin(name string) *V1 {
 				LongHelp:    "Mock plugin for testing",
 				IgnoreFlags: false,
 			},
-			RuntimeConfig: &RuntimeConfigSubprocess{
-				PlatformCommand: []PlatformCommand{
-					{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"mock plugin\""}},
-					{OperatingSystem: "windows", Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"mock plugin\""}},
-				},
-				PlatformHooks: map[string][]PlatformCommand{
-					Install: {
-						{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"installing...\""}},
-						{OperatingSystem: "windows", Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"installing...\""}},
-					},
-				},
-			},
+			RuntimeConfig: &rc,
 		},
-		Dir: "no-such-dir",
+		pluginDir:     pluginDir, // NOTE: dir is empty (ie. plugin.yaml is not present)
+		RuntimeConfig: rc,
 	}
 }

@@ -15,15 +15,15 @@ limitations under the License.
 
 package plugin
 
-// Error is returned when a plugin invocation returns a non-zero status/exit code
-// - subprocess plugins: child process exit code
-type Error struct {
-	// Underlying error
-	Err  error
-	Code int
+// InvokeExecError is returned when a plugin invocation returns a non-zero status/exit code
+// - subprocess plugin: child process exit code
+// - extism plugin: wasm function return code
+type InvokeExecError struct {
+	Err  error // Underlying error
+	Code int   // Exeit code from plugin code execution
 }
 
 // Error implements the error interface
-func (e *Error) Error() string {
+func (e *InvokeExecError) Error() string {
 	return e.Err.Error()
 }
