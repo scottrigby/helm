@@ -73,7 +73,7 @@ func (r *postRendererPlugin) Run(renderedManifests *bytes.Buffer) (*bytes.Buffer
 	}
 	output, err := r.plugin.Invoke(context.Background(), input)
 	if err != nil {
-		return nil, fmt.Errorf("failed to invoke post-renderer plugin %q: %w", r.plugin.Metadata().GetName(), err)
+		return nil, fmt.Errorf("failed to invoke post-renderer plugin %q: %w", r.plugin.Metadata().Name, err)
 	}
 
 	outputMessage := output.Message.(*schema.OutputMessagePostRendererV1)
@@ -81,7 +81,7 @@ func (r *postRendererPlugin) Run(renderedManifests *bytes.Buffer) (*bytes.Buffer
 	// If the binary returned almost nothing, it's likely that it didn't
 	// successfully render anything
 	if len(bytes.TrimSpace(outputMessage.Manifests.Bytes())) == 0 {
-		return nil, fmt.Errorf("post-renderer %q produced empty output", r.plugin.Metadata().GetName())
+		return nil, fmt.Errorf("post-renderer %q produced empty output", r.plugin.Metadata().Name)
 	}
 
 	return outputMessage.Manifests, nil

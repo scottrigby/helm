@@ -48,7 +48,7 @@ func collectGetterPlugins(settings *cli.EnvSettings) (Providers, error) {
 	}
 	results := make([]Provider, 0, len(plgs))
 	for _, plg := range plgs {
-		if c, ok := plg.Metadata().GetConfig().(*plugin.ConfigGetter); ok {
+		if c, ok := plg.Metadata().Config.(*plugin.ConfigGetter); ok {
 			results = append(results, Provider{
 				Schemes: c.Protocols,
 				New:     pluginConstructorBuilder(plg),
@@ -117,7 +117,7 @@ func (g *getterPlugin) Get(href string, options ...Option) (*bytes.Buffer, error
 
 	outputMessage, ok := output.Message.(*schema.OutputMessageGetterV1)
 	if !ok {
-		return nil, fmt.Errorf("invalid output message type from plugin %q", g.plg.Metadata().GetName())
+		return nil, fmt.Errorf("invalid output message type from plugin %q", g.plg.Metadata().Name)
 	}
 
 	return outputMessage.Data, nil

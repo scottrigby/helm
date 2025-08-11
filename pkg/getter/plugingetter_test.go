@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"context"
 
-	"io"
 	"testing"
 	"time"
 
@@ -102,12 +101,12 @@ type TestPlugin struct {
 	dir string
 }
 
-func (t *TestPlugin) GetDir() string {
+func (t *TestPlugin) Dir() string {
 	return t.dir
 }
 
 func (t *TestPlugin) Metadata() plugin.Metadata {
-	return &plugin.MetadataV1{
+	return plugin.Metadata{
 		Name:       "fake-plugin",
 		Type:       "cli/v1",
 		APIVersion: "v1",
@@ -121,16 +120,6 @@ func (t *TestPlugin) Metadata() plugin.Metadata {
 			},
 		},
 	}
-}
-
-func (t *TestPlugin) InvokeWithEnv(_ string, _ []string, _ []string, _ io.Reader, _, _ io.Writer) error {
-	//TODO implement me
-	return nil
-}
-
-func (t *TestPlugin) InvokeHook(_ string) error {
-	// TODO implement me
-	return nil
 }
 
 func (t *TestPlugin) Invoke(_ context.Context, _ *plugin.Input) (*plugin.Output, error) {

@@ -49,21 +49,12 @@ func newPluginListCmd(out io.Writer) *cobra.Command {
 			table := uitable.New()
 			table.AddRow("NAME", "VERSION", "TYPE", "APIVERSION", "SOURCE")
 			for _, p := range plugins {
-				metadata := p.Metadata()
-				var version, sourceURL string
-				switch m := metadata.(type) {
-				case *plugin.MetadataV1:
-					version = m.Version
-					sourceURL = m.SourceURL
-				case *plugin.MetadataLegacy:
-					version = m.Version
-					// Legacy plugins don't have sourceURL field
-				}
-				// Set sourceURL to "unknown" if empty
+				m := p.Metadata()
+				sourceURL := m.SourceURL
 				if sourceURL == "" {
 					sourceURL = "unknown"
 				}
-				table.AddRow(p.Metadata().GetName(), version, p.Metadata().GetType(), p.Metadata().GetAPIVersion(), sourceURL)
+				table.AddRow(m.Name, m.Version, m.Type, m.APIVersion, sourceURL)
 			}
 			fmt.Fprintln(out, table)
 			return nil
@@ -85,7 +76,7 @@ func filterPlugins(plugins []plugin.Plugin, ignoredPluginNames []string) []plugi
 
 	var filteredPlugins []plugin.Plugin
 	for _, plugin := range plugins {
-		found := slices.Contains(ignoredPluginNames, plugin.Metadata().GetName())
+		found := slices.Contains(ignoredPluginNames, plugin.Metadata().Name)
 		if !found {
 			filteredPlugins = append(filteredPlugins, plugin)
 		}
@@ -105,17 +96,12 @@ func compListPlugins(_ string, ignoredPluginNames []string) []string {
 	if err == nil && len(plugins) > 0 {
 		filteredPlugins := filterPlugins(plugins, ignoredPluginNames)
 		for _, p := range filteredPlugins {
-			metadata := p.Metadata()
+			m := p.Metadata()
 			var shortHelp string
-			switch m := metadata.(type) {
-			case *plugin.MetadataV1:
-				if config, ok := m.Config.(*plugin.ConfigCLI); ok {
-					shortHelp = config.ShortHelp
-				}
-			case *plugin.MetadataLegacy:
-				shortHelp = m.Usage
+			if config, ok := m.Config.(*plugin.ConfigCLI); ok {
+				shortHelp = config.ShortHelp
 			}
-			pNames = append(pNames, fmt.Sprintf("%s\t%s", p.Metadata().GetName(), shortHelp))
+			pNames = append(pNames, fmt.Sprintf("%s\t%s", p.Metadata().Name, shortHelp))
 		}
 	}
 	return pNames
