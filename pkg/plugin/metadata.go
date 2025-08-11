@@ -252,6 +252,8 @@ func convertMetdataRuntimeConfig(runtimeType string, runtimeConfigRaw map[string
 	switch runtimeType {
 	case "subprocess":
 		runtimeConfig, err = unmarshalRuntimeConfigSubprocess(runtimeConfigRaw)
+	case "extism/v1":
+		runtimeConfig, err = unmarshalRuntimeConfigExtismV1(runtimeConfigRaw)
 	default:
 		return nil, fmt.Errorf("unsupported plugin runtime type: %q", runtimeType)
 	}
