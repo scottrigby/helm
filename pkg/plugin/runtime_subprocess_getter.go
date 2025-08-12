@@ -92,7 +92,7 @@ func (r *PluginRuntimeSubprocess) runGetter(input *Input) (*Output, error) {
 
 	return &Output{
 		Message: &schema.OutputMessageGetterV1{
-			Data: &buf,
+			Data: buf.Bytes(),
 		},
 	}, nil
 }

@@ -118,13 +118,13 @@ func (p *PluginRuntimeExtismV1) Invoke(ctx context.Context, input *Input) (*Outp
 		mc = mc.
 			WithStderr(input.Stderr)
 	}
-	// mv = mc.WithEnv()
+	// mc = mc.WithEnv()
 
 	config := extism.PluginConfig{
-		ModuleConfig:  mc,
-		RuntimeConfig: wazero.NewRuntimeConfig().WithCloseOnContextDone(true).WithCompilationCache(p.r.CompliationCache),
-		EnableWasi:    true,
-		//EnableHttpResponseHeaders: true,
+		ModuleConfig:              mc,
+		RuntimeConfig:             wazero.NewRuntimeConfig().WithCloseOnContextDone(true).WithCompilationCache(p.r.CompliationCache),
+		EnableWasi:                true,
+		EnableHttpResponseHeaders: true,
 		//ObserveAdapter: ,
 		//ObserveOptions: &observe.Options{},
 	}
@@ -150,12 +150,15 @@ func (p *PluginRuntimeExtismV1) Invoke(ctx context.Context, input *Input) (*Outp
 		//}
 		//slog.Log(context.Background(), slogLevel, s, slog.String("plugin", metadata.Name))
 		slog.Debug(s, slog.String("level", logLevel.String()), slog.String("plugin", p.metadata.Name))
+		fmt.Printf("%s [%s] %s", logLevel.String(), p.metadata.Name, s)
 	})
 
 	inputData, err := json.Marshal(input.Message)
 	if err != nil {
 		return nil, fmt.Errorf("failed to json marshel plugin input message: %T: %w", input.Message, err)
 	}
+
+	slog.Debug("plugin input", slog.String("plugin", p.metadata.Name), slog.String("inputData", string(inputData)))
 
 	entryFuncName := p.rc.EntryFuncName
 	if entryFuncName == "" {
@@ -172,6 +175,8 @@ func (p *PluginRuntimeExtismV1) Invoke(ctx context.Context, input *Input) (*Outp
 			Code: int(exitCode),
 		}
 	}
+
+	slog.Debug("plugin output", slog.String("plugin", p.metadata.Name), slog.Int("exitCode", int(exitCode)), slog.String("outputData", string(outputData)))
 
 	outputMessage := makeOutputMessage(p.metadata.Type)
 
