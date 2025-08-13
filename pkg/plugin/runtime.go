@@ -15,23 +15,19 @@ limitations under the License.
 
 package plugin
 
-import (
-	"bytes"
-	"io"
-)
-
-// Runtime interface defines the methods that all plugin runtimes must implement
+// Runtime represents a plugin runtime (subprocess, extism, etc) ie. how a plugin should be executed
+// Runtime is responsible for instantiating plugins that implement the runtime
+// TODO: could call this something more like "PluginRuntimeCreator"?
 type Runtime interface {
-	Invoke(stdin io.Reader, stdout, stderr io.Writer, env []string) error
-	InvokeHook(event string) error
-	// Postrender executes the plugin as a post-renderer with rendered manifests
-	// This method should only be called when the plugin type is "postrender"
-	Postrender(renderedManifests *bytes.Buffer, args []string) (*bytes.Buffer, error)
+	// Create a plugin instance from the given metadata
+	CreatePlugin(pluginDir string, metadata *Metadata) (Plugin, error)
+
+	// TODO: move config unmarshalling to the runtime
+	// UnmarshalConfig(runtimeConfigRaw map[string]any) (RuntimeConfig, error)
 }
 
-// RuntimeConfig interface defines the methods that all runtime configurations must implement
+// RuntimeConfig represents the assertable type for a plugin's runtime configuration.
+// It is expected to type assert (cast) the a RuntimeConfig to its expected type
 type RuntimeConfig interface {
-	GetRuntimeType() string
 	Validate() error
-	CreateRuntime(pluginDir string, pluginName string) (Runtime, error)
 }

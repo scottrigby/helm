@@ -16,9 +16,7 @@ limitations under the License.
 package cmd
 
 import (
-	"fmt"
 	"io"
-	"log/slog"
 
 	"github.com/spf13/cobra"
 
@@ -48,20 +46,11 @@ func newPluginCmd(out io.Writer) *cobra.Command {
 
 // runHook will execute a plugin hook.
 func runHook(p plugin.Plugin, event string) error {
-	plugin.SetupPluginEnv(settings, p.GetName(), p.GetDir())
-
-	// Get runtime instance
-	runtime, err := p.GetRuntimeInstance()
-	if err != nil {
-		return fmt.Errorf("failed to get runtime instance: %w", err)
+	pluginHook, ok := p.(plugin.PluginHook)
+	if ok {
+		plugin.SetupPluginEnv(settings, p.Metadata().Name, p.Dir())
+		return pluginHook.InvokeHook(event)
 	}
 
-	// For subprocess runtime, set settings
-	if subprocessRuntime, ok := runtime.(*plugin.RuntimeSubprocess); ok {
-		subprocessRuntime.SetSettings(settings)
-	}
-
-	slog.Debug("running hook", "event", event)
-
-	return runtime.InvokeHook(event)
+	return nil
 }

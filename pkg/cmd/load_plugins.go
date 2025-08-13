@@ -17,6 +17,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -26,6 +27,8 @@ import (
 	"strconv"
 	"strings"
 
+	"helm.sh/helm/v4/pkg/plugin/schema"
+
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
 
@@ -33,8 +36,8 @@ import (
 )
 
 // TODO: move pluginDynamicCompletionExecutable pkg/plugin/runtime_subprocess.go
-// any references to executables should be for [plugin.RuntimeSubprocess] only
-// this should also be for backwards compatibility in [plugin.PluginLegacy] only
+// any references to executables should be for [plugin.SubprocessPluginRuntime] only
+// this should also be for backwards compatibility in [plugin.Legacy] only
 //
 // TODO: for v1 make this configurable with a new CompletionCommand field for
 // [plugin.RuntimeConfigSubprocess]
@@ -48,18 +51,22 @@ type PluginError struct {
 	Code int
 }
 
-// loadPlugins loads plugins into the command list.
+// loadCLIPlugins loads CLI plugins into the command list.
 //
 // This follows a different pattern than the other commands because it has
 // to inspect its environment and then add commands to the base command
 // as it finds them.
-func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
+func loadCLIPlugins(baseCmd *cobra.Command, out io.Writer) {
 	// If HELM_NO_PLUGINS is set to 1, do not load plugins.
 	if os.Getenv("HELM_NO_PLUGINS") == "1" {
 		return
 	}
 
-	found, err := plugin.FindPlugins(settings.PluginsDirectory, pluginType)
+	dirs := filepath.SplitList(settings.PluginsDirectory)
+	descriptor := plugin.Descriptor{
+		Type: "cli/v1",
+	}
+	found, err := plugin.FindPlugins(dirs, descriptor)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to load plugins: %s\n", err)
 		return
@@ -68,20 +75,21 @@ func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 	// Now we create commands for all of these.
 	for _, plug := range found {
 		plug := plug
-		config := plug.GetConfig()
 		var use, short, long string
-		if cliConfig, ok := config.(*plugin.ConfigCLI); ok {
+		var ignoreFlags bool
+		if cliConfig, ok := plug.Metadata().Config.(*plugin.ConfigCLI); ok {
 			use = cliConfig.Usage
 			short = cliConfig.ShortHelp
 			long = cliConfig.LongHelp
+			ignoreFlags = cliConfig.IgnoreFlags
 		}
 
 		// Set defaults
 		if use == "" {
-			use = plug.GetName()
+			use = plug.Metadata().Name
 		}
 		if short == "" {
-			short = fmt.Sprintf("the %q plugin", plug.GetName())
+			short = fmt.Sprintf("the %q plugin", plug.Metadata().Name)
 		}
 		// long has no default, empty is ok
 
@@ -95,18 +103,12 @@ func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 					return err
 				}
 				// Setup plugin environment
-				plugin.SetupPluginEnv(settings, plug.GetName(), plug.GetDir())
+				plugin.SetupPluginEnv(settings, plug.Metadata().Name, plug.Dir())
 
-				// Get runtime instance
-				runtime, err := plug.GetRuntimeInstance()
-				if err != nil {
-					return fmt.Errorf("failed to get runtime instance: %w", err)
-				}
-
-				// For subprocess runtime, set extra args and settings
-				if subprocessRuntime, ok := runtime.(*plugin.RuntimeSubprocess); ok {
-					subprocessRuntime.SetExtraArgs(u)
-					subprocessRuntime.SetSettings(settings)
+				// For CLI plugin types runtime, set extra args and settings
+				extraArgs := []string{}
+				if !ignoreFlags {
+					extraArgs = u
 				}
 
 				// Prepare environment
@@ -116,8 +118,20 @@ func loadPlugins(baseCmd *cobra.Command, out io.Writer, pluginType string) {
 				}
 
 				// Invoke plugin
-				err = runtime.Invoke(os.Stdin, out, os.Stderr, env)
-				if execErr, ok := err.(*plugin.Error); ok {
+				input := &plugin.Input{
+					Message: schema.InputMessageCLIV1{
+						ExtraArgs: extraArgs,
+						Settings:  settings,
+					},
+					Env:    env,
+					Stdin:  os.Stdin,
+					Stdout: out,
+					Stderr: os.Stderr,
+				}
+				_, err = plug.Invoke(context.Background(), input)
+				// TODO do we want to keep execErr here?
+				if execErr, ok := err.(*plugin.InvokeExecError); ok {
+					// TODO can we replace cmd.PluginError with plugin.Error?
 					return PluginError{
 						error: execErr.Err,
 						Code:  execErr.Code,
@@ -210,7 +224,7 @@ type pluginCommand struct {
 func loadCompletionForPlugin(pluginCmd *cobra.Command, plug plugin.Plugin) {
 	// Parse the yaml file providing the plugin's sub-commands and flags
 	cmds, err := loadFile(strings.Join(
-		[]string{plug.GetDir(), pluginStaticCompletionFile}, string(filepath.Separator)))
+		[]string{plug.Dir(), pluginStaticCompletionFile}, string(filepath.Separator)))
 
 	if err != nil {
 		// The file could be missing or invalid.  No static completion for this plugin.
@@ -327,9 +341,16 @@ func loadFile(path string) (*pluginCommand, error) {
 // to obtain the dynamic completion choices.  It must pass all the flags and sub-commands
 // specified in the command-line to the plugin.complete executable (except helm's global flags)
 func pluginDynamicComp(plug plugin.Plugin, cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	config := plug.GetConfig()
+
+	subprocessPlug, ok := plug.(*plugin.SubprocessPluginRuntime)
+	if !ok {
+		// Completion only supported for subprocess plugins (TODO: fix this)
+		cobra.CompDebugln(fmt.Sprintf("Unsupported plugin runtime: %q", plug.Metadata().Runtime), settings.Debug)
+		return nil, cobra.ShellCompDirectiveDefault
+	}
+
 	var ignoreFlags bool
-	if cliConfig, ok := config.(*plugin.ConfigCLI); ok {
+	if cliConfig, ok := subprocessPlug.Metadata().Config.(*plugin.ConfigCLI); ok {
 		ignoreFlags = cliConfig.IgnoreFlags
 	}
 
@@ -339,7 +360,7 @@ func pluginDynamicComp(plug plugin.Plugin, cmd *cobra.Command, args []string, to
 	}
 
 	// We will call the dynamic completion script of the plugin
-	main := strings.Join([]string{plug.GetDir(), pluginDynamicCompletionExecutable}, string(filepath.Separator))
+	main := strings.Join([]string{plug.Dir(), pluginDynamicCompletionExecutable}, string(filepath.Separator))
 
 	// We must include all sub-commands passed on the command-line.
 	// To do that, we pass-in the entire CommandPath, except the first two elements
@@ -349,7 +370,7 @@ func pluginDynamicComp(plug plugin.Plugin, cmd *cobra.Command, args []string, to
 		argv = append(argv, u...)
 		argv = append(argv, toComplete)
 	}
-	plugin.SetupPluginEnv(settings, plug.GetName(), plug.GetDir())
+	plugin.SetupPluginEnv(settings, plug.Metadata().Name, plug.Dir())
 
 	cobra.CompDebugln(fmt.Sprintf("calling %s with args %v", main, argv), settings.Debug)
 	buf := new(bytes.Buffer)
@@ -360,23 +381,10 @@ func pluginDynamicComp(plug plugin.Plugin, cmd *cobra.Command, args []string, to
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
 
-	// Get runtime instance for dynamic completion
-	runtime, err := plug.GetRuntimeInstance()
-	if err != nil {
-		cobra.CompDebugln(fmt.Sprintf("Unable to get runtime for %s: %v", plug.GetName(), err.Error()), settings.Debug)
-		return nil, cobra.ShellCompDirectiveDefault
-	}
-
 	// For subprocess runtime, use InvokeWithEnv for dynamic completion
-	if subprocessRuntime, ok := runtime.(*plugin.RuntimeSubprocess); ok {
-		if err := subprocessRuntime.InvokeWithEnv(main, argv, env, nil, buf, buf); err != nil {
-			// The dynamic completion file is optional for a plugin, so this error is ok.
-			cobra.CompDebugln(fmt.Sprintf("Unable to call %s: %v", main, err.Error()), settings.Debug)
-			return nil, cobra.ShellCompDirectiveDefault
-		}
-	} else {
-		// Non-subprocess runtimes don't support dynamic completion yet
-		cobra.CompDebugln(fmt.Sprintf("Dynamic completion not supported for runtime type of %s", plug.GetName()), settings.Debug)
+	if err := subprocessPlug.InvokeWithEnv(main, argv, env, nil, buf, buf); err != nil {
+		// The dynamic completion file is optional for a plugin, so this error is ok.
+		cobra.CompDebugln(fmt.Sprintf("Unable to call %s: %v", main, err.Error()), settings.Debug)
 		return nil, cobra.ShellCompDirectiveDefault
 	}
 

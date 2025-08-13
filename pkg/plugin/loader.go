@@ -16,234 +16,237 @@ limitations under the License.
 package plugin
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
-	"sigs.k8s.io/yaml"
+	"go.yaml.in/yaml/v3"
 
 	"helm.sh/helm/v4/pkg/cli"
 )
 
-// Load loads a plugin from raw YAML data.
-// dirname is optional and can be empty if the plugin is not loaded from a directory.
-func Load(data []byte, dirname string) (Plugin, error) {
-	// First, try to detect the API version
-	var raw map[string]interface{}
-	if err := yaml.UnmarshalStrict(data, &raw); err != nil {
-		return nil, fmt.Errorf("failed to parse plugin: %w", err)
+func peekAPIVersion(r io.Reader) (string, error) {
+	type apiVersion struct {
+		APIVersion string `yaml:"apiVersion"`
 	}
 
-	// Check if APIVersion is present
-	if apiVersion, ok := raw["apiVersion"].(string); ok {
-		if apiVersion == "v1" {
-			// Load as V1 plugin with new structure
-			plug := &PluginV1{Dir: dirname}
-
-			// First, unmarshal the base metadata without the config and runtimeConfig fields
-			tempMeta := &struct {
-				APIVersion string `json:"apiVersion"`
-				Name       string `json:"name"`
-				Type       string `json:"type"`
-				Runtime    string `json:"runtime"`
-				Version    string `json:"version"`
-				SourceURL  string `json:"sourceURL,omitempty"`
-			}{}
-
-			if err := yaml.Unmarshal(data, tempMeta); err != nil {
-				return nil, fmt.Errorf("failed to load V1 plugin metadata: %w", err)
-			}
-
-			// Default runtime to subprocess if not specified
-			if tempMeta.Runtime == "" {
-				tempMeta.Runtime = "subprocess"
-			}
-
-			// Default type to cli if not specified
-			if tempMeta.Type == "" {
-				tempMeta.Type = "cli"
-			}
-
-			// Create the MetadataV1 struct with base fields
-			plug.MetadataV1 = &MetadataV1{
-				APIVersion: tempMeta.APIVersion,
-				Name:       tempMeta.Name,
-				Type:       tempMeta.Type,
-				Runtime:    tempMeta.Runtime,
-				Version:    tempMeta.Version,
-				SourceURL:  tempMeta.SourceURL,
-			}
-
-			// Extract the config section based on plugin type
-			if configData, ok := raw["config"].(map[string]interface{}); ok {
-				var config Config
-				var err error
-
-				switch tempMeta.Type {
-				case "cli":
-					config, err = unmarshalConfigCLI(configData)
-				case "download":
-					config, err = unmarshalConfigDownload(configData)
-				case "postrender":
-					config, err = unmarshalConfigPostrender(configData)
-				default:
-					return nil, fmt.Errorf("unsupported plugin type: %s", tempMeta.Type)
-				}
-
-				if err != nil {
-					return nil, fmt.Errorf("failed to unmarshal config for %s plugin: %w", tempMeta.Type, err)
-				}
-
-				plug.MetadataV1.Config = config
-			} else {
-				// Create default config based on plugin type
-				var config Config
-				switch tempMeta.Type {
-				case "cli":
-					config = &ConfigCLI{}
-				case "download":
-					config = &ConfigDownload{}
-				case "postrender":
-					config = &ConfigPostrender{}
-				default:
-					return nil, fmt.Errorf("unsupported plugin type: %s", tempMeta.Type)
-				}
-				plug.MetadataV1.Config = config
-			}
-
-			// Extract the runtimeConfig section based on runtime type
-			if runtimeConfigData, ok := raw["runtimeConfig"].(map[string]interface{}); ok {
-				var runtimeConfig RuntimeConfig
-				var err error
-
-				switch tempMeta.Runtime {
-				case "subprocess":
-					runtimeConfig, err = unmarshalRuntimeConfigSubprocess(runtimeConfigData)
-				case "wasm":
-					runtimeConfig, err = unmarshalRuntimeConfigWasm(runtimeConfigData)
-				default:
-					return nil, fmt.Errorf("unsupported runtime type: %s", tempMeta.Runtime)
-				}
-
-				if err != nil {
-					return nil, fmt.Errorf("failed to unmarshal runtimeConfig for %s runtime: %w", tempMeta.Runtime, err)
-				}
-
-				plug.MetadataV1.RuntimeConfig = runtimeConfig
-			} else {
-				// Create default runtimeConfig based on runtime type
-				var runtimeConfig RuntimeConfig
-				switch tempMeta.Runtime {
-				case "subprocess":
-					runtimeConfig = &RuntimeConfigSubprocess{}
-				case "wasm":
-					runtimeConfig = &RuntimeConfigWasm{}
-				default:
-					return nil, fmt.Errorf("unsupported runtime type: %s", tempMeta.Runtime)
-				}
-				plug.MetadataV1.RuntimeConfig = runtimeConfig
-			}
-
-			return plug, plug.Validate()
-		} else {
-			// Unsupported apiVersion
-			return nil, fmt.Errorf("unsupported apiVersion %q in plugin", apiVersion)
-		}
-	} else {
-		// Load as legacy plugin
-		plug := &PluginLegacy{Dir: dirname}
-		if err := yaml.UnmarshalStrict(data, &plug.MetadataLegacy); err != nil {
-			return nil, fmt.Errorf("failed to load legacy plugin: %w", err)
-		}
-		return plug, plug.Validate()
+	var v apiVersion
+	d := yaml.NewDecoder(r)
+	if err := d.Decode(&v); err != nil {
+		return "", err
 	}
+
+	return v.APIVersion, nil
+}
+
+func loadMetadataLegacy(metadataData []byte) (*Metadata, error) {
+
+	var ml MetadataLegacy
+	d := yaml.NewDecoder(bytes.NewReader(metadataData))
+	if err := d.Decode(&ml); err != nil {
+		return nil, err
+	}
+
+	if err := ml.Validate(); err != nil {
+		return nil, err
+	}
+
+	m := fromMetadataLegacy(ml)
+	if err := m.Validate(); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func loadMetadataV1(metadataData []byte) (*Metadata, error) {
+
+	var mv1 MetadataV1
+	d := yaml.NewDecoder(bytes.NewReader(metadataData))
+	if err := d.Decode(&mv1); err != nil {
+		return nil, err
+	}
+
+	if err := mv1.Validate(); err != nil {
+		return nil, err
+	}
+
+	m, err := fromMetadataV1(mv1)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert MetadataV1 to Metadata: %w", err)
+	}
+
+	if err := m.Validate(); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func loadMetadata(metadataData []byte) (*Metadata, error) {
+	apiVersion, err := peekAPIVersion(bytes.NewReader(metadataData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to peek %s API version: %w", PluginFileName, err)
+	}
+
+	switch apiVersion {
+	case "": // legacy
+		return loadMetadataLegacy(metadataData)
+	case "v1":
+		return loadMetadataV1(metadataData)
+	}
+
+	return nil, fmt.Errorf("invalid plugin apiVersion: %q", apiVersion)
+}
+
+type prototypePluginManager struct {
+	runtimes map[string]Runtime
+}
+
+func newPrototypePluginManager() *prototypePluginManager {
+	return &prototypePluginManager{
+		runtimes: map[string]Runtime{
+			"subprocess": &RuntimeSubprocess{},
+			"extism/v1":  &RuntimeExtismV1{},
+		},
+	}
+}
+
+func (pm *prototypePluginManager) RegisterRuntime(runtimeName string, runtime Runtime) {
+	//if _, exists := pm.runtimes[runtimeName]; exists {
+	pm.runtimes[runtimeName] = runtime
+}
+
+func (pm *prototypePluginManager) CreatePlugin(pluginPath string, metadata *Metadata) (Plugin, error) {
+	rt, ok := pm.runtimes[metadata.Runtime]
+	if !ok {
+		return nil, fmt.Errorf("unsupported plugin runtime type: %q", metadata.Runtime)
+	}
+
+	return rt.CreatePlugin(pluginPath, metadata)
 }
 
 // LoadDir loads a plugin from the given directory.
 func LoadDir(dirname string) (Plugin, error) {
 	pluginfile := filepath.Join(dirname, PluginFileName)
-	data, err := os.ReadFile(pluginfile)
+	metadataData, err := os.ReadFile(pluginfile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read plugin at %q: %w", pluginfile, err)
 	}
 
-	plugin, err := Load(data, dirname)
+	m, err := loadMetadata(metadataData)
 	if err != nil {
-		return nil, fmt.Errorf("plugin at %q: %w", pluginfile, err)
+		return nil, fmt.Errorf("failed to load plugin %q: %w", dirname, err)
 	}
-	return plugin, nil
+
+	pm := newPrototypePluginManager()
+	return pm.CreatePlugin(dirname, m)
 }
 
 // LoadAll loads all plugins found beneath the base directory.
 //
 // This scans only one directory level.
-func LoadAll(basedir, pluginType string) ([]Plugin, error) {
-	plugins := []Plugin{}
+func LoadAll(basedir string) ([]Plugin, error) {
+	var plugins []Plugin
 	// We want basedir/*/plugin.yaml
 	scanpath := filepath.Join(basedir, "*", PluginFileName)
 	matches, err := filepath.Glob(scanpath)
 	if err != nil {
-		return plugins, fmt.Errorf("failed to find plugins in %q: %w", scanpath, err)
+		return nil, fmt.Errorf("failed to search for plugins in %q: %w", scanpath, err)
 	}
 
-	if matches == nil {
+	// empty dir should load
+	if len(matches) == 0 {
 		return plugins, nil
 	}
 
-	for _, yaml := range matches {
-		dir := filepath.Dir(yaml)
+	for _, yamlFile := range matches {
+		dir := filepath.Dir(yamlFile)
 		p, err := LoadDir(dir)
 		if err != nil {
 			return plugins, err
 		}
-		if pluginType == "" || p.GetType() == pluginType {
-			plugins = append(plugins, p)
-		}
+		plugins = append(plugins, p)
 	}
 	return plugins, detectDuplicates(plugins)
 }
 
-// FindPlugins returns a list of YAML files that describe plugins.
-func FindPlugins(plugdirs string, pluginType string) ([]Plugin, error) {
-	found := []Plugin{}
-	// Let's get all UNIXy and allow path separators
-	for _, p := range filepath.SplitList(plugdirs) {
-		matches, err := LoadAll(p, pluginType)
+// findFunc is a function that finds plugins in a directory
+type findFunc func(pluginsDir string) ([]Plugin, error)
+
+// filterFunc is a function that filters plugins
+type filterFunc func(Plugin) bool
+
+// FindPlugins returns a list of plugins that match the descriptor
+func FindPlugins(pluginsDirs []string, descriptor Descriptor) ([]Plugin, error) {
+	return findPlugins(pluginsDirs, LoadAll, makeDescriptorFilter(descriptor))
+}
+
+// findPlugins is the internal implementation that uses the find and filter functions
+func findPlugins(pluginsDirs []string, findFunc findFunc, filterFunc filterFunc) ([]Plugin, error) {
+	var found []Plugin
+	for _, pluginsDir := range pluginsDirs {
+		ps, err := findFunc(pluginsDir)
+
 		if err != nil {
-			return matches, err
+			return nil, err
 		}
-		found = append(found, matches...)
+
+		for _, p := range ps {
+			if filterFunc(p) {
+				found = append(found, p)
+			}
+		}
+
 	}
+
 	return found, nil
 }
 
-// FindPlugin returns a plugin by name and optionally by type
-// pluginType can be an empty string for any type
-// TODO disambiguate from [cmd.findPlugin] or merge with this public func?
-func FindPlugin(name, plugdirs, pluginType string) (Plugin, error) {
-	plugins, _ := FindPlugins(plugdirs, pluginType)
-	for _, p := range plugins {
-		if p.GetName() == name {
-			return p, nil
+// makeDescriptorFilter creates a filter function from a descriptor
+// Additional plugin filter criteria we wish to support can be added here
+func makeDescriptorFilter(descriptor Descriptor) filterFunc {
+	return func(p Plugin) bool {
+		// If name is specified, it must match
+		if descriptor.Name != "" && p.Metadata().Name != descriptor.Name {
+			return false
+
 		}
+		// If type is specified, it must match
+		if descriptor.Type != "" && p.Metadata().Type != descriptor.Type {
+			return false
+		}
+		return true
 	}
-	err := fmt.Errorf("plugin: %s not found", name)
-	return nil, err
+}
+
+// FindPlugin returns a single plugin that matches the descriptor
+func FindPlugin(dirs []string, descriptor Descriptor) (Plugin, error) {
+	plugins, err := FindPlugins(dirs, descriptor)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(plugins) > 0 {
+		return plugins[0], nil
+	}
+
+	return nil, fmt.Errorf("plugin: %+v not found", descriptor)
 }
 
 func detectDuplicates(plugs []Plugin) error {
 	names := map[string]string{}
 
 	for _, plug := range plugs {
-		if oldpath, ok := names[plug.GetName()]; ok {
+		if oldpath, ok := names[plug.Metadata().Name]; ok {
 			return fmt.Errorf(
 				"two plugins claim the name %q at %q and %q",
-				plug.GetName(),
+				plug.Metadata().Name,
 				oldpath,
-				plug.GetDir(),
+				plug.Dir(),
 			)
 		}
-		names[plug.GetName()] = plug.GetDir()
+		names[plug.Metadata().Name] = plug.Dir()
 	}
 
 	return nil
@@ -252,7 +255,7 @@ func detectDuplicates(plugs []Plugin) error {
 // SetupPluginEnv prepares os.Env for plugins. It operates on os.Env because
 // the plugin subsystem itself needs access to the environment variables
 // created here.
-func SetupPluginEnv(settings *cli.EnvSettings, name, base string) {
+func SetupPluginEnv(settings *cli.EnvSettings, name, base string) { // TODO: remove
 	env := settings.EnvVars()
 	env["HELM_PLUGIN_NAME"] = name
 	env["HELM_PLUGIN_DIR"] = base

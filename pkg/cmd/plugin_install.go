@@ -19,19 +19,31 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"helm.sh/helm/v4/pkg/cmd/require"
+	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/plugin"
 	"helm.sh/helm/v4/pkg/plugin/installer"
+	"helm.sh/helm/v4/pkg/registry"
 )
 
 type pluginInstallOptions struct {
 	source  string
 	version string
+	// signing options
 	verify  bool
 	keyring string
+	// OCI-specific options
+	certFile              string
+	keyFile               string
+	caFile                string
+	insecureSkipTLSverify bool
+	plainHTTP             bool
+	password              string
+	username              string
 }
 
 const pluginInstallDesc = `
@@ -73,6 +85,16 @@ func newPluginInstallCmd(out io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&o.version, "version", "", "specify a version constraint. If this is not specified, the latest version is installed")
 	cmd.Flags().BoolVar(&o.verify, "verify", true, "verify the plugin signature before installing")
 	cmd.Flags().StringVar(&o.keyring, "keyring", defaultKeyring(), "location of public keys used for verification")
+
+	// Add OCI-specific flags
+	cmd.Flags().StringVar(&o.certFile, "cert-file", "", "identify registry client using this SSL certificate file")
+	cmd.Flags().StringVar(&o.keyFile, "key-file", "", "identify registry client using this SSL key file")
+	cmd.Flags().StringVar(&o.caFile, "ca-file", "", "verify certificates of HTTPS-enabled servers using this CA bundle")
+	cmd.Flags().BoolVar(&o.insecureSkipTLSverify, "insecure-skip-tls-verify", false, "skip tls certificate checks for the plugin download")
+	cmd.Flags().BoolVar(&o.plainHTTP, "plain-http", false, "use insecure HTTP connections for the plugin download")
+	cmd.Flags().StringVar(&o.username, "username", "", "registry username")
+	cmd.Flags().StringVar(&o.password, "password", "", "registry password")
+
 	return cmd
 }
 
@@ -81,10 +103,39 @@ func (o *pluginInstallOptions) complete(args []string) error {
 	return nil
 }
 
+func (o *pluginInstallOptions) newInstallerForSource() (installer.Installer, error) {
+	// Check if source is an OCI registry reference
+	if strings.HasPrefix(o.source, fmt.Sprintf("%s://", registry.OCIScheme)) {
+		// Build getter options for OCI
+		var options []getter.Option
+
+		if o.certFile != "" || o.keyFile != "" || o.caFile != "" {
+			options = append(options, getter.WithTLSClientConfig(o.certFile, o.keyFile, o.caFile))
+		}
+
+		if o.insecureSkipTLSverify {
+			options = append(options, getter.WithInsecureSkipVerifyTLS(o.insecureSkipTLSverify))
+		}
+
+		if o.plainHTTP {
+			options = append(options, getter.WithPlainHTTP(o.plainHTTP))
+		}
+
+		if o.username != "" || o.password != "" {
+			options = append(options, getter.WithBasicAuth(o.username, o.password))
+		}
+
+		return installer.NewOCIInstaller(o.source, options...)
+	}
+
+	// For non-OCI sources, use the original logic
+	return installer.NewForSource(o.source, o.version)
+}
+
 func (o *pluginInstallOptions) run(out io.Writer) error {
 	installer.Debug = settings.Debug
 
-	i, err := installer.NewForSource(o.source, o.version)
+	i, err := o.newInstallerForSource()
 	if err != nil {
 		return err
 	}
@@ -143,6 +194,6 @@ func (o *pluginInstallOptions) run(out io.Writer) error {
 		return err
 	}
 
-	fmt.Fprintf(out, "Installed plugin: %s\n", p.GetName())
+	fmt.Fprintf(out, "Installed plugin: %s\n", p.Metadata().Name)
 	return nil
 }

@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"helm.sh/helm/v4/pkg/plugin"
+	"helm.sh/helm/v4/pkg/registry"
 )
 
 // ErrMissingMetadata indicates that plugin.yaml is missing.
@@ -149,6 +150,10 @@ func Update(i Installer) error {
 
 // NewForSource determines the correct Installer for the given source.
 func NewForSource(source, version string) (Installer, error) {
+	// Check if source is an OCI registry reference
+	if strings.HasPrefix(source, fmt.Sprintf("%s://", registry.OCIScheme)) {
+		return NewOCIInstaller(source)
+	}
 	// Check if source is a local directory
 	if isLocalReference(source) {
 		return NewLocalInstaller(source)
