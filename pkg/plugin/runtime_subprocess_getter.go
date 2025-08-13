@@ -38,7 +38,7 @@ func getProtocolCommand(commands []SubprocessProtocolCommand, protocol string) *
 }
 
 // TODO can we replace a lot of this func with RuntimeSubprocess.invokeWithEnv?
-func (r *PluginRuntimeSubprocess) runGetter(input *Input) (*Output, error) {
+func (r *SubprocessPluginRuntime) runGetter(input *Input) (*Output, error) {
 	msg, ok := (input.Message).(schema.InputMessageGetterV1)
 	if !ok {
 		return nil, fmt.Errorf("expected input type schema.InputMessageGetterV1, got %T", input)

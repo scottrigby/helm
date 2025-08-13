@@ -598,7 +598,9 @@ func TestDetectDuplicates(t *testing.T) {
 	}
 }
 
-func mockSubprocessCLIPlugin(t *testing.T, pluginName string) *PluginRuntimeSubprocess {
+func mockSubprocessCLIPlugin(t *testing.T, pluginName string) *SubprocessPluginRuntime {
+	t.Helper()
+
 	rc := RuntimeConfigSubprocess{
 		PlatformCommand: []PlatformCommand{
 			{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"mock plugin\""}},
@@ -614,7 +616,7 @@ func mockSubprocessCLIPlugin(t *testing.T, pluginName string) *PluginRuntimeSubp
 
 	pluginDir := t.TempDir()
 
-	return &PluginRuntimeSubprocess{
+	return &SubprocessPluginRuntime{
 		metadata: Metadata{
 			Name:       pluginName,
 			Version:    "v0.1.2",

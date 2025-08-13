@@ -79,7 +79,7 @@ var _ Runtime = (*RuntimeSubprocess)(nil)
 
 // CreateRuntime implementation for RuntimeConfig
 func (r *RuntimeSubprocess) CreatePlugin(pluginDir string, metadata *Metadata) (Plugin, error) {
-	return &PluginRuntimeSubprocess{
+	return &SubprocessPluginRuntime{
 		metadata:      *metadata,
 		pluginDir:     pluginDir,
 		RuntimeConfig: *(metadata.RuntimeConfig.(*RuntimeConfigSubprocess)),
@@ -87,23 +87,23 @@ func (r *RuntimeSubprocess) CreatePlugin(pluginDir string, metadata *Metadata) (
 }
 
 // RuntimeSubprocess implements the Runtime interface for subprocess execution
-type PluginRuntimeSubprocess struct {
+type SubprocessPluginRuntime struct {
 	metadata      Metadata
 	pluginDir     string
 	RuntimeConfig RuntimeConfigSubprocess
 }
 
-var _ Plugin = (*PluginRuntimeSubprocess)(nil)
+var _ Plugin = (*SubprocessPluginRuntime)(nil)
 
-func (r *PluginRuntimeSubprocess) Dir() string {
+func (r *SubprocessPluginRuntime) Dir() string {
 	return r.pluginDir
 }
 
-func (r *PluginRuntimeSubprocess) Metadata() Metadata {
+func (r *SubprocessPluginRuntime) Metadata() Metadata {
 	return r.metadata
 }
 
-func (r *PluginRuntimeSubprocess) Invoke(_ context.Context, input *Input) (*Output, error) {
+func (r *SubprocessPluginRuntime) Invoke(_ context.Context, input *Input) (*Output, error) {
 	switch input.Message.(type) {
 	case schema.InputMessageCLIV1:
 		return r.runCLI(input)
@@ -118,7 +118,7 @@ func (r *PluginRuntimeSubprocess) Invoke(_ context.Context, input *Input) (*Outp
 
 // InvokeWithEnv executes a plugin command with custom environment and I/O streams
 // This method allows execution with different command/args than the plugin's default
-func (r *PluginRuntimeSubprocess) InvokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {
+func (r *SubprocessPluginRuntime) InvokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	mainCmdExp := os.ExpandEnv(main)
 	prog := exec.Command(mainCmdExp, argv...)
 	prog.Env = env
@@ -139,7 +139,7 @@ func (r *PluginRuntimeSubprocess) InvokeWithEnv(main string, argv []string, env 
 	return nil
 }
 
-func (r *PluginRuntimeSubprocess) InvokeHook(event string) error {
+func (r *SubprocessPluginRuntime) InvokeHook(event string) error {
 	// Get hook commands for the event
 	var cmds []PlatformCommand
 	expandArgs := true
@@ -209,7 +209,7 @@ func executeCmd(prog *exec.Cmd, pluginName string) error {
 	return nil
 }
 
-func (r *PluginRuntimeSubprocess) runCLI(input *Input) (*Output, error) {
+func (r *SubprocessPluginRuntime) runCLI(input *Input) (*Output, error) {
 	if _, ok := input.Message.(schema.InputMessageCLIV1); !ok {
 		return nil, fmt.Errorf("plugin %q input message does not implement InputMessageCLIV1", r.metadata.Name)
 	}
@@ -236,7 +236,7 @@ func (r *PluginRuntimeSubprocess) runCLI(input *Input) (*Output, error) {
 	}, nil
 }
 
-func (r *PluginRuntimeSubprocess) runPostrenderer(input *Input) (*Output, error) {
+func (r *SubprocessPluginRuntime) runPostrenderer(input *Input) (*Output, error) {
 	if _, ok := input.Message.(schema.InputMessagePostRendererV1); !ok {
 		return nil, fmt.Errorf("plugin %q input message does not implement InputMessagePostRendererV1", r.metadata.Name)
 	}

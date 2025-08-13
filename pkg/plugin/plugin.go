@@ -54,7 +54,7 @@ type Plugin interface {
 }
 
 // PluginHook allows plugins to implement hooks that are invoked on plugin management events (install, upgrade, etc)
-type PluginHook interface {
+type PluginHook interface { //nolint:revive
 	InvokeHook(event string) error
 }
 

@@ -36,7 +36,7 @@ import (
 )
 
 // TODO: move pluginDynamicCompletionExecutable pkg/plugin/runtime_subprocess.go
-// any references to executables should be for [plugin.PluginRuntimeSubprocess] only
+// any references to executables should be for [plugin.SubprocessPluginRuntime] only
 // this should also be for backwards compatibility in [plugin.Legacy] only
 //
 // TODO: for v1 make this configurable with a new CompletionCommand field for
@@ -342,7 +342,7 @@ func loadFile(path string) (*pluginCommand, error) {
 // specified in the command-line to the plugin.complete executable (except helm's global flags)
 func pluginDynamicComp(plug plugin.Plugin, cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 
-	subprocessPlug, ok := plug.(*plugin.PluginRuntimeSubprocess)
+	subprocessPlug, ok := plug.(*plugin.SubprocessPluginRuntime)
 	if !ok {
 		// Completion only supported for subprocess plugins (TODO: fix this)
 		cobra.CompDebugln(fmt.Sprintf("Unsupported plugin runtime: %q", plug.Metadata().Runtime), settings.Debug)

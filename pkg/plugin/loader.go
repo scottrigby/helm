@@ -50,6 +50,7 @@ func loadMetadataLegacy(metadataData []byte) (*Metadata, error) {
 	}
 
 	if err := ml.Validate(); err != nil {
+		return nil, err
 	}
 
 	m := fromMetadataLegacy(ml)
