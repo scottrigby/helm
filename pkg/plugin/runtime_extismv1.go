@@ -31,7 +31,7 @@ import (
 
 type RuntimeConfigExtismV1 struct {
 	MaxPages             uint32            `json:"maxPages,omitempty"`
-	MaxHttpResponseBytes int64             `json:"maxHttpResponseBytes,omitempty"`
+	MaxHTTPResponseBytes int64             `json:"maxHttpResponseBytes,omitempty"`
 	MaxVarBytes          int64             `json:"maxVarBytes,omitempty"`
 	Config               map[string]string `json:"config,omitempty"`
 	AllowedHosts         []string          `json:"allowedHosts,omitempty"`
@@ -72,7 +72,7 @@ func (r *RuntimeExtismV1) CreatePlugin(pluginDir string, metadata *Metadata) (Pl
 		},
 		Memory: &extism.ManifestMemory{
 			MaxPages:             rc.MaxPages,
-			MaxHttpResponseBytes: rc.MaxHttpResponseBytes,
+			MaxHttpResponseBytes: rc.MaxHTTPResponseBytes,
 			MaxVarBytes:          rc.MaxVarBytes,
 		},
 		Config:       rc.Config,
@@ -91,7 +91,7 @@ func (r *RuntimeExtismV1) CreatePlugin(pluginDir string, metadata *Metadata) (Pl
 		hostFunctions = append(hostFunctions, fn)
 	}
 
-	return &PluginRuntimeExtismV1{
+	return &ExtismV1PluginRuntime{
 		metadata:      *metadata,
 		dir:           pluginDir,
 		manifest:      manifest,
@@ -99,7 +99,7 @@ func (r *RuntimeExtismV1) CreatePlugin(pluginDir string, metadata *Metadata) (Pl
 	}, nil
 }
 
-type PluginRuntimeExtismV1 struct {
+type ExtismV1PluginRuntime struct {
 	metadata      Metadata
 	dir           string
 	manifest      extism.Manifest
@@ -108,17 +108,17 @@ type PluginRuntimeExtismV1 struct {
 	r             RuntimeExtismV1
 }
 
-var _ Plugin = (*PluginRuntimeExtismV1)(nil)
+var _ Plugin = (*ExtismV1PluginRuntime)(nil)
 
-func (p *PluginRuntimeExtismV1) Metadata() Metadata {
+func (p *ExtismV1PluginRuntime) Metadata() Metadata {
 	return p.metadata
 }
 
-func (p *PluginRuntimeExtismV1) Dir() string {
+func (p *ExtismV1PluginRuntime) Dir() string {
 	return p.dir
 }
 
-func (p *PluginRuntimeExtismV1) Invoke(ctx context.Context, input *Input) (*Output, error) {
+func (p *ExtismV1PluginRuntime) Invoke(ctx context.Context, input *Input) (*Output, error) {
 
 	mc := wazero.NewModuleConfig().
 		WithSysWalltime()
