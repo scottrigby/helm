@@ -22,9 +22,9 @@ import (
 
 	"net/url"
 
+	"helm.sh/helm/v4/internal/plugin"
+	"helm.sh/helm/v4/internal/plugin/schema"
 	"helm.sh/helm/v4/pkg/cli"
-	"helm.sh/helm/v4/pkg/plugin"
-	"helm.sh/helm/v4/pkg/plugin/schema"
 )
 
 // collectGetterPlugins scans for getter plugins.

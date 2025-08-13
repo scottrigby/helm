@@ -22,10 +22,10 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"helm.sh/helm/v4/pkg/plugin/schema"
+	"helm.sh/helm/v4/internal/plugin/schema"
 
+	"helm.sh/helm/v4/internal/plugin"
 	"helm.sh/helm/v4/pkg/cli"
-	"helm.sh/helm/v4/pkg/plugin"
 )
 
 // PostRenderer is an interface different plugin runtimes

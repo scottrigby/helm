@@ -20,7 +20,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"helm.sh/helm/v4/pkg/plugin"
+	"helm.sh/helm/v4/internal/plugin"
 )
 
 const pluginHelp = `

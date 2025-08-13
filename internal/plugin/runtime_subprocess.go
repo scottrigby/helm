@@ -27,7 +27,7 @@ import (
 
 	"sigs.k8s.io/yaml"
 
-	"helm.sh/helm/v4/pkg/plugin/schema"
+	"helm.sh/helm/v4/internal/plugin/schema"
 )
 
 // SubprocessProtocolCommand maps a given protocol to the getter command used to retrieve artifacts for that protcol

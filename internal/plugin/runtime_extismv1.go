@@ -26,7 +26,7 @@ import (
 	"github.com/tetratelabs/wazero"
 	"sigs.k8s.io/yaml"
 
-	"helm.sh/helm/v4/pkg/plugin/schema"
+	"helm.sh/helm/v4/internal/plugin/schema"
 )
 
 type RuntimeConfigExtismV1 struct {
