@@ -38,19 +38,19 @@ func getProtocolCommand(commands []SubprocessProtocolCommand, protocol string) *
 }
 
 // TODO can we replace a lot of this func with RuntimeSubprocess.invokeWithEnv?
-func (r *RuntimeSubprocess) runGetter(input *Input) (*Output, error) {
+func (r *PluginRuntimeSubprocess) runGetter(input *Input) (*Output, error) {
 	msg, ok := (input.Message).(schema.InputMessageGetterV1)
 	if !ok {
 		return nil, fmt.Errorf("expected input type schema.InputMessageGetterV1, got %T", input)
 	}
 
-	tmpDir, err := os.MkdirTemp(os.TempDir(), fmt.Sprintf("helm-plugin-%s-", r.pluginName))
+	tmpDir, err := os.MkdirTemp(os.TempDir(), fmt.Sprintf("helm-plugin-%s-", r.metadata.Name))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temporary directory: %w", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	d := getProtocolCommand(r.config.ProtocolCommands, msg.Protocol)
+	d := getProtocolCommand(r.RuntimeConfig.ProtocolCommands, msg.Protocol)
 	if d == nil {
 		return nil, fmt.Errorf("no downloader found for protocol %q", msg.Protocol)
 	}
@@ -86,7 +86,7 @@ func (r *RuntimeSubprocess) runGetter(input *Input) (*Output, error) {
 	prog.Env = env
 	prog.Stdout = &buf
 	prog.Stderr = os.Stderr
-	if err := executeCmd(prog, r.pluginName); err != nil {
+	if err := executeCmd(prog, r.metadata.Name); err != nil {
 		return nil, err
 	}
 

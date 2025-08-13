@@ -14,6 +14,7 @@ limitations under the License.
 */
 
 package plugin // import "helm.sh/helm/v4/pkg/plugin"
+
 import (
 	"context"
 	"io"
@@ -31,19 +32,36 @@ type Downloaders struct {
 	Command string `json:"command"`
 }
 
-// Plugin interface defines the common methods that all plugin versions must implement
+// Plugin defines a plugin instance. The client (Helm codebase) facing type that can be used to introspect and invoke a plugin
 type Plugin interface {
-	GetDir() string
+	// Dir return the plugin directory (as an absolute path) on the filesystem
+	Dir() string
+
+	// Metadata describes the plugin's type, version, etc.
+	// (This metadata type is the converted and plugin version independented in-memory representation of the plugin.yaml file)
 	Metadata() Metadata
+
+	// Invoke takes the given input, and dispatches the contents to plugin instance
+	// The input is expected to be a JSON-serializable object, which the plugin will interpret according to its type
+	// The plugin is expected to return a JSON-serializable object, which the invoker
+	// will interpret according to the plugin's type
+	//
+	// Invoke can be thought of as a request/response mechanism. Similar to e.g. http.RoundTripper
+	//
+	// If plugin's execution fails with a non-zero "return code" (this is plugin runtime implementation specific)
+	// an InvokeExecError is returned
 	Invoke(ctx context.Context, input *Input) (*Output, error)
-	InvokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error
+}
+
+// PluginHook allows plugins to implement hooks that are invoked on plugin management events (install, upgrade, etc)
+type PluginHook interface {
 	InvokeHook(event string) error
 }
 
 // Input defines the input message and parameters to be passed to the plugin
 type Input struct {
 	// Message represents the type-elided value to be passed to the plugin.
-	// The plugin is expected to interpret the message according to its type/version
+	// The plugin is expected to interpret the message according to its type
 	// The message object must be JSON-serializable
 	Message any
 
@@ -53,14 +71,15 @@ type Input struct {
 	// Optional: Writers to consume the plugin's "stdout" and "stderr"
 	Stdout, Stderr io.Writer
 
-	// Env represents the environment as a list of "key=value" strings
+	// Optional: Env represents the environment as a list of "key=value" strings
 	// see os.Environ
 	Env []string
 }
 
 // Output defines the output message and parameters the passed from the plugin
 type Output struct {
-	// Message represents the type-elided value passed from the plugin
-	// The invoker is expected to interpret the message according to the plugins type/version
+	// Message represents the type-elided value returned from the plugin
+	// The invoker is expected to interpret the message according to the plugin's type
+	// The message object must be JSON-serializable
 	Message any
 }

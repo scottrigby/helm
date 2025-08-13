@@ -16,80 +16,36 @@ limitations under the License.
 package plugin
 
 import (
-	"context"
 	"fmt"
-	"io"
 	"strings"
 	"unicode"
 )
 
-// Legacy represents a legacy plugin
-type Legacy struct {
-	// MetadataLegacy is a parsed representation of a plugin.yaml
-	MetadataLegacy *MetadataLegacy
-	// Dir is the string path to the directory that holds the plugin.
-	Dir string
-}
-
-func (p *Legacy) GetDir() string     { return p.Dir }
-func (p *Legacy) Metadata() Metadata { return p.MetadataLegacy }
-
-func (p *Legacy) Runtime() (Runtime, error) {
-	runtimeConfig := p.Metadata().GetRuntimeConfig()
-	return runtimeConfig.CreateRuntime(p.Dir, p.Metadata().GetName(), p.Metadata().GetType())
-}
-
-func (p *Legacy) Invoke(ctx context.Context, input *Input) (*Output, error) {
-	r, err := p.Runtime()
-	if err != nil {
-		return nil, err
-	}
-	return r.invoke(ctx, input)
-}
-
-func (p *Legacy) InvokeWithEnv(main string, argv []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {
-	r, err := p.Runtime()
-	if err != nil {
-		return err
-	}
-	return r.invokeWithEnv(main, argv, env, stdin, stdout, stderr)
-}
-func (p *Legacy) InvokeHook(event string) error {
-	r, err := p.Runtime()
-	if err != nil {
-		return err
-	}
-	return r.invokeHook(event)
-}
-
-// Validate validates a legacy plugin's metadata.
-func (p *Legacy) Validate() error {
-	if !validPluginName.MatchString(p.MetadataLegacy.Name) {
+func (m *MetadataLegacy) Validate() error {
+	if !validPluginName.MatchString(m.Name) {
 		return fmt.Errorf("invalid plugin name")
 	}
-	p.MetadataLegacy.Usage = sanitizeString(p.MetadataLegacy.Usage)
+	m.Usage = sanitizeString(m.Usage)
 
-	if len(p.MetadataLegacy.PlatformCommand) > 0 && len(p.MetadataLegacy.Command) > 0 {
+	if len(m.PlatformCommand) > 0 && len(m.Command) > 0 {
 		return fmt.Errorf("both platformCommand and command are set")
 	}
 
-	if len(p.MetadataLegacy.PlatformHooks) > 0 && len(p.MetadataLegacy.Hooks) > 0 {
+	if len(m.PlatformHooks) > 0 && len(m.Hooks) > 0 {
 		return fmt.Errorf("both platformHooks and hooks are set")
 	}
 
 	// Validate downloader plugins
-	if len(p.MetadataLegacy.Downloaders) > 0 {
-		for i, downloader := range p.MetadataLegacy.Downloaders {
-			if downloader.Command == "" {
-				return fmt.Errorf("downloader %d has empty command", i)
-			}
-			if len(downloader.Protocols) == 0 {
-				return fmt.Errorf("downloader %d has no protocols", i)
-			}
-			for j, protocol := range downloader.Protocols {
-				if protocol == "" {
-					return fmt.Errorf("downloader %d has empty protocol at index %d", i, j)
-				}
+	for i, downloader := range m.Downloaders {
+		if downloader.Command == "" {
+			return fmt.Errorf("downloader %d has empty command", i)
+		}
+		if len(downloader.Protocols) == 0 {
+			return fmt.Errorf("downloader %d has no protocols", i)
+		}
+		for j, protocol := range downloader.Protocols {
+			if protocol == "" {
+				return fmt.Errorf("downloader %d has empty protocol at index %d", i, j)
 			}
 		}
 	}
