@@ -24,7 +24,7 @@ import (
 	"slices"
 	"strings"
 
-	"helm.sh/helm/v4/pkg/plugin/schema"
+	"helm.sh/helm/v4/internal/plugin/schema"
 )
 
 func getProtocolCommand(commands []SubprocessProtocolCommand, protocol string) *SubprocessProtocolCommand {

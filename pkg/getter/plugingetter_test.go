@@ -24,8 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"helm.sh/helm/v4/pkg/plugin"
-	"helm.sh/helm/v4/pkg/plugin/schema"
+	"helm.sh/helm/v4/internal/plugin"
+	"helm.sh/helm/v4/internal/plugin/schema"
 
 	"helm.sh/helm/v4/pkg/cli"
 )

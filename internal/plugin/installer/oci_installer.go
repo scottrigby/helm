@@ -26,11 +26,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"helm.sh/helm/v4/internal/plugin/cache"
 	"helm.sh/helm/v4/internal/third_party/dep/fs"
 	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/helmpath"
-	"helm.sh/helm/v4/pkg/plugin/cache"
 	"helm.sh/helm/v4/pkg/registry"
 )
 
