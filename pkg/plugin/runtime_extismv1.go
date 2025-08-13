@@ -24,8 +24,9 @@ import (
 
 	extism "github.com/extism/go-sdk"
 	"github.com/tetratelabs/wazero"
-	"helm.sh/helm/v4/pkg/plugin/schema"
 	"sigs.k8s.io/yaml"
+
+	"helm.sh/helm/v4/pkg/plugin/schema"
 )
 
 type RuntimeConfigExtismV1 struct {

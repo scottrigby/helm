@@ -16,7 +16,6 @@ limitations under the License.
 package getter
 
 import (
-	"bytes"
 	"context"
 
 	"testing"
@@ -126,7 +125,7 @@ func (t *TestPlugin) Invoke(_ context.Context, _ *plugin.Input) (*plugin.Output,
 	// Simulate a plugin invocation
 	output := &plugin.Output{
 		Message: &schema.OutputMessageGetterV1{
-			Data: bytes.NewBuffer([]byte("fake-plugin output")),
+			Data: []byte("fake-plugin output"),
 		},
 	}
 	return output, nil
