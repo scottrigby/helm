@@ -120,5 +120,5 @@ func (g *getterPlugin) Get(href string, options ...Option) (*bytes.Buffer, error
 		return nil, fmt.Errorf("invalid output message type from plugin %q", g.plg.Metadata().Name)
 	}
 
-	return outputMessage.Data, nil
+	return bytes.NewBuffer(outputMessage.Data), nil
 }
