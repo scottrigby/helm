@@ -58,7 +58,7 @@ func newPluginPackageCmd(out io.Writer) *cobra.Command {
 		Short: "package a plugin directory into a plugin archive",
 		Long:  pluginPackageDesc,
 		Args:  require.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			o.pluginPath = args[0]
 			return o.run(out)
 		},

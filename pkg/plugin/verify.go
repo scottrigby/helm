@@ -26,7 +26,6 @@ import (
 	"golang.org/x/crypto/openpgp"           //nolint
 	"golang.org/x/crypto/openpgp/clearsign" //nolint
 	"golang.org/x/mod/sumdb/dirhash"
-	"sigs.k8s.io/yaml"
 
 	"helm.sh/helm/v4/pkg/provenance"
 )
@@ -169,35 +168,6 @@ func verifyPluginDirectory(pluginPath, provPath string, sig *provenance.Signator
 	}
 
 	return ver, nil
-}
-
-// parsePluginMessageBlock parses the signed content to extract metadata and checksums
-func parsePluginMessageBlock(data []byte) (string, string, *provenance.SumCollection, error) {
-	// Split the message block (similar to chart provenance)
-	parts := bytes.Split(data, []byte("\n...\n"))
-	if len(parts) < 2 {
-		return "", "", nil, errors.New("message block must have at least two parts")
-	}
-
-	// Parse metadata for name and version
-	parsedMeta := &struct {
-		Name    string `json:"name"`
-		Version string `json:"version"`
-	}{}
-	if err := yaml.Unmarshal(parts[0], parsedMeta); err != nil {
-		return "", "", nil, fmt.Errorf("failed to parse plugin metadata: %w", err)
-	}
-	if parsedMeta.Name == "" || parsedMeta.Version == "" {
-		return "", "", nil, fmt.Errorf("name and version are missing in metadata block")
-	}
-
-	// Parse checksums
-	sums := &provenance.SumCollection{}
-	if err := yaml.Unmarshal(parts[1], sums); err != nil {
-		return "", "", nil, fmt.Errorf("failed to parse checksums: %w", err)
-	}
-
-	return parsedMeta.Name, parsedMeta.Version, sums, nil
 }
 
 // isTarball checks if a file has a tarball extension

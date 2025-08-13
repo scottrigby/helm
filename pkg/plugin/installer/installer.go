@@ -18,6 +18,7 @@ package installer
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -127,12 +128,15 @@ func InstallWithOptions(i Installer, opts Options) (*VerificationResult, error) 
 	}
 
 	// Save provenance file if the installer supports it and verification was performed
+	// TODO implement SaveProvenance() for OCIInstaller, if not already
+	// 	addressed by pkg/registry. if it is, document that here
 	if opts.Verify {
 		if saver, ok := i.(ProvenanceSaver); ok {
 			if err := saver.SaveProvenance(); err != nil {
 				// Log the error but don't fail the installation
 				// The plugin is already installed at this point
 				// Silently ignore the error as the plugin is already installed successfully
+				slog.Error("failed to save provenance for plugin", "error", err)
 			}
 		}
 	}

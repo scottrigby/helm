@@ -65,7 +65,7 @@ command: "$HELM_PLUGIN_DIR/run.sh"
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := signer.DecryptKey(func(s string) ([]byte, error) {
+	if err := signer.DecryptKey(func(_ string) ([]byte, error) {
 		return []byte(""), nil
 	}); err != nil {
 		t.Fatal(err)
@@ -207,7 +207,7 @@ command: echo`
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := signer.DecryptKey(func(s string) ([]byte, error) {
+	if err := signer.DecryptKey(func(_ string) ([]byte, error) {
 		return []byte(""), nil
 	}); err != nil {
 		t.Fatal(err)
