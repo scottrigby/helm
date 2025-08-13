@@ -34,6 +34,10 @@ import (
 	"helm.sh/helm/v4/pkg/registry"
 )
 
+// Ensure OCIInstaller implements ProvenanceSaver and Verifier
+var _ ProvenanceSaver = (*OCIInstaller)(nil)
+var _ Verifier = (*OCIInstaller)(nil)
+
 // OCIInstaller installs plugins from OCI registries
 type OCIInstaller struct {
 	CacheDir   string
@@ -226,4 +230,79 @@ func extractTar(r io.Reader, targetDir string) error {
 	}
 
 	return nil
+}
+
+// SaveProvenance downloads and saves the provenance file for the plugin
+func (i *OCIInstaller) SaveProvenance() error {
+	slog.Debug("pulling OCI plugin provenance", "source", i.Source)
+
+	// Request provenance file by appending .prov suffix
+	provSource := i.Source + ".prov"
+	provData, err := i.getter.Get(provSource)
+	if err != nil {
+		return fmt.Errorf("failed to pull provenance from %s: %w", provSource, err)
+	}
+
+	// Save provenance to same directory as plugin with .prov extension
+	pluginPath := i.Path()
+	provPath := pluginPath + ".prov"
+
+	if err := os.WriteFile(provPath, provData.Bytes(), 0644); err != nil {
+		return fmt.Errorf("failed to save provenance file: %w", err)
+	}
+
+	slog.Debug("saved provenance file", "path", provPath)
+	return nil
+}
+
+// SupportsVerification returns true since OCI plugins can be verified
+func (i *OCIInstaller) SupportsVerification() bool {
+	return true
+}
+
+// PrepareForVerification downloads the plugin tarball and provenance to a temporary directory
+func (i *OCIInstaller) PrepareForVerification() (pluginPath string, cleanup func(), err error) {
+	slog.Debug("preparing OCI plugin for verification", "source", i.Source)
+
+	// Create temporary directory for verification
+	tempDir, err := os.MkdirTemp("", "helm-oci-verify-")
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to create temp directory: %w", err)
+	}
+
+	cleanup = func() {
+		os.RemoveAll(tempDir)
+	}
+
+	// Download the plugin tarball
+	pluginData, err := i.getter.Get(i.Source)
+	if err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("failed to pull plugin from %s: %w", i.Source, err)
+	}
+
+	// Save plugin tarball to temp directory
+	pluginTarball := filepath.Join(tempDir, i.PluginName+".tgz")
+	if err := os.WriteFile(pluginTarball, pluginData.Bytes(), 0644); err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("failed to save plugin tarball: %w", err)
+	}
+
+	// Download the provenance file
+	provSource := i.Source + ".prov"
+	provData, err := i.getter.Get(provSource)
+	if err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("failed to pull provenance from %s: %w", provSource, err)
+	}
+
+	// Save provenance to temp directory
+	provFile := filepath.Join(tempDir, i.PluginName+".tgz.prov")
+	if err := os.WriteFile(provFile, provData.Bytes(), 0644); err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("failed to save provenance file: %w", err)
+	}
+
+	slog.Debug("prepared plugin for verification", "plugin", pluginTarball, "provenance", provFile)
+	return pluginTarball, cleanup, nil
 }

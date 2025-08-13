@@ -38,11 +38,13 @@ type PluginPullOptions struct {
 
 // PluginPullResult contains the result of a plugin pull operation
 type PluginPullResult struct {
-	Manifest       ocispec.Descriptor
-	PluginData     []byte
-	ProvenanceData []byte // Optional provenance data
-	Ref            string
-	PluginName     string
+	Manifest   ocispec.Descriptor
+	PluginData []byte
+	Prov       struct {
+		Data []byte
+	}
+	Ref        string
+	PluginName string
 }
 
 // PullPlugin downloads a plugin from an OCI registry using artifact type
@@ -138,7 +140,7 @@ func (c *Client) processPluginPull(genericResult *GenericPullResult, pluginName 
 
 	// Fetch provenance data if available
 	if provenanceDescriptor != nil {
-		result.ProvenanceData, err = genericClient.GetDescriptorData(genericResult.MemoryStore, *provenanceDescriptor)
+		result.Prov.Data, err = genericClient.GetDescriptorData(genericResult.MemoryStore, *provenanceDescriptor)
 		if err != nil {
 			return nil, fmt.Errorf("unable to retrieve provenance data with digest %s: %w", provenanceDescriptor.Digest, err)
 		}
@@ -146,7 +148,7 @@ func (c *Client) processPluginPull(genericResult *GenericPullResult, pluginName 
 
 	fmt.Fprintf(c.out, "Pulled plugin: %s\n", result.Ref)
 	fmt.Fprintf(c.out, "Digest: %s\n", result.Manifest.Digest)
-	if result.ProvenanceData != nil {
+	if result.Prov.Data != nil {
 		fmt.Fprintf(c.out, "Provenance: %s\n", expectedProvenance)
 	}
 
@@ -162,6 +164,7 @@ func (c *Client) processPluginPull(genericResult *GenericPullResult, pluginName 
 type (
 	pluginPullOperation struct {
 		pluginName string
+		withProv   bool
 	}
 
 	// PluginPullOption allows customizing plugin pull operations
@@ -172,5 +175,12 @@ type (
 func PluginPullOptWithPluginName(name string) PluginPullOption {
 	return func(operation *pluginPullOperation) {
 		operation.pluginName = name
+	}
+}
+
+// PullPluginOptWithProv configures the pull to fetch provenance data
+func PullPluginOptWithProv(withProv bool) PluginPullOption {
+	return func(operation *pluginPullOperation) {
+		operation.withProv = withProv
 	}
 }
