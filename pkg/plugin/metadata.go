@@ -191,11 +191,17 @@ func buildLegacyConfig(m MetadataLegacy, pluginType string) Config {
 }
 
 func buildLegacyRuntimeConfig(m MetadataLegacy) RuntimeConfig {
+
+	protocolCommands := make([]SubprocessProtocolCommand, 0, len(m.Downloaders))
+	for _, d := range m.Downloaders {
+		protocolCommands = append(protocolCommands, SubprocessProtocolCommand(d))
+	}
 	return &RuntimeConfigSubprocess{
-		PlatformCommand: m.PlatformCommand,
-		Command:         m.Command,
-		PlatformHooks:   m.PlatformHooks,
-		Hooks:           m.Hooks,
+		PlatformCommand:  m.PlatformCommand,
+		Command:          m.Command,
+		PlatformHooks:    m.PlatformHooks,
+		Hooks:            m.Hooks,
+		ProtocolCommands: protocolCommands,
 	}
 }
 
