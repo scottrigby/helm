@@ -33,12 +33,12 @@ import (
 	"helm.sh/helm/v4/pkg/provenance"
 )
 
-// SignPlugin signs a plugin tarball using the directory hash of the source.
+// SignPlugin signs a plugin using the directory hash of the source.
 //
-// This is used when packaging and signing a plugin, where we have both the source
-// directory and the resulting tarball. It creates a signature that includes only
-// the directory hash, allowing verification of the installed plugin directory later.
-func SignPlugin(tarballPath, sourceDir string, signer *provenance.Signatory) (string, error) {
+// This is used when packaging and signing a plugin from a source directory
+// It creates a signature that includes only the directory hash, allowing
+// verification of the installed plugin directory later.
+func SignPlugin(sourceDir string, signer *provenance.Signatory) (string, error) {
 	if signer.Entity == nil {
 		return "", errors.New("private key not found")
 	}
@@ -46,21 +46,13 @@ func SignPlugin(tarballPath, sourceDir string, signer *provenance.Signatory) (st
 		return "", errors.New("provided key is not a private key")
 	}
 
-	// Verify both paths exist
-	if _, err := os.Stat(tarballPath); err != nil {
-		return "", fmt.Errorf("tarball not found: %w", err)
-	}
+	// Verify path exists
 	if _, err := os.Stat(sourceDir); err != nil {
 		return "", fmt.Errorf("source directory not found: %w", err)
 	}
 
-	return signPluginTarball(tarballPath, sourceDir, signer)
-}
-
-// signPluginTarball signs a plugin tarball
-func signPluginTarball(tarballPath, sourceDir string, signer *provenance.Signatory) (string, error) {
 	// Create the message block for signing
-	messageBlock, err := createPluginMessageBlock(tarballPath, sourceDir)
+	messageBlock, err := createPluginMessageBlock(sourceDir)
 	if err != nil {
 		return "", err
 	}
@@ -93,7 +85,7 @@ func signPluginTarball(tarballPath, sourceDir string, signer *provenance.Signato
 }
 
 // createPluginMessageBlock creates the content that will be signed
-func createPluginMessageBlock(tarballPath, sourceDir string) (*bytes.Buffer, error) {
+func createPluginMessageBlock(sourceDir string) (*bytes.Buffer, error) {
 	if sourceDir == "" {
 		return nil, errors.New("source directory is required for signing")
 	}
@@ -106,51 +98,6 @@ func createPluginMessageBlock(tarballPath, sourceDir string) (*bytes.Buffer, err
 
 	// Create a simple provenance with just the hash
 	return bytes.NewBufferString(hash), nil
-}
-
-// extractPlugin extracts plugin metadata from a tarball
-func extractPlugin(tarballPath string) (Plugin, error) {
-	f, err := os.Open(tarballPath)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	// Create gzip reader
-	gzr, err := gzip.NewReader(f)
-	if err != nil {
-		return nil, err
-	}
-	defer gzr.Close()
-
-	// Create tar reader
-	tr := tar.NewReader(gzr)
-
-	// Look for plugin.yaml
-	for {
-		header, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		// Check if this is plugin.yaml (at root or in a subdirectory)
-		if filepath.Base(header.Name) == PluginFileName {
-			// Read the plugin.yaml content
-			data := make([]byte, header.Size)
-			if _, err := io.ReadFull(tr, data); err != nil {
-				return nil, err
-			}
-
-			// Use the Load function to properly parse the plugin
-			// We pass an empty dirname since this is from a tarball
-			return Load(data, "")
-		}
-	}
-
-	return nil, errors.New("no plugin.yaml found in tarball")
 }
 
 // CreatePluginTarball creates a gzipped tarball from a plugin directory

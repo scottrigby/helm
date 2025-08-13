@@ -89,7 +89,7 @@ func uninstallPlugin(p plugin.Plugin) error {
 	}
 
 	// Also remove the .prov file if it exists
-	provFile := p.GetDir() + ".prov"
+	provFile := p.Dir() + ".prov"
 	if _, err := os.Stat(provFile); err == nil {
 		if err := os.Remove(provFile); err != nil {
 			// Log error but don't fail the uninstall

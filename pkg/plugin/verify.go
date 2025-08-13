@@ -100,37 +100,6 @@ func verifySignature(provPath string, sig *provenance.Signatory) (*clearsign.Blo
 	return block, ver, nil
 }
 
-// verifyPluginMetadata verifies that plugin metadata matches what's in the provenance
-func verifyPluginMetadata(plugin Plugin, provMetadata []byte) error {
-	// Load the provenance metadata using the same Load function
-	// to ensure consistent parsing
-	provPlugin, err := Load(provMetadata, "")
-	if err != nil {
-		return fmt.Errorf("failed to parse provenance metadata: %w", err)
-	}
-
-	// Compare the metadata
-	provMeta := provPlugin.GetMetadata()
-	actualMeta := plugin.GetMetadata()
-
-	// Marshal both to compare
-	provYAML, err := yaml.Marshal(provMeta)
-	if err != nil {
-		return fmt.Errorf("failed to marshal provenance metadata: %w", err)
-	}
-
-	actualYAML, err := yaml.Marshal(actualMeta)
-	if err != nil {
-		return fmt.Errorf("failed to marshal plugin metadata: %w", err)
-	}
-
-	if string(provYAML) != string(actualYAML) {
-		return errors.New("plugin metadata does not match provenance")
-	}
-
-	return nil
-}
-
 // getPluginName extracts the plugin name from metadata
 func getPluginName(metadata interface{}) string {
 	switch m := metadata.(type) {
@@ -190,7 +159,8 @@ func verifyPluginDirectory(pluginPath, provPath string, sig *provenance.Signator
 		ver.FileName = filepath.Base(pluginPath)
 	} else {
 		// Set the file name to the plugin name
-		name := getPluginName(plugin.GetMetadata())
+		m := plugin.Metadata()
+		name := getPluginName(m.Name)
 		if name != "" {
 			ver.FileName = name
 		} else {

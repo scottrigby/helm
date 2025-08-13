@@ -138,8 +138,8 @@ func (o *pluginPackageOptions) run(out io.Writer) error {
 
 	// If signing was requested, sign the tarball
 	if o.sign {
-		// Sign the tarball with the source directory hash
-		sig, err := plugin.SignPlugin(tarballPath, o.pluginPath, signer)
+		// Sign the plugin with the source directory hash
+		sig, err := plugin.SignPlugin(o.pluginPath, signer)
 		if err != nil {
 			os.Remove(tarballPath)
 			return fmt.Errorf("failed to sign plugin: %w", err)

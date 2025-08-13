@@ -68,8 +68,8 @@ command: echo`
 		t.Fatal(err)
 	}
 
-	// Sign the tarball with source directory
-	sig, err := SignPlugin(tarballPath, pluginDir, signer)
+	// Sign the plugin with source directory
+	sig, err := SignPlugin(pluginDir, signer)
 	if err != nil {
 		t.Fatalf("failed to sign plugin: %v", err)
 	}

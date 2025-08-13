@@ -51,7 +51,8 @@ func validatePluginName(pluginRoot string, expectedName string) error {
 		return fmt.Errorf("failed to load plugin from %s: %w", pluginRoot, err)
 	}
 
-	actualName := p.GetName()
+	m := p.Metadata()
+	actualName := m.Name
 
 	// For now, just log a warning if names don't match
 	// In the future, we might want to enforce this more strictly

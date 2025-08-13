@@ -20,8 +20,9 @@ import (
 	"os"
 	"strings"
 
+	"golang.org/x/mod/sumdb/dirhash"
+
 	"golang.org/x/crypto/openpgp/clearsign" //nolint
-	"gopkg.in/yaml.v3"
 
 	"helm.sh/helm/v4/pkg/helmpath"
 )
@@ -82,16 +83,7 @@ func GetPluginSigningInfo(pluginName string) (*SigningInfo, error) {
 	// This prevents copying .prov files between plugins
 	blockContent := string(block.Plaintext)
 
-	// Load the actual plugin metadata to compare
-	plugin, err := LoadDir(pluginDir)
-	if err != nil {
-		return &SigningInfo{
-			Status:   "cannot verify provenance",
-			IsSigned: false,
-		}, nil
-	}
-
-	if !validateProvenanceMetadata(blockContent, plugin.GetMetadata()) {
+	if !validateProvenanceHash(blockContent, pluginDir) {
 		return &SigningInfo{
 			Status:   "mismatched provenance",
 			IsSigned: false,
@@ -102,49 +94,20 @@ func GetPluginSigningInfo(pluginName string) (*SigningInfo, error) {
 	// Without a keyring, we can't verify the signature, but we know:
 	// 1. A .prov file exists
 	// 2. It's a valid clearsigned document (cryptographically signed)
-	// 3. The signed metadata exactly matches this plugin
+	// 3. The hash in .prov exactly matches the plugin directory hash
 	return &SigningInfo{
 		Status:   "signed",
 		IsSigned: true,
 	}, nil
 }
 
-// validateProvenanceMetadata validates that provenance metadata matches the actual plugin
-func validateProvenanceMetadata(provenanceContent string, actualMetadata interface{}) bool {
-	// Provenance files contain plugin metadata followed by checksums
-	// Split by the YAML document separator
-	parts := strings.Split(provenanceContent, "\n...\n")
-	if len(parts) == 0 {
-		return false
-	}
+func validateProvenanceHash(blockContent, pluginDir string) bool {
+	// Verify the directory hash is correct
+	expectedHash, _ := dirhash.HashDir(pluginDir, "", dirhash.DefaultHash)
 
-	// Parse the first part which should contain plugin metadata
-	metadataYAML := parts[0]
-
-	// To handle the complex unmarshaling of Config and RuntimeConfig interfaces,
-	// we use the Load function to parse the provenance metadata the same way
-	// the actual plugin was loaded
-	provPlugin, err := Load([]byte(metadataYAML), "")
-	if err != nil {
-		return false
-	}
-
-	// Get the metadata from the loaded provenance plugin
-	provMetadata := provPlugin.GetMetadata()
-
-	// Now marshal both metadata objects and compare
-	provYAML, err := yaml.Marshal(provMetadata)
-	if err != nil {
-		return false
-	}
-
-	actualYAML, err := yaml.Marshal(actualMetadata)
-	if err != nil {
-		return false
-	}
-
-	// Compare the marshaled YAML
-	return string(provYAML) == string(actualYAML)
+	// Extract the hash from the signed message
+	// The hash should be the only content between the headers
+	return strings.Contains(blockContent, expectedHash)
 }
 
 // GetSigningInfoForPlugins returns signing info for multiple plugins
@@ -152,15 +115,17 @@ func GetSigningInfoForPlugins(plugins []Plugin) map[string]*SigningInfo {
 	result := make(map[string]*SigningInfo)
 
 	for _, p := range plugins {
-		info, err := GetPluginSigningInfo(p.GetName())
+		m := p.Metadata()
+
+		info, err := GetPluginSigningInfo(m.Name)
 		if err != nil {
 			// If there's an error, treat as unsigned
-			result[p.GetName()] = &SigningInfo{
+			result[m.Name] = &SigningInfo{
 				Status:   "unknown",
 				IsSigned: false,
 			}
 		} else {
-			result[p.GetName()] = info
+			result[m.Name] = info
 		}
 	}
 
