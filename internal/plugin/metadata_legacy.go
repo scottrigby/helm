@@ -21,6 +21,42 @@ import (
 	"unicode"
 )
 
+// MetadataLegacy is the legacy plugin.yaml format
+type MetadataLegacy struct {
+	// Name is the name of the plugin
+	Name string `yaml:"name"`
+
+	// Version is a SemVer 2 version of the plugin.
+	Version string `yaml:"version"`
+
+	// Usage is the single-line usage text shown in help
+	Usage string `yaml:"usage"`
+
+	// Description is a long description shown in places like `helm help`
+	Description string `yaml:"description"`
+
+	// PlatformCommand is the plugin command, with a platform selector and support for args.
+	PlatformCommand []PlatformCommand `yaml:"platformCommand"`
+
+	// Command is the plugin command, as a single string.
+	// DEPRECATED: Use PlatformCommand instead. Remove in Helm 4.
+	Command string `yaml:"command"`
+
+	// IgnoreFlags ignores any flags passed in from Helm
+	IgnoreFlags bool `yaml:"ignoreFlags"`
+
+	// PlatformHooks are commands that will run on plugin events, with a platform selector and support for args.
+	PlatformHooks PlatformHooks `yaml:"platformHooks"`
+
+	// Hooks are commands that will run on plugin events, as a single string.
+	// DEPRECATED: Use PlatformHooks instead. Remove in Helm 4.
+	Hooks Hooks `yaml:"hooks"`
+
+	// Downloaders field is used if the plugin supply downloader mechanism
+	// for special protocols.
+	Downloaders []Downloaders `yaml:"downloaders"`
+}
+
 func (m *MetadataLegacy) Validate() error {
 	if !validPluginName.MatchString(m.Name) {
 		return fmt.Errorf("invalid plugin name")

@@ -20,6 +20,33 @@ import (
 	"regexp"
 )
 
+// MetadataLegacy is the APIVersion V1 plugin.yaml format
+type MetadataV1 struct {
+	// APIVersion specifies the plugin API version
+	APIVersion string `yaml:"apiVersion"`
+
+	// Name is the name of the plugin
+	Name string `yaml:"name"`
+
+	// Type of plugin (eg, cli/v1, getter/v1, postrenderer/v1)
+	Type string `yaml:"type"`
+
+	// Runtime specifies the runtime type (subprocess, wasm)
+	Runtime string `yaml:"runtime"`
+
+	// Version is a SemVer 2 version of the plugin.
+	Version string `yaml:"version"`
+
+	// SourceURL is the URL where this plugin can be found
+	SourceURL string `yaml:"sourceURL,omitempty"`
+
+	// Config contains the type-specific configuration for this plugin
+	Config map[string]any `yaml:"config"`
+
+	// RuntimeConfig contains the runtime-specific configuration
+	RuntimeConfig map[string]any `yaml:"runtimeConfig"`
+}
+
 func (m *MetadataV1) Validate() error {
 	if !validPluginName.MatchString(m.Name) {
 		return fmt.Errorf("invalid plugin `name`")
