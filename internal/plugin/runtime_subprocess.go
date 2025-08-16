@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"helm.sh/helm/v4/internal/plugin/schema"
+	"helm.sh/helm/v4/pkg/cli"
 )
 
 // SubprocessProtocolCommand maps a given protocol to the getter command used to retrieve artifacts for that protcol
@@ -290,4 +291,16 @@ func (r *SubprocessPluginRuntime) runPostrenderer(input *Input) (*Output, error)
 			Manifests: postRendered,
 		},
 	}, nil
+}
+
+// SetupPluginEnv prepares os.Env for plugins. It operates on os.Env because
+// the plugin subsystem itself needs access to the environment variables
+// created here.
+func SetupPluginEnv(settings *cli.EnvSettings, name, base string) { // TODO: remove
+	env := settings.EnvVars()
+	env["HELM_PLUGIN_NAME"] = name
+	env["HELM_PLUGIN_DIR"] = base
+	for key, val := range env {
+		os.Setenv(key, val)
+	}
 }

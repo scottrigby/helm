@@ -22,7 +22,7 @@ type Runtime interface {
 	// Create a plugin instance from the given metadata
 	CreatePlugin(pluginDir string, metadata *Metadata) (Plugin, error)
 
-	// TODO: move config unmarshalling to the runtime
+	// TODO: move config unmarshalling to the runtime?
 	// UnmarshalConfig(runtimeConfigRaw map[string]any) (RuntimeConfig, error)
 }
 

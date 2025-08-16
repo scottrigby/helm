@@ -23,8 +23,6 @@ import (
 	"path/filepath"
 
 	"go.yaml.in/yaml/v3"
-
-	"helm.sh/helm/v4/pkg/cli"
 )
 
 func peekAPIVersion(r io.Reader) (string, error) {
@@ -250,16 +248,4 @@ func detectDuplicates(plugs []Plugin) error {
 	}
 
 	return nil
-}
-
-// SetupPluginEnv prepares os.Env for plugins. It operates on os.Env because
-// the plugin subsystem itself needs access to the environment variables
-// created here.
-func SetupPluginEnv(settings *cli.EnvSettings, name, base string) { // TODO: remove
-	env := settings.EnvVars()
-	env["HELM_PLUGIN_NAME"] = name
-	env["HELM_PLUGIN_DIR"] = base
-	for key, val := range env {
-		os.Setenv(key, val)
-	}
 }
