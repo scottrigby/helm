@@ -31,6 +31,8 @@ import (
 	"sync"
 	"text/template"
 
+	"helm.sh/helm/v4/pkg/postrenderer"
+
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/discovery"
@@ -43,7 +45,6 @@ import (
 	chartutil "helm.sh/helm/v4/pkg/chart/v2/util"
 	"helm.sh/helm/v4/pkg/engine"
 	"helm.sh/helm/v4/pkg/kube"
-	"helm.sh/helm/v4/pkg/postrender"
 	"helm.sh/helm/v4/pkg/registry"
 	releaseutil "helm.sh/helm/v4/pkg/release/util"
 	release "helm.sh/helm/v4/pkg/release/v1"
@@ -176,8 +177,8 @@ func splitAndDeannotate(postrendered string) (map[string]string, error) {
 // TODO: As part of the refactor the duplicate code in cmd/helm/template.go should be removed
 //
 //	This code has to do with writing files to disk.
-func (cfg *Configuration) renderResources(ch *chart.Chart, values chartutil.Values, releaseName, outputDir string, subNotes, useReleaseName, includeCrds bool, pr postrender.PostRenderer, interactWithRemote, enableDNS, hideSecret bool) ([]*release.Hook, *bytes.Buffer, string, error) {
-	hs := []*release.Hook{}
+func (cfg *Configuration) renderResources(ch *chart.Chart, values chartutil.Values, releaseName, outputDir string, subNotes, useReleaseName, includeCrds bool, pr postrenderer.PostRenderer, interactWithRemote, enableDNS, hideSecret bool) ([]*release.Hook, *bytes.Buffer, string, error) {
+	var hs []*release.Hook
 	b := bytes.NewBuffer(nil)
 
 	caps, err := cfg.getCapabilities()
