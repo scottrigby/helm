@@ -24,10 +24,10 @@ import (
 
 // PlatformCommand represents a command for a particular operating system and architecture
 type PlatformCommand struct {
-	OperatingSystem string   `json:"os"`
-	Architecture    string   `json:"arch"`
-	Command         string   `json:"command"`
-	Args            []string `json:"args"`
+	OperatingSystem string   `yaml:"os"`
+	Architecture    string   `yaml:"arch"`
+	Command         string   `yaml:"command"`
+	Args            []string `yaml:"args"`
 }
 
 // Returns command and args strings based on the following rules in priority order:

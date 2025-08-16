@@ -124,13 +124,16 @@ func buildLegacyConfig(m MetadataLegacy, pluginType string) Config {
 }
 
 func buildLegacyRuntimeConfig(m MetadataLegacy) RuntimeConfig {
-
-	protocolCommands := make([]SubprocessProtocolCommand, 0, len(m.Downloaders))
-	for _, d := range m.Downloaders {
-		protocolCommands = append(protocolCommands, SubprocessProtocolCommand(d))
+	var protocolCommands []SubprocessProtocolCommand
+	if len(m.Downloaders) > 0 {
+		protocolCommands =
+			make([]SubprocessProtocolCommand, 0, len(m.Downloaders))
+		for _, d := range m.Downloaders {
+			protocolCommands = append(protocolCommands, SubprocessProtocolCommand(d))
+		}
 	}
 	return &RuntimeConfigSubprocess{
-		PlatformCommand:  m.PlatformCommand,
+		PlatformCommands: m.PlatformCommands,
 		Command:          m.Command,
 		PlatformHooks:    m.PlatformHooks,
 		Hooks:            m.Hooks,
@@ -138,25 +141,25 @@ func buildLegacyRuntimeConfig(m MetadataLegacy) RuntimeConfig {
 	}
 }
 
-func fromMetadataV1(m MetadataV1) (*Metadata, error) {
+func fromMetadataV1(mv1 MetadataV1) (*Metadata, error) {
 
-	config, err := convertMetadataConfig(m.Type, m.Config)
+	config, err := convertMetadataConfig(mv1.Type, mv1.Config)
 	if err != nil {
 		return nil, err
 	}
 
-	runtimeConfig, err := convertMetdataRuntimeConfig(m.Runtime, m.RuntimeConfig)
+	runtimeConfig, err := convertMetdataRuntimeConfig(mv1.Runtime, mv1.RuntimeConfig)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Metadata{
-		APIVersion:    m.APIVersion,
-		Name:          m.Name,
-		Type:          m.Type,
-		Runtime:       m.Runtime,
-		Version:       m.Version,
-		SourceURL:     m.SourceURL,
+		APIVersion:    mv1.APIVersion,
+		Name:          mv1.Name,
+		Type:          mv1.Type,
+		Runtime:       mv1.Runtime,
+		Version:       mv1.Version,
+		SourceURL:     mv1.SourceURL,
 		Config:        config,
 		RuntimeConfig: runtimeConfig,
 	}, nil
@@ -168,11 +171,11 @@ func convertMetadataConfig(pluginType string, configRaw map[string]any) (Config,
 
 	switch pluginType {
 	case "cli/v1":
-		config, err = unmarshalConfigCLI(configRaw)
+		config, err = remarshalConfig[*ConfigCLI](configRaw)
 	case "getter/v1":
-		config, err = unmarshalConfigGetter(configRaw)
+		config, err = remarshalConfig[*ConfigGetter](configRaw)
 	case "postrenderer/v1":
-		config, err = unmarshalConfigPostrenderer(configRaw)
+		config, err = remarshalConfig[*ConfigPostrenderer](configRaw)
 	default:
 		return nil, fmt.Errorf("unsupported plugin type: %s", pluginType)
 	}
@@ -190,9 +193,9 @@ func convertMetdataRuntimeConfig(runtimeType string, runtimeConfigRaw map[string
 
 	switch runtimeType {
 	case "subprocess":
-		runtimeConfig, err = unmarshalRuntimeConfigSubprocess(runtimeConfigRaw)
+		runtimeConfig, err = remarshalRuntimeConfig[*RuntimeConfigSubprocess](runtimeConfigRaw)
 	case "extism/v1":
-		runtimeConfig, err = unmarshalRuntimeConfigExtismV1(runtimeConfigRaw)
+		runtimeConfig, err = remarshalRuntimeConfig[*RuntimeConfigExtismV1](runtimeConfigRaw)
 	default:
 		return nil, fmt.Errorf("unsupported plugin runtime type: %q", runtimeType)
 	}

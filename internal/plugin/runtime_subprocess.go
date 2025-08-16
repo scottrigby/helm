@@ -25,8 +25,6 @@ import (
 	"os/exec"
 	"syscall"
 
-	"sigs.k8s.io/yaml"
-
 	"helm.sh/helm/v4/internal/plugin/schema"
 	"helm.sh/helm/v4/pkg/cli"
 )
@@ -34,30 +32,29 @@ import (
 // SubprocessProtocolCommand maps a given protocol to the getter command used to retrieve artifacts for that protcol
 type SubprocessProtocolCommand struct {
 	// Protocols are the list of schemes from the charts URL.
-	Protocols []string `json:"protocols"`
+	Protocols []string `yaml:"protocols"`
 	// Command is the executable path with which the plugin performs
 	// the actual download for the corresponding Protocols
-	Command string `json:"command"`
+	Command string `yaml:"command"`
 }
 
 // RuntimeConfigSubprocess represents configuration for subprocess runtime
 type RuntimeConfigSubprocess struct {
 	// PlatformCommand is a list containing a plugin command, with a platform selector and support for args.
-	// TODO rename to "PlatformCommands" plural to match other plural field names
-	PlatformCommand []PlatformCommand `json:"platformCommand"`
+	PlatformCommands []PlatformCommand `yaml:"platformCommand"`
 	// Command is the plugin command, as a single string.
 	// DEPRECATED: Use PlatformCommand instead. Remove in Helm 4.
-	Command string `json:"command"`
+	Command string `yaml:"command"`
 	// PlatformHooks are commands that will run on plugin events, with a platform selector and support for args.
-	PlatformHooks PlatformHooks `json:"platformHooks"`
+	PlatformHooks PlatformHooks `yaml:"platformHooks"`
 	// Hooks are commands that will run on plugin events, as a single string.
 	// DEPRECATED: Use PlatformHooks instead. Remove in Helm 4.
-	Hooks Hooks `json:"hooks"`
+	Hooks Hooks `yaml:"hooks"`
 	// ProtocolCommands field is used if the plugin supply downloader mechanism
 	// for special protocols.
-	// (This is a compatibility handover from the old plugin downloader mechanism, which was extended to support multiple
+	// (This is a compatibility hangover from the old plugin downloader mechanism, which was extended to support multiple
 	// protocols in a given plugin)
-	ProtocolCommands []SubprocessProtocolCommand `json:"protocolCommands,omitempty"`
+	ProtocolCommands []SubprocessProtocolCommand `yaml:"protocolCommands,omitempty"`
 }
 
 var _ RuntimeConfig = (*RuntimeConfigSubprocess)(nil)
@@ -65,7 +62,7 @@ var _ RuntimeConfig = (*RuntimeConfigSubprocess)(nil)
 func (r *RuntimeConfigSubprocess) GetType() string { return "subprocess" }
 
 func (r *RuntimeConfigSubprocess) Validate() error {
-	if len(r.PlatformCommand) > 0 && len(r.Command) > 0 {
+	if len(r.PlatformCommands) > 0 && len(r.Command) > 0 {
 		return fmt.Errorf("both platformCommand and command are set")
 	}
 	if len(r.PlatformHooks) > 0 && len(r.Hooks) > 0 {
@@ -177,20 +174,6 @@ func (r *SubprocessPluginRuntime) InvokeHook(event string) error {
 	return nil
 }
 
-func unmarshalRuntimeConfigSubprocess(runtimeData map[string]interface{}) (*RuntimeConfigSubprocess, error) {
-	data, err := yaml.Marshal(runtimeData)
-	if err != nil {
-		return nil, err
-	}
-
-	var config RuntimeConfigSubprocess
-	if err := yaml.UnmarshalStrict(data, &config); err != nil {
-		return nil, err
-	}
-
-	return &config, nil
-}
-
 // TODO decide the best way to handle this code
 // right now we implement status and error return in 3 slightly different ways in this file
 // then replace the other three with a call to this func
@@ -217,7 +200,7 @@ func (r *SubprocessPluginRuntime) runCLI(input *Input) (*Output, error) {
 
 	extraArgs := input.Message.(schema.InputMessageCLIV1).ExtraArgs
 
-	cmds := r.RuntimeConfig.PlatformCommand
+	cmds := r.RuntimeConfig.PlatformCommands
 	if len(cmds) == 0 && len(r.RuntimeConfig.Command) > 0 {
 		cmds = []PlatformCommand{{Command: r.RuntimeConfig.Command}}
 	}
@@ -249,7 +232,7 @@ func (r *SubprocessPluginRuntime) runPostrenderer(input *Input) (*Output, error)
 	// Setup plugin environment
 	SetupPluginEnv(settings, r.metadata.Name, r.pluginDir)
 
-	cmds := r.RuntimeConfig.PlatformCommand
+	cmds := r.RuntimeConfig.PlatformCommands
 	if len(cmds) == 0 && len(r.RuntimeConfig.Command) > 0 {
 		cmds = []PlatformCommand{{Command: r.RuntimeConfig.Command}}
 	}

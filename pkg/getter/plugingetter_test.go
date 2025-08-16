@@ -112,7 +112,7 @@ func (t *TestPlugin) Metadata() plugin.Metadata {
 		Runtime:    "subprocess",
 		Config:     &plugin.ConfigGetter{},
 		RuntimeConfig: &plugin.RuntimeConfigSubprocess{
-			PlatformCommand: []plugin.PlatformCommand{
+			PlatformCommands: []plugin.PlatformCommand{
 				{
 					Command: "echo fake-plugin",
 				},

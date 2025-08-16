@@ -35,11 +35,11 @@ type MetadataLegacy struct {
 	// Description is a long description shown in places like `helm help`
 	Description string `yaml:"description"`
 
-	// PlatformCommand is the plugin command, with a platform selector and support for args.
-	PlatformCommand []PlatformCommand `yaml:"platformCommand"`
+	// PlatformCommands is the plugin command, with a platform selector and support for args.
+	PlatformCommands []PlatformCommand `yaml:"platformCommand"`
 
 	// Command is the plugin command, as a single string.
-	// DEPRECATED: Use PlatformCommand instead. Remove in Helm 4.
+	// DEPRECATED: Use PlatformCommand instead. Removed in subprocess/v1 plugins.
 	Command string `yaml:"command"`
 
 	// IgnoreFlags ignores any flags passed in from Helm
@@ -49,7 +49,7 @@ type MetadataLegacy struct {
 	PlatformHooks PlatformHooks `yaml:"platformHooks"`
 
 	// Hooks are commands that will run on plugin events, as a single string.
-	// DEPRECATED: Use PlatformHooks instead. Remove in Helm 4.
+	// DEPRECATED: Use PlatformHooks instead. Removed in subprocess/v1 plugins.
 	Hooks Hooks `yaml:"hooks"`
 
 	// Downloaders field is used if the plugin supply downloader mechanism
@@ -63,7 +63,7 @@ func (m *MetadataLegacy) Validate() error {
 	}
 	m.Usage = sanitizeString(m.Usage)
 
-	if len(m.PlatformCommand) > 0 && len(m.Command) > 0 {
+	if len(m.PlatformCommands) > 0 && len(m.Command) > 0 {
 		return fmt.Errorf("both platformCommand and command are set")
 	}
 
