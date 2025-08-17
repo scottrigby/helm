@@ -21,6 +21,16 @@ import (
 	"unicode"
 )
 
+// Downloaders represents the plugins capability if it can retrieve
+// charts from special sources
+type Downloaders struct {
+	// Protocols are the list of schemes from the charts URL.
+	Protocols []string `yaml:"protocols"`
+	// Command is the executable path with which the plugin performs
+	// the actual download for the corresponding Protocols
+	Command string `yaml:"command"`
+}
+
 // MetadataLegacy is the legacy plugin.yaml format
 type MetadataLegacy struct {
 	// Name is the name of the plugin

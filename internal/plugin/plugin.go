@@ -22,16 +22,6 @@ import (
 
 const PluginFileName = "plugin.yaml"
 
-// Downloaders represents the plugins capability if it can retrieve
-// charts from special sources
-type Downloaders struct {
-	// Protocols are the list of schemes from the charts URL.
-	Protocols []string `yaml:"protocols"`
-	// Command is the executable path with which the plugin performs
-	// the actual download for the corresponding Protocols
-	Command string `yaml:"command"`
-}
-
 // Plugin defines a plugin instance. The client (Helm codebase) facing type that can be used to introspect and invoke a plugin
 type Plugin interface {
 	// Dir return the plugin directory (as an absolute path) on the filesystem
