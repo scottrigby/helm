@@ -24,21 +24,20 @@ import (
 
 	extism "github.com/extism/go-sdk"
 	"github.com/tetratelabs/wazero"
-	"sigs.k8s.io/yaml"
 
 	"helm.sh/helm/v4/internal/plugin/schema"
 )
 
 type RuntimeConfigExtismV1 struct {
-	MaxPages             uint32            `json:"maxPages,omitempty"`
-	MaxHTTPResponseBytes int64             `json:"maxHttpResponseBytes,omitempty"`
-	MaxVarBytes          int64             `json:"maxVarBytes,omitempty"`
-	Config               map[string]string `json:"config,omitempty"`
-	AllowedHosts         []string          `json:"allowedHosts,omitempty"`
-	AllowedPaths         map[string]string `json:"allowedPaths,omitempty"`
-	Timeout              uint64            `json:"timeout,omitempty"`
-	HostFunctions        []string          `json:"hostFunctions,omitempty"`
-	EntryFuncName        string            `json:"entryFuncName,omitempty"` // The name of entry function name to call in the plugin. Defaults to "helm_plugin_main".
+	MaxPages             uint32            `yaml:"maxPages,omitempty"`
+	MaxHTTPResponseBytes int64             `yaml:"maxHttpResponseBytes,omitempty"`
+	MaxVarBytes          int64             `yaml:"maxVarBytes,omitempty"`
+	Config               map[string]string `yaml:"config,omitempty"`
+	AllowedHosts         []string          `yaml:"allowedHosts,omitempty"`
+	AllowedPaths         map[string]string `yaml:"allowedPaths,omitempty"`
+	Timeout              uint64            `yaml:"timeout,omitempty"`
+	HostFunctions        []string          `yaml:"hostFunctions,omitempty"`
+	EntryFuncName        string            `yaml:"entryFuncName,omitempty"` // The name of entry function name to call in the plugin. Defaults to "helm_plugin_main".
 }
 
 var _ RuntimeConfig = (*RuntimeConfigExtismV1)(nil)
@@ -218,18 +217,4 @@ func makeOutputMessage(pluginType string) any {
 	}
 
 	return nil
-}
-
-func unmarshalRuntimeConfigExtismV1(runtimeData map[string]interface{}) (*RuntimeConfigExtismV1, error) {
-	data, err := yaml.Marshal(runtimeData)
-	if err != nil {
-		return nil, err
-	}
-
-	var config RuntimeConfigExtismV1
-	if err := yaml.UnmarshalStrict(data, &config); err != nil {
-		return nil, err
-	}
-
-	return &config, nil
 }

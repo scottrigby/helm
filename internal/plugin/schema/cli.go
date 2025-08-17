@@ -20,7 +20,6 @@ import (
 )
 
 type InputMessageCLIV1 struct {
-	//Env       []string         `json:"env"`
 	ExtraArgs []string         `json:"extraArgs"`
 	Settings  *cli.EnvSettings `json:"settings"`
 }

@@ -26,10 +26,10 @@ const PluginFileName = "plugin.yaml"
 // charts from special sources
 type Downloaders struct {
 	// Protocols are the list of schemes from the charts URL.
-	Protocols []string `json:"protocols"`
+	Protocols []string `yaml:"protocols"`
 	// Command is the executable path with which the plugin performs
 	// the actual download for the corresponding Protocols
-	Command string `json:"command"`
+	Command string `yaml:"command"`
 }
 
 // Plugin defines a plugin instance. The client (Helm codebase) facing type that can be used to introspect and invoke a plugin
