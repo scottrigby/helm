@@ -90,6 +90,7 @@ func TestLoadDir(t *testing.T) {
 						{OperatingSystem: "windows", Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"installing...\""}},
 					},
 				},
+				expandHookArgs: apiVersion == "legacy",
 			},
 		}
 	}
@@ -150,8 +151,8 @@ func TestLoadDirGetter(t *testing.T) {
 		RuntimeConfig: &RuntimeConfigSubprocess{
 			ProtocolCommands: []SubprocessProtocolCommand{
 				{
-					Protocols: []string{"myprotocol", "myprotocols"},
-					Command:   "echo getter",
+					Protocols:        []string{"myprotocol", "myprotocols"},
+					PlatformCommands: []PlatformCommand{{Command: "echo getter"}},
 				},
 			},
 		},

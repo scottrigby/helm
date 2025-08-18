@@ -15,7 +15,10 @@ limitations under the License.
 
 package plugin
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestValidatePluginData(t *testing.T) {
 
@@ -29,36 +32,17 @@ func TestValidatePluginData(t *testing.T) {
 	// A mock plugin with legacy commands
 	mockLegacyCommand := mockSubprocessCLIPlugin(t, "foo")
 	mockLegacyCommand.metadata.RuntimeConfig = &RuntimeConfigSubprocess{
-		PlatformCommands: []PlatformCommand{},
-		Command:          "echo \"mock plugin\"",
-		PlatformHooks:    map[string][]PlatformCommand{},
-		Hooks: map[string]string{
-			Install: "echo installing...",
-		},
-	}
-
-	// A mock plugin with a command also set
-	mockWithCommand := mockSubprocessCLIPlugin(t, "foo")
-	mockWithCommand.metadata.RuntimeConfig = &RuntimeConfigSubprocess{
 		PlatformCommands: []PlatformCommand{
-			{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"mock plugin\""}},
-		},
-		Command: "echo \"mock plugin\"",
-	}
-
-	// A mock plugin with a hooks also set
-	mockWithHooks := mockSubprocessCLIPlugin(t, "foo")
-	mockWithHooks.metadata.RuntimeConfig = &RuntimeConfigSubprocess{
-		PlatformCommands: []PlatformCommand{
-			{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"mock plugin\""}},
+			{
+				Command: "echo \"mock plugin\"",
+			},
 		},
 		PlatformHooks: map[string][]PlatformCommand{
 			Install: {
-				{OperatingSystem: "linux", Architecture: "", Command: "sh", Args: []string{"-c", "echo \"installing...\""}},
+				PlatformCommand{
+					Command: "echo installing...",
+				},
 			},
-		},
-		Hooks: map[string]string{
-			Install: "echo installing...",
 		},
 	}
 
@@ -74,14 +58,14 @@ func TestValidatePluginData(t *testing.T) {
 		{false, mockSubprocessCLIPlugin(t, "foo\nbar")},  // Test newline
 		{true, mockNoCommand},     // Test no command metadata works
 		{true, mockLegacyCommand}, // Test legacy command metadata works
-		{false, mockWithCommand},  // Test platformCommand and command both set fails
-		{false, mockWithHooks},    // Test platformHooks and hooks both set fails
 	} {
-		err := item.plug.Metadata().Validate()
-		if item.pass && err != nil {
-			t.Errorf("failed to validate case %d: %s", i, err)
-		} else if !item.pass && err == nil {
-			t.Errorf("expected case %d to fail", i)
-		}
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			err := item.plug.Metadata().Validate()
+			if item.pass && err != nil {
+				t.Errorf("failed to validate case %d: %s", i, err)
+			} else if !item.pass && err == nil {
+				t.Errorf("expected case %d to fail", i)
+			}
+		})
 	}
 }

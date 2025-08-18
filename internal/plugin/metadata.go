@@ -15,7 +15,9 @@ limitations under the License.
 
 package plugin
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // Metadata of a plugin, converted from the "on-disk" legacy or v1 (yaml) formats
 // Specifically, Config and RuntimeConfig are converted to their respective types based on the plugin type and runtime
@@ -129,15 +131,32 @@ func buildLegacyRuntimeConfig(m MetadataLegacy) RuntimeConfig {
 		protocolCommands =
 			make([]SubprocessProtocolCommand, 0, len(m.Downloaders))
 		for _, d := range m.Downloaders {
-			protocolCommands = append(protocolCommands, SubprocessProtocolCommand(d))
+			protocolCommands = append(protocolCommands, SubprocessProtocolCommand{
+				Protocols:        d.Protocols,
+				PlatformCommands: []PlatformCommand{{Command: d.Command}},
+			})
+		}
+	}
+
+	platformCommands := m.PlatformCommands
+	if len(platformCommands) == 0 && len(m.Command) > 0 {
+		platformCommands = []PlatformCommand{{Command: m.Command}}
+	}
+
+	platformHooks := m.PlatformHooks
+	expandHookArgs := true
+	if len(platformHooks) == 0 && len(m.Hooks) > 0 {
+		platformHooks = make(PlatformHooks, len(m.Hooks))
+		for hookName, hookCommand := range m.Hooks {
+			platformHooks[hookName] = []PlatformCommand{{Command: "sh", Args: []string{"-c", hookCommand}}}
+			expandHookArgs = false
 		}
 	}
 	return &RuntimeConfigSubprocess{
-		PlatformCommands: m.PlatformCommands,
-		Command:          m.Command,
-		PlatformHooks:    m.PlatformHooks,
-		Hooks:            m.Hooks,
+		PlatformCommands: platformCommands,
+		PlatformHooks:    platformHooks,
 		ProtocolCommands: protocolCommands,
+		expandHookArgs:   expandHookArgs,
 	}
 }
 
