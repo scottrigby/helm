@@ -89,10 +89,11 @@ func TestPrepareCommandExtraArgs(t *testing.T) {
 			//expectedArgs := append(cmdArgs, extraArgs...)
 
 			// extra args are expected when ignoreFlags is unset or false
+			testExtraArgs := extraArgs
 			if tc.ignoreFlags {
-				extraArgs = []string{}
+				testExtraArgs = []string{}
 			}
-			cmd, args, err := PrepareCommands(platformCommands, true, extraArgs)
+			cmd, args, err := PrepareCommands(platformCommands, true, testExtraArgs)
 			if err != nil {
 				t.Fatal(err)
 			}
