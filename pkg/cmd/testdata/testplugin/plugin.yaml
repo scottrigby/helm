@@ -7,4 +7,5 @@ config:
   longHelp: "This echos test"
   ignoreFlags: false
 runtimeConfig:
-  command: "echo test"
+  platformCommands:
+  - command: "echo test"

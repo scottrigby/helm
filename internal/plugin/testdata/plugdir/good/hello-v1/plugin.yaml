@@ -11,7 +11,7 @@ config:
     description
   ignoreFlags: true
 runtimeConfig:
-  platformCommand:
+  platformCommands:
     - os: linux
       arch:
       command: "sh"

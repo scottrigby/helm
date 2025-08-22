@@ -6,5 +6,5 @@ runtime: subprocess
 config:
   postrendererArgs: []
 runtimeConfig:
-  platformCommand:
-    - command: "${HELM_PLUGIN_DIR}/sed-test.sh"
+  platformCommands:
+  - command: "${HELM_PLUGIN_DIR}/sed-test.sh"
