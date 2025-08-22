@@ -7,4 +7,5 @@ config:
   longHelp: "show the env"
   ignoreFlags: false
 runtimeConfig:
-  command: "echo $HELM_PLUGIN_NAME"
+  platformCommand:
+  - command: ${HELM_PLUGIN_DIR}/plugin-name.sh
