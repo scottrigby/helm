@@ -34,7 +34,8 @@ func TestPrepareCommand(t *testing.T) {
 		{OperatingSystem: runtime.GOOS, Architecture: runtime.GOARCH, Command: cmdMain, Args: cmdArgs},
 	}
 
-	cmd, args, err := PrepareCommands(platformCommands, true, []string{})
+	env := map[string]string{}
+	cmd, args, err := PrepareCommands(platformCommands, true, []string{}, env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +94,9 @@ func TestPrepareCommandExtraArgs(t *testing.T) {
 			if tc.ignoreFlags {
 				testExtraArgs = []string{}
 			}
-			cmd, args, err := PrepareCommands(platformCommands, true, testExtraArgs)
+
+			env := map[string]string{}
+			cmd, args, err := PrepareCommands(platformCommands, true, testExtraArgs, env)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -114,7 +117,8 @@ func TestPrepareCommands(t *testing.T) {
 		{OperatingSystem: runtime.GOOS, Architecture: "", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
 	}
 
-	cmd, args, err := PrepareCommands(cmds, true, []string{})
+	env := map[string]string{}
+	cmd, args, err := PrepareCommands(cmds, true, []string{}, env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +144,8 @@ func TestPrepareCommandsExtraArgs(t *testing.T) {
 
 	expectedArgs := append(cmdArgs, extraArgs...)
 
-	cmd, args, err := PrepareCommands(cmds, true, extraArgs)
+	env := map[string]string{}
+	cmd, args, err := PrepareCommands(cmds, true, extraArgs, env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +167,8 @@ func TestPrepareCommandsNoArch(t *testing.T) {
 		{OperatingSystem: runtime.GOOS, Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
 	}
 
-	cmd, args, err := PrepareCommands(cmds, true, []string{})
+	env := map[string]string{}
+	cmd, args, err := PrepareCommands(cmds, true, []string{}, env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +190,8 @@ func TestPrepareCommandsNoOsNoArch(t *testing.T) {
 		{OperatingSystem: runtime.GOOS, Architecture: "no-arch", Command: "pwsh", Args: []string{"-c", "echo \"error\""}},
 	}
 
-	cmd, args, err := PrepareCommands(cmds, true, []string{})
+	env := map[string]string{}
+	cmd, args, err := PrepareCommands(cmds, true, []string{}, env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +210,8 @@ func TestPrepareCommandsNoMatch(t *testing.T) {
 		{OperatingSystem: "no-os", Architecture: runtime.GOARCH, Command: "sh", Args: []string{"-c", "echo \"test\""}},
 	}
 
-	if _, _, err := PrepareCommands(cmds, true, []string{}); err == nil {
+	env := map[string]string{}
+	if _, _, err := PrepareCommands(cmds, true, []string{}, env); err == nil {
 		t.Fatalf("Expected error to be returned")
 	}
 }
@@ -211,7 +219,8 @@ func TestPrepareCommandsNoMatch(t *testing.T) {
 func TestPrepareCommandsNoCommands(t *testing.T) {
 	cmds := []PlatformCommand{}
 
-	if _, _, err := PrepareCommands(cmds, true, []string{}); err == nil {
+	env := map[string]string{}
+	if _, _, err := PrepareCommands(cmds, true, []string{}, env); err == nil {
 		t.Fatalf("Expected error to be returned")
 	}
 }
@@ -226,7 +235,8 @@ func TestPrepareCommandsExpand(t *testing.T) {
 
 	expectedArgs := []string{"-c", "echo \"test\""}
 
-	cmd, args, err := PrepareCommands(cmds, true, []string{})
+	env := map[string]string{}
+	cmd, args, err := PrepareCommands(cmds, true, []string{}, env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +256,8 @@ func TestPrepareCommandsNoExpand(t *testing.T) {
 		{OperatingSystem: "", Architecture: "", Command: cmdMain, Args: cmdArgs},
 	}
 
-	cmd, args, err := PrepareCommands(cmds, false, []string{})
+	env := map[string]string{}
+	cmd, args, err := PrepareCommands(cmds, false, []string{}, env)
 	if err != nil {
 		t.Fatal(err)
 	}

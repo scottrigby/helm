@@ -18,16 +18,13 @@ package schema
 
 import (
 	"bytes"
-
-	"helm.sh/helm/v4/pkg/cli"
 )
 
 // TODO remove ExtraArgs from here and elsewhere? There are --post-renderer-args but there are no "extra args"
 type InputMessagePostRendererV1 struct {
 	Args      []string
-	Manifests *bytes.Buffer    `json:"manifests"`
-	ExtraArgs []string         `json:"extraArgs"`
-	Settings  *cli.EnvSettings `json:"settings"`
+	Manifests *bytes.Buffer `json:"manifests"`
+	ExtraArgs []string      `json:"extraArgs"`
 }
 
 type OutputMessagePostRendererV1 struct {
