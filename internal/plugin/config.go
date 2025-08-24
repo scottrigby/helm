@@ -19,7 +19,7 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// Config represents the assertable type for eachplugin type's config.
+// Config represents the assertable type for each plugin type's config.
 // It is expected to type assert (cast) the a Config to its expected underlying type (schema.ConfigCLIV1, schema.ConfigGetterV1, etc).
 type Config interface {
 	Validate() error
