@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-// TODO: can we generate these plugin input/outputs?
+// TODO: can we generate these plugin input/output messages?
 
 type GetterOptionsV1 struct {
 	URL                   string
