@@ -28,16 +28,52 @@ import (
 	"helm.sh/helm/v4/internal/plugin/schema"
 )
 
+const ExtistmV1WasmBinaryFilename = "plugin.wasm"
+
+type RuntimeConfigExtismV1Memory struct {
+	// The max amount of pages the plugin can allocate
+	// One page is 64Kib. e.g. 16 pages would require 1MiB.
+	// Default is 4 pages (256KiB)
+	MaxPages uint32 `yaml:"maxPages,omitempty"`
+
+	// The max size of an Extism HTTP response in bytes
+	// Default is 4096 bytes (4KiB)
+	MaxHTTPResponseBytes int64 `yaml:"maxHttpResponseBytes,omitempty"`
+
+	// The max size of all Extism vars in bytes
+	// Default is 4096 bytes (4KiB)
+	MaxVarBytes int64 `yaml:"maxVarBytes,omitempty"`
+}
+
+// RuntimeConfigExtismV1 defines the user-configurable options the plugin's Extism runtime
+// The format loosely follows the Extism Manifest format: https://extism.org/docs/concepts/manifest/
 type RuntimeConfigExtismV1 struct {
-	MaxPages             uint32            `yaml:"maxPages,omitempty"`
-	MaxHTTPResponseBytes int64             `yaml:"maxHttpResponseBytes,omitempty"`
-	MaxVarBytes          int64             `yaml:"maxVarBytes,omitempty"`
-	Config               map[string]string `yaml:"config,omitempty"`
-	AllowedHosts         []string          `yaml:"allowedHosts,omitempty"`
-	AllowedPaths         map[string]string `yaml:"allowedPaths,omitempty"`
-	Timeout              uint64            `yaml:"timeout,omitempty"`
-	HostFunctions        []string          `yaml:"hostFunctions,omitempty"`
-	EntryFuncName        string            `yaml:"entryFuncName,omitempty"` // The name of entry function name to call in the plugin. Defaults to "helm_plugin_main".
+	// Describes the limits on the memory the plugin may be allocated.
+	Memory RuntimeConfigExtismV1Memory `yaml:"memory"`
+
+	// The "config" key is a free-form map that can be passed to the plugin.
+	// The plugin must interpret arbitrary data this map may contain
+	Config map[string]string `yaml:"config,omitempty"`
+
+	// An optional set of hosts this plugin can communicate with.
+	// This only has an effect if the plugin makes HTTP requests.
+	// If not specified, then no hosts are allowed.
+	AllowedHosts []string `yaml:"allowedHosts,omitempty"`
+
+	// // An optional set of mappings between the host's filesystem and the paths a plugin can access.
+	// TODO: shuld Helm expose this?
+	// AllowedPaths  map[string]string           `yaml:"allowedPaths,omitempty"`
+
+	// The timeout in milliseconds for the plugin to execute
+	Timeout uint64 `yaml:"timeout,omitempty"`
+
+	// HostFunction names exposed in Helm the plugin may access
+	// see: https://extism.org/docs/concepts/host-functions/
+	HostFunctions []string `yaml:"hostFunctions,omitempty"`
+
+	// The name of entry function name to call in the plugin
+	// Defaults to "helm_plugin_main".
+	EntryFuncName string `yaml:"entryFuncName,omitempty"`
 }
 
 var _ RuntimeConfig = (*RuntimeConfigExtismV1)(nil)
@@ -61,7 +97,11 @@ func (r *RuntimeExtismV1) CreatePlugin(pluginDir string, metadata *Metadata) (Pl
 		return nil, fmt.Errorf("invalid extism/v1 plugin runtime config type: %T", metadata.RuntimeConfig)
 	}
 
-	wasmFile := filepath.Join(pluginDir, "plugin.wasm")
+	wasmFile := filepath.Join(pluginDir, ExtistmV1WasmBinaryFilename)
+	allowedHosts := rc.AllowedHosts
+	if allowedHosts == nil {
+		allowedHosts = []string{}
+	}
 	manifest := extism.Manifest{
 		Wasm: []extism.Wasm{
 			extism.WasmFile{
@@ -70,13 +110,13 @@ func (r *RuntimeExtismV1) CreatePlugin(pluginDir string, metadata *Metadata) (Pl
 			},
 		},
 		Memory: &extism.ManifestMemory{
-			MaxPages:             rc.MaxPages,
-			MaxHttpResponseBytes: rc.MaxHTTPResponseBytes,
-			MaxVarBytes:          rc.MaxVarBytes,
+			MaxPages:             rc.Memory.MaxPages,
+			MaxHttpResponseBytes: rc.Memory.MaxHTTPResponseBytes,
+			MaxVarBytes:          rc.Memory.MaxVarBytes,
 		},
 		Config:       rc.Config,
-		AllowedHosts: rc.AllowedHosts,
-		AllowedPaths: rc.AllowedPaths,
+		AllowedHosts: allowedHosts,
+		AllowedPaths: nil, // rc.AllowedPaths,
 		Timeout:      rc.Timeout,
 	}
 
@@ -122,26 +162,29 @@ func (p *ExtismV1PluginRuntime) Invoke(ctx context.Context, input *Input) (*Outp
 	mc := wazero.NewModuleConfig().
 		WithSysWalltime()
 	if input.Stdin != nil {
-		mc = mc.
-			WithStdin(input.Stdin)
+		mc.WithStdin(input.Stdin)
 	}
 	if input.Stdout != nil {
-		mc = mc.
-			WithStdout(input.Stdout)
+		mc.WithStdout(input.Stdout)
 	}
 	if input.Stderr != nil {
-		mc = mc.
-			WithStderr(input.Stderr)
+		mc.WithStderr(input.Stderr)
 	}
-	// mc = mc.WithEnv()
+	if len(input.Env) > 0 {
+		env := parseEnv(input.Env)
+		for k, v := range env {
+			mc.WithEnv(k, v)
+		}
+	}
 
 	config := extism.PluginConfig{
-		ModuleConfig:              mc,
-		RuntimeConfig:             wazero.NewRuntimeConfig().WithCloseOnContextDone(true).WithCompilationCache(p.r.CompliationCache),
+		ModuleConfig: mc,
+		RuntimeConfig: wazero.
+			NewRuntimeConfig().
+			WithCloseOnContextDone(true).
+			WithCompilationCache(p.r.CompliationCache),
 		EnableWasi:                true,
 		EnableHttpResponseHeaders: true,
-		//ObserveAdapter: ,
-		//ObserveOptions: &observe.Options{},
 	}
 
 	pe, err := extism.NewPlugin(ctx, p.manifest, config, p.hostFunctions)
@@ -195,7 +238,7 @@ func (p *ExtismV1PluginRuntime) Invoke(ctx context.Context, input *Input) (*Outp
 
 	outputMessage := makeOutputMessage(p.metadata.Type)
 
-	if err := json.Unmarshal(outputData, outputMessage); err != nil {
+	if err := json.Unmarshal(outputData, &outputMessage); err != nil {
 		return nil, fmt.Errorf("failed to json marshel plugin output message: %T: %w", outputMessage, err)
 	}
 
