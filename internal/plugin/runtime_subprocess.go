@@ -275,7 +275,7 @@ func (r *SubprocessPluginRuntime) runPostrenderer(input *Input) (*Output, error)
 
 	return &Output{
 		Message: &schema.OutputMessagePostRendererV1{
-			Manifests: postRendered,
+			Manifests: postRendered.Bytes(),
 		},
 	}, nil
 }

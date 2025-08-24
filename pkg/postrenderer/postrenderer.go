@@ -79,9 +79,9 @@ func (r *postRendererPlugin) Run(renderedManifests *bytes.Buffer) (*bytes.Buffer
 
 	// If the binary returned almost nothing, it's likely that it didn't
 	// successfully render anything
-	if len(bytes.TrimSpace(outputMessage.Manifests.Bytes())) == 0 {
+	if len(bytes.TrimSpace(outputMessage.Manifests)) == 0 {
 		return nil, fmt.Errorf("post-renderer %q produced empty output", r.plugin.Metadata().Name)
 	}
 
-	return outputMessage.Manifests, nil
+	return bytes.NewBuffer(outputMessage.Manifests), nil
 }

@@ -28,5 +28,5 @@ type InputMessagePostRendererV1 struct {
 }
 
 type OutputMessagePostRendererV1 struct {
-	Manifests *bytes.Buffer `json:"manifests"`
+	Manifests []byte `json:"manifests"`
 }
