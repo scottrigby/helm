@@ -85,7 +85,7 @@ func NewExtractor(source string) (Extractor, error) {
 }
 
 // NewHTTPInstaller creates a new HttpInstaller.
-func NewHTTPInstaller(source string) (*HTTPInstaller, error) {
+func NewHTTPInstaller(source string, settings *cli.EnvSettings) (*HTTPInstaller, error) {
 	key, err := cache.Key(source)
 	if err != nil {
 		return nil, err
@@ -96,7 +96,7 @@ func NewHTTPInstaller(source string) (*HTTPInstaller, error) {
 		return nil, err
 	}
 
-	get, err := getter.All(new(cli.EnvSettings)).ByScheme("http")
+	get, err := getter.All(settings).ByScheme("http")
 	if err != nil {
 		return nil, err
 	}
