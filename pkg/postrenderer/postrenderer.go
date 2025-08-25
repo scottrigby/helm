@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"path/filepath"
 
 	"helm.sh/helm/v4/internal/plugin/schema"
 
@@ -43,7 +42,7 @@ func NewPostRendererPlugin(settings *cli.EnvSettings, pluginName string, args ..
 		Name: pluginName,
 		Type: "postrenderer/v1",
 	}
-	p, err := plugin.FindPlugin(filepath.SplitList(settings.PluginsDirectory), descriptor)
+	p, err := settings.PluginCatalog.FindPlugin(descriptor)
 	if err != nil {
 		return nil, err
 	}

@@ -87,6 +87,8 @@ func TestLoadCLIPlugins(t *testing.T) {
 	settings.PluginsDirectory = "testdata/helmhome/helm/plugins"
 	settings.RepositoryConfig = "testdata/helmhome/helm/repositories.yaml"
 	settings.RepositoryCache = "testdata/helmhome/helm/repository"
+	err := settings.InitializeDefaultPluginManager()
+	require.Nil(t, err)
 
 	var (
 		out bytes.Buffer
@@ -164,6 +166,8 @@ func TestLoadPluginsWithSpace(t *testing.T) {
 	settings.PluginsDirectory = "testdata/helm home with space/helm/plugins"
 	settings.RepositoryConfig = "testdata/helm home with space/helm/repositories.yaml"
 	settings.RepositoryCache = "testdata/helm home with space/helm/repository"
+	err := settings.InitializeDefaultPluginManager()
+	require.Nil(t, err)
 
 	var (
 		out bytes.Buffer
@@ -242,6 +246,8 @@ type staticCompletionDetails struct {
 
 func TestLoadCLIPluginsForCompletion(t *testing.T) {
 	settings.PluginsDirectory = "testdata/helmhome/helm/plugins"
+	err := settings.InitializeDefaultPluginManager()
+	require.Nil(t, err)
 
 	var out bytes.Buffer
 
@@ -329,15 +335,19 @@ func TestPluginDynamicCompletion(t *testing.T) {
 	}}
 	for _, test := range tests {
 		settings.PluginsDirectory = "testdata/helmhome/helm/plugins"
+		err := settings.InitializeDefaultPluginManager()
+		require.Nil(t, err)
 		runTestCmd(t, []cmdTestCase{test})
 	}
 }
 
 func TestLoadCLIPlugins_HelmNoPlugins(t *testing.T) {
+	t.Setenv("HELM_NO_PLUGINS", "1")
+
 	settings.PluginsDirectory = "testdata/helmhome/helm/plugins"
 	settings.RepositoryConfig = "testdata/helmhome/helm/repository"
-
-	t.Setenv("HELM_NO_PLUGINS", "1")
+	err := settings.InitializeDefaultPluginManager()
+	require.Nil(t, err)
 
 	out := bytes.NewBuffer(nil)
 	cmd := &cobra.Command{}
@@ -398,6 +408,9 @@ func TestPluginCmdsCompletion(t *testing.T) {
 	}, {}}
 	for _, test := range tests {
 		settings.PluginsDirectory = "testdata/helmhome/helm/plugins"
+		err := settings.InitializeDefaultPluginManager()
+		require.Nil(t, err)
+
 		runTestCmd(t, []cmdTestCase{test})
 	}
 }

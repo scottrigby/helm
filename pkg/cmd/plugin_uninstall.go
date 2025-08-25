@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -60,42 +59,42 @@ func (o *pluginUninstallOptions) complete(args []string) error {
 }
 
 func (o *pluginUninstallOptions) run(out io.Writer) error {
-	slog.Debug("loading installer plugins", "dir", settings.PluginsDirectory)
-	plugins, err := plugin.LoadAll(settings.PluginsDirectory)
-	if err != nil {
-		return err
+	pmc, ok := settings.PluginCatalog.(*plugin.PluginManagerCatalog)
+	if !ok {
+		return nil
 	}
-	var errorPlugins []error
+
+	pm := pmc.Manager
+
+	var errs []error
 	for _, name := range o.names {
-		if found := findPlugin(plugins, name); found != nil {
-			if err := uninstallPlugin(found); err != nil {
-				errorPlugins = append(errorPlugins, fmt.Errorf("failed to uninstall plugin %s, got error (%v)", name, err))
-			} else {
-				fmt.Fprintf(out, "Uninstalled plugin: %s\n", name)
-			}
-		} else {
-			errorPlugins = append(errorPlugins, fmt.Errorf("plugin: %s not found", name))
+		pluginRaw := pm.Store.Load(name)
+		if pluginRaw == nil {
+			errs = append(errs, fmt.Errorf("plugin: %s not found", name))
+			continue
 		}
+
+		if err := uninstallPlugin(pm, pluginRaw); err != nil {
+			errs = append(errs, fmt.Errorf("failed to uninstall plugin %s, got error (%v)", name, err))
+			continue
+		}
+
+		fmt.Fprintf(out, "Uninstalled plugin: %s\n", name)
 	}
-	if len(errorPlugins) > 0 {
-		return errors.Join(errorPlugins...)
-	}
-	return nil
+
+	return errors.Join(errs...)
 }
 
-func uninstallPlugin(p plugin.Plugin) error {
-	if err := os.RemoveAll(p.Dir()); err != nil {
+func uninstallPlugin(pm *plugin.Manager, pluginRaw *plugin.PluginRaw) error {
+	pm.Store.Delete(pluginRaw.Metadata.Name)
+
+	if err := os.RemoveAll(pluginRaw.Dir); err != nil {
 		return err
 	}
-	return runHook(p, plugin.Delete)
-}
 
-// TODO should this be in pkg/plugin/loader.go?
-func findPlugin(plugins []plugin.Plugin, name string) plugin.Plugin {
-	for _, p := range plugins {
-		if p.Metadata().Name == name {
-			return p
-		}
-	}
-	return nil
+	// Ensure a concurrent store reload doesn't accidentally race the os.RemoveAll and read the plugin back into memory
+	pm.Store.Delete(pluginRaw.Metadata.Name)
+
+	// TODO: should the hook be run before deleting the plugin's files?
+	return runHook(pm, pluginRaw, plugin.Delete)
 }

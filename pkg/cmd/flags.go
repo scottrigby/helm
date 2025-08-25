@@ -25,8 +25,6 @@ import (
 	"sort"
 	"strings"
 
-	"helm.sh/helm/v4/pkg/postrenderer"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
@@ -38,6 +36,7 @@ import (
 	"helm.sh/helm/v4/pkg/cli/values"
 	"helm.sh/helm/v4/pkg/helmpath"
 	"helm.sh/helm/v4/pkg/kube"
+	"helm.sh/helm/v4/pkg/postrenderer"
 	"helm.sh/helm/v4/pkg/repo"
 )
 
