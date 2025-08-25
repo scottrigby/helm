@@ -21,11 +21,10 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"reflect"
 
 	extism "github.com/extism/go-sdk"
 	"github.com/tetratelabs/wazero"
-
-	"helm.sh/helm/v4/internal/plugin/schema"
 )
 
 const ExtistmV1WasmBinaryFilename = "plugin.wasm"
@@ -236,8 +235,7 @@ func (p *ExtismV1PluginRuntime) Invoke(ctx context.Context, input *Input) (*Outp
 
 	slog.Debug("plugin output", slog.String("plugin", p.metadata.Name), slog.Int("exitCode", int(exitCode)), slog.String("outputData", string(outputData)))
 
-	outputMessage := makeOutputMessage(p.metadata.Type)
-
+	outputMessage := reflect.Zero(pluginTypesIndex[p.metadata.Type].outputType).Interface()
 	if err := json.Unmarshal(outputData, &outputMessage); err != nil {
 		return nil, fmt.Errorf("failed to json marshel plugin output message: %T: %w", outputMessage, err)
 	}
@@ -247,17 +245,4 @@ func (p *ExtismV1PluginRuntime) Invoke(ctx context.Context, input *Input) (*Outp
 	}
 
 	return output, nil
-}
-
-func makeOutputMessage(pluginType string) any {
-	switch pluginType {
-	case "getter/v1":
-		return &schema.OutputMessageGetterV1{}
-	case "cli/v1":
-		return &schema.OutputMessageCLIV1{}
-	case "postrenderer/v1":
-		return &schema.OutputMessagePostRendererV1{}
-	}
-
-	return nil
 }

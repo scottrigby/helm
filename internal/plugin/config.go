@@ -16,25 +16,39 @@ limitations under the License.
 package plugin
 
 import (
+	"bytes"
+	"fmt"
+	"reflect"
+
 	"go.yaml.in/yaml/v3"
 )
 
-// Config represents the assertable type for each plugin type's config.
+// Config represents an plugin type specific configuration
 // It is expected to type assert (cast) the a Config to its expected underlying type (schema.ConfigCLIV1, schema.ConfigGetterV1, etc).
 type Config interface {
 	Validate() error
 }
 
-func remarshalConfig[T Config](configData map[string]any) (Config, error) {
+func unmarshaConfig(pluginType string, configData map[string]any) (Config, error) {
+
+	pluginTypeMeta, ok := pluginTypesIndex[pluginType]
+	if !ok {
+		return nil, fmt.Errorf("unknown plugin type %q", pluginType)
+	}
+
+	// TODO: Avoid (yaml) serialization/deserialization for type conversion here
+
 	data, err := yaml.Marshal(configData)
 	if err != nil {
+		return nil, fmt.Errorf("failed to marshel config data (plugin type %s): %w", pluginType, err)
+	}
+
+	config := reflect.New(pluginTypeMeta.configType)
+	d := yaml.NewDecoder(bytes.NewReader(data))
+	d.KnownFields(true)
+	if err := d.Decode(config.Interface()); err != nil {
 		return nil, err
 	}
 
-	var config T
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, err
-	}
-
-	return config, nil
+	return config.Interface().(Config), nil
 }
