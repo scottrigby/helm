@@ -17,6 +17,8 @@ package plugin
 
 import (
 	"fmt"
+
+	"helm.sh/helm/v4/internal/plugin/schema"
 )
 
 // Metadata of a plugin, converted from the "on-disk" legacy or v1 (yaml) formats
@@ -110,11 +112,11 @@ func buildLegacyConfig(m MetadataLegacy, pluginType string) Config {
 		for _, d := range m.Downloaders {
 			protocols = append(protocols, d.Protocols...)
 		}
-		return &ConfigGetter{
+		return &schema.ConfigGetterV1{
 			Protocols: protocols,
 		}
 	case "cli/v1":
-		return &ConfigCLI{
+		return &schema.ConfigCLIV1{
 			Usage:       "",            // Legacy plugins don't have Usage field for command syntax
 			ShortHelp:   m.Usage,       // Map legacy usage to shortHelp
 			LongHelp:    m.Description, // Map legacy description to longHelp
@@ -190,11 +192,11 @@ func convertMetadataConfig(pluginType string, configRaw map[string]any) (Config,
 
 	switch pluginType {
 	case "cli/v1":
-		config, err = remarshalConfig[*ConfigCLI](configRaw)
+		config, err = remarshalConfig[*schema.ConfigCLIV1](configRaw)
 	case "getter/v1":
-		config, err = remarshalConfig[*ConfigGetter](configRaw)
+		config, err = remarshalConfig[*schema.ConfigGetterV1](configRaw)
 	case "postrenderer/v1":
-		config, err = remarshalConfig[*ConfigPostrenderer](configRaw)
+		config, err = remarshalConfig[*schema.ConfigPostRendererV1](configRaw)
 	default:
 		return nil, fmt.Errorf("unsupported plugin type: %s", pluginType)
 	}

@@ -71,7 +71,7 @@ func loadCLIPlugins(baseCmd *cobra.Command, out io.Writer) {
 	for _, plug := range found {
 		var use, short, long string
 		var ignoreFlags bool
-		if cliConfig, ok := plug.Metadata().Config.(*plugin.ConfigCLI); ok {
+		if cliConfig, ok := plug.Metadata().Config.(*schema.ConfigCLIV1); ok {
 			use = cliConfig.Usage
 			short = cliConfig.ShortHelp
 			long = cliConfig.LongHelp
@@ -113,7 +113,6 @@ func loadCLIPlugins(baseCmd *cobra.Command, out io.Writer) {
 				input := &plugin.Input{
 					Message: schema.InputMessageCLIV1{
 						ExtraArgs: extraArgs,
-						Settings:  settings,
 					},
 					Env:    env,
 					Stdin:  os.Stdin,
@@ -340,7 +339,7 @@ func pluginDynamicComp(plug plugin.Plugin, cmd *cobra.Command, args []string, to
 	}
 
 	var ignoreFlags bool
-	if cliConfig, ok := subprocessPlug.Metadata().Config.(*plugin.ConfigCLI); ok {
+	if cliConfig, ok := subprocessPlug.Metadata().Config.(*schema.ConfigCLIV1); ok {
 		ignoreFlags = cliConfig.IgnoreFlags
 	}
 

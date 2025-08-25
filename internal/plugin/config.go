@@ -16,68 +16,13 @@ limitations under the License.
 package plugin
 
 import (
-	"fmt"
-
 	"go.yaml.in/yaml/v3"
 )
 
-// Config interface defines the methods that all plugin type configurations must implement
+// Config represents the assertable type for each plugin type's config.
+// It is expected to type assert (cast) the a Config to its expected underlying type (schema.ConfigCLIV1, schema.ConfigGetterV1, etc).
 type Config interface {
-	GetType() string
 	Validate() error
-}
-
-// ConfigCLI represents the configuration for CLI plugins
-type ConfigCLI struct {
-	// Usage is the single-line usage text shown in help
-	// For recommended syntax, see [spf13/cobra.command.Command] Use field comment:
-	// https://pkg.go.dev/github.com/spf13/cobra#Command
-	Usage string `yaml:"usage"`
-	// ShortHelp is the short description shown in the 'helm help' output
-	ShortHelp string `yaml:"shortHelp"`
-	// LongHelp is the long message shown in the 'helm help <this-command>' output
-	LongHelp string `yaml:"longHelp"`
-	// IgnoreFlags ignores any flags passed in from Helm
-	IgnoreFlags bool `yaml:"ignoreFlags"`
-}
-
-// ConfigGetter represents the configuration for download plugins
-type ConfigGetter struct {
-	// Protocols are the list of URL schemes supported by this downloader
-	Protocols []string `yaml:"protocols"`
-}
-
-// ConfigPostrenderer represents the configuration for postrenderer plugins
-type ConfigPostrenderer struct {
-	// PostrendererArgs are arguments passed to the post-renderer plugin
-	// TODO: remove this field. it is not needed as args are passed from CLI to the plugin
-	PostrendererArgs []string `yaml:"postrendererArgs"`
-}
-
-func (c *ConfigCLI) GetType() string          { return "cli/v1" }
-func (c *ConfigGetter) GetType() string       { return "getter/v1" }
-func (c *ConfigPostrenderer) GetType() string { return "postrenderer/v1" }
-
-func (c *ConfigCLI) Validate() error {
-	// Config validation for CLI plugins
-	return nil
-}
-
-func (c *ConfigGetter) Validate() error {
-	if len(c.Protocols) == 0 {
-		return fmt.Errorf("getter has no protocols")
-	}
-	for i, protocol := range c.Protocols {
-		if protocol == "" {
-			return fmt.Errorf("getter has empty protocol at index %d", i)
-		}
-	}
-	return nil
-}
-
-func (c *ConfigPostrenderer) Validate() error {
-	// Config validation for postrenderer plugins
-	return nil
 }
 
 func remarshalConfig[T Config](configData map[string]any) (Config, error) {
