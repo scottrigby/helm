@@ -13,6 +13,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package downloader provides chart downloading capabilities.
+//
+// Deprecated: New code should use the unified artifact downloader in pkg/artifact
+// which supports multiple artifact types (charts, plugins, etc.) with a consistent API.
+// This package is maintained for backward compatibility with existing chart download logic.
 package downloader
 
 import (
@@ -40,6 +45,8 @@ import (
 )
 
 // VerificationStrategy describes a strategy for determining whether to verify a chart.
+//
+// Deprecated: New code should use artifact.VerificationStrategy for unified artifact verification.
 type VerificationStrategy int
 
 const (
@@ -58,11 +65,15 @@ const (
 )
 
 // ErrNoOwnerRepo indicates that a given chart URL can't be found in any repos.
+//
+// Deprecated: New code should use artifact.ErrNoOwnerRepo for unified artifact handling.
 var ErrNoOwnerRepo = errors.New("could not find a repo containing the given URL")
 
 // ChartDownloader handles downloading a chart.
 //
-// It is capable of performing verifications on charts as well.
+// Deprecated: New code should use artifact.ChartDownloader for unified artifact downloading
+// that supports charts, plugins, and other artifact types with a consistent API.
+// This implementation is maintained for backward compatibility.
 type ChartDownloader struct {
 	// Out is the location to write warning and info messages.
 	Out io.Writer

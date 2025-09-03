@@ -37,7 +37,8 @@ import (
 // Ensure OCIInstaller implements Verifier
 var _ Verifier = (*OCIInstaller)(nil)
 
-// OCIInstaller installs plugins from OCI registries
+// OCIInstaller installs plugins from OCI registries.
+// DEPRECATED: Use ArtifactInstaller instead for unified transport support.
 type OCIInstaller struct {
 	CacheDir   string
 	PluginName string

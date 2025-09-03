@@ -32,6 +32,7 @@ import (
 )
 
 // HTTPInstaller installs plugins from an archive served by a web server.
+// DEPRECATED: Use ArtifactInstaller instead for unified transport support.
 type HTTPInstaller struct {
 	CacheDir   string
 	PluginName string
