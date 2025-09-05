@@ -17,7 +17,9 @@ package artifact
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
+	"io"
 	"os"
 	"testing"
 
@@ -48,7 +50,7 @@ type MockCache struct {
 	data map[string][]byte
 }
 
-func (c *MockCache) Get(digest [32]byte, cacheType CacheType) (string, error) {
+func (c *MockCache) Get(digest [sha256.Size]byte, cacheType CacheType) (string, error) {
 	// Use cache type in key to simulate different cache directories
 	key := fmt.Sprintf("%s-%d", string(digest[:]), cacheType)
 	if data, exists := c.data[key]; exists {
@@ -69,10 +71,16 @@ func (c *MockCache) Get(digest [32]byte, cacheType CacheType) (string, error) {
 	return "", os.ErrNotExist
 }
 
-func (c *MockCache) Put(digest [32]byte, data *bytes.Buffer, cacheType CacheType) (string, error) {
+func (c *MockCache) Put(digest [sha256.Size]byte, data io.Reader, cacheType CacheType) (string, error) {
 	// Use cache type in key to simulate different cache directories
 	key := fmt.Sprintf("%s-%d", string(digest[:]), cacheType)
-	c.data[key] = data.Bytes()
+
+	// Read data into buffer
+	buf := &bytes.Buffer{}
+	if _, err := io.Copy(buf, data); err != nil {
+		return "", err
+	}
+	c.data[key] = buf.Bytes()
 
 	// Create temporary file with appropriate extension
 	pattern := "cache-*.tgz"
@@ -85,7 +93,7 @@ func (c *MockCache) Put(digest [32]byte, data *bytes.Buffer, cacheType CacheType
 	}
 	defer tmpfile.Close()
 
-	_, err = tmpfile.Write(data.Bytes())
+	_, err = tmpfile.Write(buf.Bytes())
 	return tmpfile.Name(), err
 }
 
@@ -214,42 +222,4 @@ func TestPluginDownloader_Compatibility(t *testing.T) {
 	}
 }
 
-func TestDiskCache(t *testing.T) {
-	tmpdir := t.TempDir()
-	cache := &DiskCache{Root: tmpdir}
-
-	// Test cache miss
-	digest := [32]byte{}
-	copy(digest[:], []byte("test"))
-
-	_, err := cache.Get(digest, CacheArtifact)
-	if !os.IsNotExist(err) {
-		t.Errorf("Expected not exist error, got %v", err)
-	}
-
-	// Test cache put and get
-	data := bytes.NewBuffer([]byte("test data"))
-	path, err := cache.Put(digest, data, CacheArtifact)
-	if err != nil {
-		t.Errorf("Expected no error putting to cache, got %v", err)
-	}
-
-	retrievedPath, err := cache.Get(digest, CacheArtifact)
-	if err != nil {
-		t.Errorf("Expected no error getting from cache, got %v", err)
-	}
-
-	if path != retrievedPath {
-		t.Errorf("Expected paths to match: %s != %s", path, retrievedPath)
-	}
-
-	// Verify file contents
-	content, err := os.ReadFile(retrievedPath)
-	if err != nil {
-		t.Errorf("Expected no error reading cached file, got %v", err)
-	}
-
-	if string(content) != "test data" {
-		t.Errorf("Expected 'test data', got %s", string(content))
-	}
-}
+// Cache tests moved to cache_test.go for better organization

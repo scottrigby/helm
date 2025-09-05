@@ -60,19 +60,6 @@ const (
 	VerifyLater
 )
 
-// Cache defines the interface for artifact caching.
-type Cache interface {
-	Get(digest [32]byte, cacheType CacheType) (string, error)
-	Put(digest [32]byte, data *bytes.Buffer, cacheType CacheType) (string, error)
-}
-
-// CacheType indicates what type of cached item is being stored.
-type CacheType int
-
-const (
-	CacheArtifact CacheType = iota
-	CacheProv
-)
 
 // ErrNoOwnerRepo indicates that a given artifact URL can't be found in any repos.
 var ErrNoOwnerRepo = errors.New("could not find a repo containing the given URL")
@@ -365,32 +352,3 @@ func (d *Downloader) VerifyArtifact(artifactPath, provPath string) (*provenance.
 	return sig.Verify(artifactData, provData, filepath.Base(artifactPath))
 }
 
-// DiskCache is a simple disk-based cache implementation.
-type DiskCache struct {
-	Root string
-}
-
-func (c *DiskCache) Get(digest [32]byte, cacheType CacheType) (string, error) {
-	subdir := "artifacts"
-	if cacheType == CacheProv {
-		subdir = "provenance"
-	}
-	path := filepath.Join(c.Root, subdir, hex.EncodeToString(digest[:]))
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return "", err
-	}
-	return path, nil
-}
-
-func (c *DiskCache) Put(digest [32]byte, data *bytes.Buffer, cacheType CacheType) (string, error) {
-	subdir := "artifacts"
-	if cacheType == CacheProv {
-		subdir = "provenance"
-	}
-	dir := filepath.Join(c.Root, subdir)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return "", err
-	}
-	path := filepath.Join(dir, hex.EncodeToString(digest[:]))
-	return path, fileutil.AtomicWriteFile(path, data, 0644)
-}

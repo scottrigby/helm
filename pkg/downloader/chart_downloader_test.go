@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"helm.sh/helm/v4/internal/test/ensure"
+	"helm.sh/helm/v4/pkg/artifact"
 	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/registry"
@@ -408,7 +409,7 @@ func TestDownloadToCache(t *testing.T) {
 			RepositoryCache:  repoCache,
 			ContentCache:     contentCache,
 		}),
-		Cache: &DiskCache{Root: contentCache},
+		Cache: &artifact.DiskCache{Root: contentCache},
 	}
 
 	// Case 1: Chart not in cache, download it.
@@ -416,7 +417,7 @@ func TestDownloadToCache(t *testing.T) {
 		// Clear cache for this test
 		os.RemoveAll(contentCache)
 		os.MkdirAll(contentCache, 0755)
-		c.Cache = &DiskCache{Root: contentCache}
+		c.Cache = &artifact.DiskCache{Root: contentCache}
 
 		pth, v, err := c.DownloadToCache("test/signtest", "0.1.0")
 		require.NoError(t, err)
@@ -434,7 +435,7 @@ func TestDownloadToCache(t *testing.T) {
 		var digestArray [sha256.Size]byte
 		copy(digestArray[:], digestBytes)
 
-		cachePath, err := c.Cache.Get(digestArray, CacheChart)
+		cachePath, err := c.Cache.Get(digestArray, artifact.CacheArtifact)
 		require.NoError(t, err, "chart should now be in cache")
 		require.Equal(t, pth, cachePath)
 	})
@@ -458,7 +459,7 @@ func TestDownloadToCache(t *testing.T) {
 		// Clear cache
 		os.RemoveAll(contentCache)
 		os.MkdirAll(contentCache, 0755)
-		c.Cache = &DiskCache{Root: contentCache}
+		c.Cache = &artifact.DiskCache{Root: contentCache}
 		c.Verify = VerifyAlways
 		c.Keyring = "testdata/helm-test-key.pub"
 
@@ -475,9 +476,9 @@ func TestDownloadToCache(t *testing.T) {
 		var digestArray [sha256.Size]byte
 		copy(digestArray[:], digestBytes)
 
-		_, err = c.Cache.Get(digestArray, CacheChart)
+		_, err = c.Cache.Get(digestArray, artifact.CacheArtifact)
 		require.NoError(t, err, "chart should be in cache")
-		_, err = c.Cache.Get(digestArray, CacheProv)
+		_, err = c.Cache.Get(digestArray, artifact.CacheProv)
 		require.NoError(t, err, "provenance file should be in cache")
 
 		// Reset for other tests

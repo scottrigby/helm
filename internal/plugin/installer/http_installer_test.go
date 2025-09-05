@@ -19,6 +19,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -33,9 +34,29 @@ import (
 	"helm.sh/helm/v4/internal/test/ensure"
 	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/helmpath"
+	"helm.sh/helm/v4/pkg/transport"
 )
 
 var _ Installer = new(HTTPInstaller)
+
+// MockTransport implements transport.Transport for testing
+type MockTransport struct {
+	data map[string][]byte
+	err  error
+}
+
+func (m *MockTransport) Get(url string, _ ...transport.Option) (*bytes.Buffer, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+
+	data, exists := m.data[url]
+	if !exists {
+		return nil, fmt.Errorf("URL not found: %s", url)
+	}
+
+	return bytes.NewBuffer(data), nil
+}
 
 // Fake http client
 type TestHTTPGetter struct {
@@ -99,9 +120,35 @@ func TestHTTPInstaller(t *testing.T) {
 		t.Fatal("expected an ArtifactInstaller")
 	}
 
-	// TODO: Rewrite this test for ArtifactInstaller
-	// The unified downloader doesn't expose getter for mocking
-	t.Skip("Test needs rewriting for ArtifactInstaller - transport mocking not implemented")
+	// Mock the downloader's transport to provide test data
+	artifactInstaller := i.(*ArtifactInstaller)
+
+	// Decode the fake plugin data
+	mockTgz, err := base64.StdEncoding.DecodeString(fakePluginB64)
+	if err != nil {
+		t.Fatalf("Could not decode fake tgz plugin: %s", err)
+	}
+
+	// Create mock transport that returns our test data
+	mockTransport := &MockTransport{
+		data: map[string][]byte{
+			source: mockTgz,
+		},
+	}
+
+	// Configure the ArtifactInstaller's downloader with mock transport and cache
+	tmpdir := t.TempDir()
+	artifactInstaller.downloader.Transports = transport.Providers{
+		"http":  mockTransport,
+		"https": mockTransport,
+	}
+	artifactInstaller.downloader.ContentCache = tmpdir
+
+	// Test installation
+	if err := Install(i); err != nil {
+		t.Fatal(err)
+	}
+
 	if i.Path() != helmpath.DataPath("plugins", "fake-plugin") {
 		t.Fatalf("expected path '$XDG_CONFIG_HOME/helm/plugins/fake-plugin', got %q", i.Path())
 	}
@@ -136,8 +183,26 @@ func TestHTTPInstallerNonExistentVersion(t *testing.T) {
 		t.Fatal("expected an ArtifactInstaller")
 	}
 
-	// TODO: Rewrite this test for ArtifactInstaller
-	t.Skip("Test needs rewriting for ArtifactInstaller - error injection not implemented")
+	// Mock the downloader's transport to simulate download failure
+	artifactInstaller := i.(*ArtifactInstaller)
+
+	// Create mock transport that returns error for this source
+	mockTransport := &MockTransport{
+		err: fmt.Errorf("404 not found"),
+	}
+
+	// Configure the ArtifactInstaller's downloader with mock transport and cache
+	tmpdir := t.TempDir()
+	artifactInstaller.downloader.Transports = transport.Providers{
+		"http":  mockTransport,
+		"https": mockTransport,
+	}
+	artifactInstaller.downloader.ContentCache = tmpdir
+
+	// Test installation failure with ArtifactInstaller
+	if err := Install(i); err == nil {
+		t.Fatal("expected error downloading non-existent version")
+	}
 
 }
 
@@ -162,15 +227,42 @@ func TestHTTPInstallerUpdate(t *testing.T) {
 		t.Fatal("expected an ArtifactInstaller")
 	}
 
-	// TODO: Rewrite this test for ArtifactInstaller
-	t.Skip("Test needs rewriting for ArtifactInstaller - transport mocking not implemented")
+	// Mock the downloader's transport to provide test data
+	artifactInstaller := i.(*ArtifactInstaller)
+
+	// Decode the fake plugin data
+	mockTgz, err := base64.StdEncoding.DecodeString(fakePluginB64)
+	if err != nil {
+		t.Fatalf("Could not decode fake tgz plugin: %s", err)
+	}
+
+	// Create mock transport that returns our test data
+	mockTransport := &MockTransport{
+		data: map[string][]byte{
+			source: mockTgz,
+		},
+	}
+
+	// Configure the ArtifactInstaller's downloader with mock transport and cache
+	tmpdir := t.TempDir()
+	artifactInstaller.downloader.Transports = transport.Providers{
+		"http":  mockTransport,
+		"https": mockTransport,
+	}
+	artifactInstaller.downloader.ContentCache = tmpdir
+
+	// install the plugin before updating
+	if err := Install(i); err != nil {
+		t.Fatal(err)
+	}
+
 	if i.Path() != helmpath.DataPath("plugins", "fake-plugin") {
 		t.Fatalf("expected path '$XDG_CONFIG_HOME/helm/plugins/fake-plugin', got %q", i.Path())
 	}
 
-	// Update plugin, should fail because it is not implemented
-	if err := Update(i); err == nil {
-		t.Fatal("update method not implemented for http installer")
+	// Update plugin - ArtifactInstaller should support updates (unlike HTTPInstaller)
+	if err := Update(i); err != nil {
+		t.Fatalf("update should work for ArtifactInstaller, got error: %v", err)
 	}
 }
 

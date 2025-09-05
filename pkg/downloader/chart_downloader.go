@@ -37,6 +37,7 @@ import (
 	"helm.sh/helm/v4/internal/fileutil"
 	ifs "helm.sh/helm/v4/internal/third_party/dep/fs"
 	"helm.sh/helm/v4/internal/urlutil"
+	"helm.sh/helm/v4/pkg/artifact"
 	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/helmpath"
 	"helm.sh/helm/v4/pkg/provenance"
@@ -95,7 +96,7 @@ type ChartDownloader struct {
 	ContentCache string
 
 	// Cache specifies the cache implementation to use.
-	Cache Cache
+	Cache artifact.Cache
 }
 
 // DownloadTo retrieves a chart. Depending on the settings, it may also download a provenance file.
@@ -114,7 +115,7 @@ func (c *ChartDownloader) DownloadTo(ref, version, dest string) (string, *proven
 		if c.ContentCache == "" {
 			return "", nil, errors.New("content cache must be set")
 		}
-		c.Cache = &DiskCache{Root: c.ContentCache}
+		c.Cache = &artifact.DiskCache{Root: c.ContentCache}
 		slog.Debug("setup up default downloader cache")
 	}
 	hash, u, err := c.ResolveChartVersion(ref, version)
@@ -133,7 +134,7 @@ func (c *ChartDownloader) DownloadTo(ref, version, dest string) (string, *proven
 	var data *bytes.Buffer
 	var found bool
 	var digest []byte
-	var digest32 [32]byte
+	var digest32 [sha256.Size]byte
 	if hash != "" {
 		// if there is a hash, populate the other formats
 		digest, err = hex.DecodeString(hash)
@@ -141,7 +142,7 @@ func (c *ChartDownloader) DownloadTo(ref, version, dest string) (string, *proven
 			return "", nil, err
 		}
 		copy(digest32[:], digest)
-		if pth, err := c.Cache.Get(digest32, CacheChart); err == nil {
+		if pth, err := c.Cache.Get(digest32, artifact.CacheArtifact); err == nil {
 			fdata, err := os.ReadFile(pth)
 			if err == nil {
 				found = true
@@ -177,7 +178,7 @@ func (c *ChartDownloader) DownloadTo(ref, version, dest string) (string, *proven
 		found = false
 		var body *bytes.Buffer
 		if hash != "" {
-			if pth, err := c.Cache.Get(digest32, CacheProv); err == nil {
+			if pth, err := c.Cache.Get(digest32, artifact.CacheProv); err == nil {
 				fdata, err := os.ReadFile(pth)
 				if err == nil {
 					found = true
@@ -219,7 +220,7 @@ func (c *ChartDownloader) DownloadToCache(ref, version string) (string, *provena
 		if c.ContentCache == "" {
 			return "", nil, errors.New("content cache must be set")
 		}
-		c.Cache = &DiskCache{Root: c.ContentCache}
+		c.Cache = &artifact.DiskCache{Root: c.ContentCache}
 		slog.Debug("setup up default downloader cache")
 	}
 
@@ -240,7 +241,7 @@ func (c *ChartDownloader) DownloadToCache(ref, version string) (string, *provena
 	if err != nil {
 		return "", nil, err
 	}
-	var digest32 [32]byte
+	var digest32 [sha256.Size]byte
 	copy(digest32[:], digest)
 	if err != nil {
 		return "", nil, fmt.Errorf("unable to decode digest: %w", err)
@@ -249,7 +250,7 @@ func (c *ChartDownloader) DownloadToCache(ref, version string) (string, *provena
 	var pth string
 	// only fetch from the cache if we have a digest
 	if len(digest) > 0 {
-		pth, err = c.Cache.Get(digest32, CacheChart)
+		pth, err = c.Cache.Get(digest32, artifact.CacheArtifact)
 		if err == nil {
 			slog.Debug("found chart in cache", "id", digestString)
 		}
@@ -271,7 +272,7 @@ func (c *ChartDownloader) DownloadToCache(ref, version string) (string, *provena
 			digest32 = sha256.Sum256(data.Bytes())
 		}
 
-		pth, err = c.Cache.Put(digest32, data, CacheChart)
+		pth, err = c.Cache.Put(digest32, data, artifact.CacheArtifact)
 		if err != nil {
 			return "", nil, err
 		}
@@ -282,7 +283,7 @@ func (c *ChartDownloader) DownloadToCache(ref, version string) (string, *provena
 	ver := &provenance.Verification{}
 	if c.Verify > VerifyNever {
 
-		ppth, err := c.Cache.Get(digest32, CacheProv)
+		ppth, err := c.Cache.Get(digest32, artifact.CacheProv)
 		if err == nil {
 			slog.Debug("found provenance in cache", "id", digestString)
 		} else {
@@ -299,7 +300,7 @@ func (c *ChartDownloader) DownloadToCache(ref, version string) (string, *provena
 				return pth, ver, nil
 			}
 
-			ppth, err = c.Cache.Put(digest32, body, CacheProv)
+			ppth, err = c.Cache.Put(digest32, body, artifact.CacheProv)
 			if err != nil {
 				return "", nil, err
 			}
