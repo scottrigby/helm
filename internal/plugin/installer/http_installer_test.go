@@ -34,7 +34,6 @@ import (
 	"helm.sh/helm/v4/internal/test/ensure"
 	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/helmpath"
-	"helm.sh/helm/v4/pkg/transport"
 )
 
 var _ Installer = new(HTTPInstaller)
@@ -45,7 +44,7 @@ type MockTransport struct {
 	err  error
 }
 
-func (m *MockTransport) Get(url string, _ ...transport.Option) (*bytes.Buffer, error) {
+func (m *MockTransport) Get(url string, _ ...getter.TransportOption) (*bytes.Buffer, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -138,7 +137,7 @@ func TestHTTPInstaller(t *testing.T) {
 
 	// Configure the ArtifactInstaller's downloader with mock transport and cache
 	tmpdir := t.TempDir()
-	artifactInstaller.downloader.Transports = transport.Providers{
+	artifactInstaller.downloader.Transports = getter.TransportProviders{
 		"http":  mockTransport,
 		"https": mockTransport,
 	}
@@ -193,7 +192,7 @@ func TestHTTPInstallerNonExistentVersion(t *testing.T) {
 
 	// Configure the ArtifactInstaller's downloader with mock transport and cache
 	tmpdir := t.TempDir()
-	artifactInstaller.downloader.Transports = transport.Providers{
+	artifactInstaller.downloader.Transports = getter.TransportProviders{
 		"http":  mockTransport,
 		"https": mockTransport,
 	}
@@ -245,7 +244,7 @@ func TestHTTPInstallerUpdate(t *testing.T) {
 
 	// Configure the ArtifactInstaller's downloader with mock transport and cache
 	tmpdir := t.TempDir()
-	artifactInstaller.downloader.Transports = transport.Providers{
+	artifactInstaller.downloader.Transports = getter.TransportProviders{
 		"http":  mockTransport,
 		"https": mockTransport,
 	}

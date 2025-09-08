@@ -28,4 +28,4 @@ limitations under the License.
 //
 // Type-specific convenience wrappers (ChartDownloader, PluginDownloader) provide
 // backward-compatible APIs while using the unified implementation.
-package artifact
+package downloader

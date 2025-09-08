@@ -26,7 +26,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"helm.sh/helm/v4/pkg/action"
-	"helm.sh/helm/v4/pkg/artifact"
+	"helm.sh/helm/v4/pkg/downloader"
 	"helm.sh/helm/v4/pkg/cli/values"
 	"helm.sh/helm/v4/pkg/getter"
 )
@@ -91,7 +91,7 @@ func newPackageCmd(out io.Writer) *cobra.Command {
 				}
 
 				if client.DependencyUpdate {
-					downloadManager := &artifact.Manager{
+					downloadManager := &downloader.Manager{
 						Out:              io.Discard,
 						ChartPath:        path,
 						Keyring:          client.Keyring,

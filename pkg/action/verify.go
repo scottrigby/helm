@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"helm.sh/helm/v4/pkg/artifact"
+	"helm.sh/helm/v4/pkg/downloader"
 )
 
 // Verify is the action for building a given chart's Verify tree.
@@ -39,7 +39,7 @@ func NewVerify() *Verify {
 // Run executes 'helm verify'.
 func (v *Verify) Run(chartfile string) error {
 	var out strings.Builder
-	p, err := artifact.VerifyChart(chartfile, chartfile+".prov", v.Keyring)
+	p, err := downloader.VerifyChart(chartfile, chartfile+".prov", v.Keyring)
 	if err != nil {
 		return err
 	}

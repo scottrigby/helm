@@ -25,7 +25,7 @@ import (
 	"k8s.io/client-go/util/homedir"
 
 	"helm.sh/helm/v4/pkg/action"
-	"helm.sh/helm/v4/pkg/artifact"
+	"helm.sh/helm/v4/pkg/downloader"
 	"helm.sh/helm/v4/pkg/cmd/require"
 	"helm.sh/helm/v4/pkg/getter"
 )
@@ -60,7 +60,7 @@ func newDependencyBuildCmd(out io.Writer) *cobra.Command {
 				return fmt.Errorf("missing registry client: %w", err)
 			}
 
-			man := &artifact.Manager{
+			man := &downloader.Manager{
 				Out:              out,
 				ChartPath:        chartpath,
 				Keyring:          client.Keyring,
@@ -73,10 +73,10 @@ func newDependencyBuildCmd(out io.Writer) *cobra.Command {
 				Debug:            settings.Debug,
 			}
 			if client.Verify {
-				man.Verify = artifact.VerifyIfPossible
+				man.Verify = downloader.VerifyIfPossible
 			}
 			err = man.Build()
-			if e, ok := err.(artifact.ErrRepoNotFound); ok {
+			if e, ok := err.(downloader.ErrRepoNotFound); ok {
 				return fmt.Errorf("%s. Please add the missing repos via 'helm repo add'", e.Error())
 			}
 			return err

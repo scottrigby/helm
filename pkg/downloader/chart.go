@@ -14,7 +14,7 @@ limitations under the License.
 */
 
 // Chart-specific artifact downloading capabilities.
-package artifact
+package downloader
 
 import (
 	"bytes"
@@ -27,14 +27,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"helm.sh/helm/v4/internal/fileutil"
 	ifs "helm.sh/helm/v4/internal/third_party/dep/fs"
 	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/provenance"
 	"helm.sh/helm/v4/pkg/registry"
-	"helm.sh/helm/v4/pkg/transport"
 )
 
 // ChartDownloader handles downloading charts with chart-specific features.
@@ -79,7 +77,7 @@ func (c *ChartDownloader) DownloadTo(ref, version, dest string) (string, *proven
 		return "", nil, err
 	}
 
-	// Use the transport bridge to ensure options are properly applied
+	// Use the unified transport approach
 	transports := c.convertGettersToTransports()
 	transport, err := transports.ByScheme(u.Scheme)
 	if err != nil {
@@ -189,7 +187,7 @@ func (c *ChartDownloader) DownloadToCache(ref, version string) (string, *provena
 		return "", nil, err
 	}
 
-	// Use the transport bridge to ensure options are properly applied
+	// Use the unified transport approach
 	transports := c.convertGettersToTransports()
 	transport, err := transports.ByScheme(u.Scheme)
 	if err != nil {
@@ -318,7 +316,7 @@ func (c *ChartDownloader) ResolveChartVersion(ref, version string) (string, *url
 		transports := c.convertGettersToTransports()
 		c.downloader = &Downloader{
 			Transports: transports,
-			Options:    make([]transport.Option, 0), // Initialize options
+			Options:    make([]getter.TransportOption, 0), // Initialize options
 		}
 		c.downloader.SetRepositoryConfig(c.RepositoryConfig, c.RepositoryCache)
 		if c.RegistryClient != nil {
@@ -331,8 +329,7 @@ func (c *ChartDownloader) ResolveChartVersion(ref, version string) (string, *url
 	// For backward compatibility, convert transport options back to getter options
 	// so that legacy tests that check c.Options continue to work
 	if err == nil && len(c.downloader.Options) > 0 {
-		bridge := &getterTransportBridge{}
-		convertedOpts := bridge.convertTransportOptsToGetterOpts(c.downloader.Options...)
+		convertedOpts := getter.ConvertTransportOptionsToGetterOptions(c.downloader.Options...)
 		c.Options = append(c.Options, convertedOpts...)
 	}
 
@@ -397,16 +394,16 @@ func defaultKeyring() string {
 	return os.ExpandEnv("$PGP_KEYRING")
 }
 
-// convertGettersToTransports converts getter.Providers to transport.Providers.
-// This is a temporary bridge function until we fully migrate to the transport system.
-func (c *ChartDownloader) convertGettersToTransports() transport.Providers {
-	transports := make(transport.Providers)
+// convertGettersToTransports converts getter.Providers to getter.TransportProviders.
+// This adapts the existing getter system to the unified transport interface.
+func (c *ChartDownloader) convertGettersToTransports() getter.TransportProviders {
+	transports := make(getter.TransportProviders)
 
 	if c.Getters != nil {
-		// For each provider, create a transport bridge for each scheme it supports
+		// For each provider, create a transport adapter for each scheme it supports
 		for _, provider := range c.Getters {
 			for _, scheme := range provider.Schemes {
-				transports[scheme] = &getterTransportBridge{
+				transports[scheme] = &getterTransportAdapter{
 					provider: provider,
 					options:  c.Options,
 				}
@@ -417,22 +414,22 @@ func (c *ChartDownloader) convertGettersToTransports() transport.Providers {
 	return transports
 }
 
-// getterTransportBridge is a temporary bridge that wraps a getter provider as a transport.
-type getterTransportBridge struct {
+// getterTransportAdapter adapts a getter provider to implement the Transport interface.
+type getterTransportAdapter struct {
 	provider getter.Provider
 	options  []getter.Option
 }
 
-// Get implements the transport.Transport interface by delegating to the getter.
-func (gtb *getterTransportBridge) Get(url string, transportOpts ...transport.Option) (*bytes.Buffer, error) {
+// Get implements the getter.Transport interface by delegating to the getter.
+func (gta *getterTransportAdapter) Get(url string, transportOpts ...getter.TransportOption) (*bytes.Buffer, error) {
 	// Create a getter instance from the provider using base options plus URL
-	allOptions := make([]getter.Option, len(gtb.options))
-	copy(allOptions, gtb.options)
+	allOptions := make([]getter.Option, len(gta.options))
+	copy(allOptions, gta.options)
 
 	// Add URL option to ensure basic auth works correctly
 	allOptions = append(allOptions, getter.WithURL(url))
 
-	g, err := gtb.provider.New(allOptions...)
+	g, err := gta.provider.New(allOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create getter: %w", err)
 	}
@@ -440,50 +437,9 @@ func (gtb *getterTransportBridge) Get(url string, transportOpts ...transport.Opt
 	// Convert transport options to getter options
 	var additionalOpts []getter.Option
 	if len(transportOpts) > 0 {
-		additionalOpts = gtb.convertTransportOptsToGetterOpts(transportOpts...)
+		additionalOpts = getter.ConvertTransportOptionsToGetterOptions(transportOpts...)
 	}
 
 	return g.Get(url, additionalOpts...)
 }
 
-// convertTransportOptsToGetterOpts converts transport.Options to equivalent getter.Options
-func (gtb *getterTransportBridge) convertTransportOptsToGetterOpts(transportOpts ...transport.Option) []getter.Option {
-	// Apply transport options to a temporary Options struct to extract values
-	opts := &transport.Options{}
-	for _, opt := range transportOpts {
-		opt(opts)
-	}
-
-	var getterOpts []getter.Option
-
-	// Convert each field to equivalent getter option
-	if opts.Username != "" && opts.Password != "" {
-		getterOpts = append(getterOpts, getter.WithBasicAuth(opts.Username, opts.Password))
-	}
-	if opts.UserAgent != "" {
-		getterOpts = append(getterOpts, getter.WithUserAgent(opts.UserAgent))
-	}
-	if opts.AcceptHeader != "" {
-		getterOpts = append(getterOpts, getter.WithAcceptHeader(opts.AcceptHeader))
-	}
-	if opts.CertFile != "" || opts.KeyFile != "" || opts.CAFile != "" {
-		getterOpts = append(getterOpts, getter.WithTLSClientConfig(opts.CertFile, opts.KeyFile, opts.CAFile))
-	}
-	if opts.InsecureSkipTLS {
-		getterOpts = append(getterOpts, getter.WithInsecureSkipVerifyTLS(opts.InsecureSkipTLS))
-	}
-	if opts.PlainHTTP {
-		getterOpts = append(getterOpts, getter.WithPlainHTTP(opts.PlainHTTP))
-	}
-	if opts.PassCredentialsAll {
-		getterOpts = append(getterOpts, getter.WithPassCredentialsAll(opts.PassCredentialsAll))
-	}
-	if opts.URL != "" {
-		getterOpts = append(getterOpts, getter.WithURL(opts.URL))
-	}
-	if opts.Timeout > 0 {
-		getterOpts = append(getterOpts, getter.WithTimeout(time.Duration(opts.Timeout)))
-	}
-
-	return getterOpts
-}

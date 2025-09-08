@@ -41,7 +41,7 @@ import (
 	"k8s.io/cli-runtime/pkg/resource"
 	"sigs.k8s.io/yaml"
 
-	"helm.sh/helm/v4/pkg/artifact"
+	"helm.sh/helm/v4/pkg/downloader"
 	"helm.sh/helm/v4/pkg/chart/common"
 	"helm.sh/helm/v4/pkg/chart/common/util"
 	chart "helm.sh/helm/v4/pkg/chart/v2"
@@ -814,7 +814,7 @@ func (c *ChartPathOptions) LocateChart(name string, settings *cli.EnvSettings) (
 			return abs, err
 		}
 		if c.Verify {
-			if _, err := artifact.VerifyChart(abs, abs+".prov", c.Keyring); err != nil {
+			if _, err := downloader.VerifyChart(abs, abs+".prov", c.Keyring); err != nil {
 				return "", err
 			}
 		}
@@ -824,7 +824,7 @@ func (c *ChartPathOptions) LocateChart(name string, settings *cli.EnvSettings) (
 		return name, fmt.Errorf("path %q not found", name)
 	}
 
-	dl := artifact.ChartDownloader{
+	dl := downloader.ChartDownloader{
 		Out:     os.Stdout,
 		Keyring: c.Keyring,
 		Getters: getter.All(settings),
@@ -846,7 +846,7 @@ func (c *ChartPathOptions) LocateChart(name string, settings *cli.EnvSettings) (
 	}
 
 	if c.Verify {
-		dl.Verify = artifact.VerifyAlways
+		dl.Verify = downloader.VerifyAlways
 	}
 	if c.RepoURL != "" {
 		chartURL, err := repo.FindChartInRepoURL(

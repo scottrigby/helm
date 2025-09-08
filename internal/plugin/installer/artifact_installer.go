@@ -25,7 +25,7 @@ import (
 	"helm.sh/helm/v4/internal/plugin"
 	"helm.sh/helm/v4/internal/plugin/cache"
 	"helm.sh/helm/v4/internal/third_party/dep/fs"
-	"helm.sh/helm/v4/pkg/artifact"
+	"helm.sh/helm/v4/pkg/downloader"
 	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/helmpath"
 )
@@ -35,7 +35,7 @@ type ArtifactInstaller struct {
 	CacheDir   string
 	PluginName string
 	base
-	downloader *artifact.Downloader
+	downloader *downloader.Downloader
 	settings   *cli.EnvSettings
 	// Cached data to avoid duplicate downloads
 	pluginData []byte
@@ -50,7 +50,7 @@ func NewArtifactInstaller(source string) (*ArtifactInstaller, error) {
 	}
 
 	settings := cli.New()
-	downloader := &artifact.Downloader{}
+	downloader := &downloader.Downloader{}
 
 	i := &ArtifactInstaller{
 		CacheDir:   helmpath.CachePath("plugins", key),
@@ -72,7 +72,7 @@ func (i *ArtifactInstaller) Install() error {
 		}
 		defer os.RemoveAll(tempDir)
 
-		pluginPath, _, err := i.downloader.Download(i.Source, "", tempDir, artifact.TypePlugin)
+		pluginPath, _, err := i.downloader.Download(i.Source, "", tempDir, downloader.TypePlugin)
 		if err != nil {
 			return fmt.Errorf("failed to download plugin: %w", err)
 		}
@@ -176,7 +176,7 @@ func (i *ArtifactInstaller) GetVerificationData() (archiveData, provData []byte,
 		}
 		defer os.RemoveAll(tempDir)
 
-		pluginPath, _, err := i.downloader.Download(i.Source, "", tempDir, artifact.TypePlugin)
+		pluginPath, _, err := i.downloader.Download(i.Source, "", tempDir, downloader.TypePlugin)
 		if err != nil {
 			return nil, nil, "", fmt.Errorf("failed to download plugin for verification: %w", err)
 		}

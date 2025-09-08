@@ -14,7 +14,7 @@ limitations under the License.
 */
 
 // Plugin-specific artifact downloading capabilities.
-package artifact
+package downloader
 
 import (
 	"io"
@@ -22,7 +22,7 @@ import (
 
 	"helm.sh/helm/v4/pkg/provenance"
 	"helm.sh/helm/v4/pkg/registry"
-	"helm.sh/helm/v4/pkg/transport"
+	"helm.sh/helm/v4/pkg/getter"
 )
 
 // PluginDownloader handles downloading plugins with plugin-specific features.
@@ -53,7 +53,7 @@ func (p *PluginDownloader) DownloadTo(ref, version, dest string) (string, *prove
 		p.downloader = &Downloader{
 			Verify:       p.Verify,
 			Keyring:      p.Keyring,
-			Transports:   make(transport.Providers), // TODO: populate with plugin-appropriate transports
+			Transports:   make(getter.TransportProviders), // TODO: populate with plugin-appropriate transports
 			Cache:        p.Cache,
 			ContentCache: p.ContentCache,
 		}

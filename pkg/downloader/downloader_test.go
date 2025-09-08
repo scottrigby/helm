@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package artifact
+package downloader
 
 import (
 	"bytes"
@@ -25,16 +25,16 @@ import (
 	"strings"
 	"testing"
 
-	"helm.sh/helm/v4/pkg/transport"
+	"helm.sh/helm/v4/pkg/getter"
 )
 
-// MockTransport implements transport.Transport for testing.
+// MockTransport implements getter.Transport for testing.
 type MockTransport struct {
 	data map[string][]byte
 	err  error
 }
 
-func (m *MockTransport) Get(url string, _ ...transport.Option) (*bytes.Buffer, error) {
+func (m *MockTransport) Get(url string, _ ...getter.TransportOption) (*bytes.Buffer, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -113,7 +113,7 @@ func TestDownloader_Download(t *testing.T) {
 
 	// Create downloader with mock registry client
 	downloader := &Downloader{
-		Transports: transport.Providers{
+		Transports: getter.TransportProviders{
 			"http": mockTransport,
 			"oci":  mockTransport,
 		},

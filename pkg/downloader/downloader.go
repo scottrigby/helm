@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package artifact
+package downloader
 
 import (
 	"bytes"
@@ -29,11 +29,11 @@ import (
 	"strings"
 
 	"helm.sh/helm/v4/internal/fileutil"
+	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/helmpath"
 	"helm.sh/helm/v4/pkg/provenance"
 	"helm.sh/helm/v4/pkg/registry"
 	"helm.sh/helm/v4/pkg/repo/v1"
-	"helm.sh/helm/v4/pkg/transport"
 )
 
 // Type represents the type of artifact being downloaded.
@@ -45,11 +45,11 @@ const (
 	// Future artifact types beyond charts and plugins can be added here
 )
 
-// VerificationStrategy describes a strategy for determining whether to verify an artifact.
+// VerificationStrategy describes a strategy for determining whether to verify an downloader.
 type VerificationStrategy int
 
 const (
-	// VerifyNever will skip all verification of an artifact.
+	// VerifyNever will skip all verification of an downloader.
 	VerifyNever VerificationStrategy = iota
 	// VerifyIfPossible will attempt a verification, it will not error if verification
 	// data is missing. But it will not stop processing if verification fails.
@@ -75,9 +75,9 @@ type Downloader struct {
 	// Keyring is the keyring file used for verification.
 	Keyring string
 	// Transports provide protocol handling for different URL schemes.
-	Transports transport.Providers
+	Transports getter.TransportProviders
 	// Options provide parameters to be passed along to Transports.
-	Options []transport.Option
+	Options []getter.TransportOption
 	// ContentCache is the location where Cache stores its files by default.
 	ContentCache string
 	// Cache specifies the cache implementation to use.
@@ -90,7 +90,7 @@ type Downloader struct {
 	registryClient *registry.Client
 }
 
-// Download retrieves an artifact. Depending on the settings, it may also download a provenance file.
+// Download retrieves an downloader. Depending on the settings, it may also download a provenance file.
 //
 // If Verify is set to VerifyNever, the verification will be nil.
 // If Verify is set to VerifyIfPossible, this will return a verification (or nil on failure), and print a warning on failure.
@@ -146,7 +146,7 @@ func (d *Downloader) Download(ref, version, dest string, artifactType Type) (str
 	}
 
 	if !found {
-		opts := append(d.Options, transport.WithArtifactType(string(artifactType)))
+		opts := append(d.Options, getter.WithTransportArtifactType(string(artifactType)))
 		data, err = t.Get(u.String(), opts...)
 		if err != nil {
 			return "", nil, err
@@ -175,7 +175,7 @@ func (d *Downloader) Download(ref, version, dest string, artifactType Type) (str
 			}
 		}
 		if !found {
-			opts := append(d.Options, transport.WithArtifactType(string(artifactType)))
+			opts := append(d.Options, getter.WithTransportArtifactType(string(artifactType)))
 			body, err = t.Get(u.String()+".prov", opts...)
 			if err != nil {
 				if d.Verify == VerifyAlways {
@@ -212,9 +212,9 @@ func (d *Downloader) SetRegistryClient(client *registry.Client) {
 }
 
 // configureTransport configures a transport based on its supported interfaces.
-func (d *Downloader) configureTransport(t transport.Transport) error {
+func (d *Downloader) configureTransport(t getter.Transport) error {
 	// Configure repository-based transports
-	if repoProvider, ok := t.(transport.RepositoryProvider); ok {
+	if repoProvider, ok := t.(getter.RepositoryProvider); ok {
 		if d.repositoryConfig != "" {
 			repoProvider.SetRepositoryConfig(d.repositoryConfig)
 		}
@@ -224,7 +224,7 @@ func (d *Downloader) configureTransport(t transport.Transport) error {
 	}
 
 	// Configure client-based transports (like OCI)
-	if clientProvider, ok := t.(transport.ClientProvider); ok {
+	if clientProvider, ok := t.(getter.ClientProvider); ok {
 		if d.registryClient != nil {
 			clientProvider.SetClient(d.registryClient)
 		}
@@ -233,7 +233,7 @@ func (d *Downloader) configureTransport(t transport.Transport) error {
 	return nil
 }
 
-// generateArtifactName generates the filename for the downloaded artifact.
+// generateArtifactName generates the filename for the downloaded downloader.
 func (d *Downloader) generateArtifactName(u *url.URL, artifactType Type) string {
 	name := filepath.Base(u.Path)
 
@@ -461,21 +461,21 @@ func (d *Downloader) configureRepositoryOptions(rc *repo.Entry) {
 
 	// Add TLS configuration if available
 	if rc.CertFile != "" || rc.KeyFile != "" || rc.CAFile != "" {
-		d.Options = append(d.Options, transport.WithTLS(rc.CertFile, rc.KeyFile, rc.CAFile, rc.InsecureSkipTLSverify))
+		d.Options = append(d.Options, getter.WithTransportTLS(rc.CertFile, rc.KeyFile, rc.CAFile, rc.InsecureSkipTLSverify))
 	}
 
 	// Add basic auth if available
 	if rc.Username != "" && rc.Password != "" {
-		d.Options = append(d.Options, transport.WithBasicAuth(rc.Username, rc.Password))
+		d.Options = append(d.Options, getter.WithTransportBasicAuth(rc.Username, rc.Password))
 	}
 
 	// Add pass credentials all flag if set
 	if rc.PassCredentialsAll {
-		d.Options = append(d.Options, transport.WithPassCredentialsAll(true))
+		d.Options = append(d.Options, getter.WithTransportPassCredentialsAll(true))
 	}
 
 	// Set the repository URL for the transport
 	if rc.URL != "" {
-		d.Options = append(d.Options, transport.WithURL(rc.URL))
+		d.Options = append(d.Options, getter.WithTransportURL(rc.URL))
 	}
 }

@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package artifact
+package downloader
 
 import (
 	"crypto/sha256"
@@ -29,7 +29,6 @@ import (
 	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/registry"
 	"helm.sh/helm/v4/pkg/repo/v1/repotest"
-	"helm.sh/helm/v4/pkg/transport"
 )
 
 const (
@@ -364,7 +363,7 @@ func TestScanReposForURL(t *testing.T) {
 		transports := c.convertGettersToTransports()
 		c.downloader = &Downloader{
 			Transports: transports,
-			Options:    make([]transport.Option, 0),
+			Options:    make([]getter.TransportOption, 0),
 		}
 		c.downloader.SetRepositoryConfig(c.RepositoryConfig, c.RepositoryCache)
 	}
