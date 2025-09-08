@@ -23,8 +23,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"helm.sh/helm/v4/pkg/action"
+	"helm.sh/helm/v4/pkg/artifact"
 	"helm.sh/helm/v4/pkg/cmd/require"
-	"helm.sh/helm/v4/pkg/downloader"
 	"helm.sh/helm/v4/pkg/getter"
 )
 
@@ -64,7 +64,7 @@ func newDependencyUpdateCmd(_ *action.Configuration, out io.Writer) *cobra.Comma
 				return fmt.Errorf("missing registry client: %w", err)
 			}
 
-			man := &downloader.Manager{
+			man := &artifact.Manager{
 				Out:              out,
 				ChartPath:        chartpath,
 				Keyring:          client.Keyring,
@@ -77,7 +77,7 @@ func newDependencyUpdateCmd(_ *action.Configuration, out io.Writer) *cobra.Comma
 				Debug:            settings.Debug,
 			}
 			if client.Verify {
-				man.Verify = downloader.VerifyAlways
+				man.Verify = artifact.VerifyAlways
 			}
 			return man.Update()
 		},

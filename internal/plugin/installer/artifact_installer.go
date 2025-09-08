@@ -18,6 +18,7 @@ package installer
 import (
 	"bytes"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -110,7 +111,7 @@ func (i *ArtifactInstaller) Install() error {
 	if i.provData != nil {
 		provPath := tarballPath + ".prov"
 		if err := os.WriteFile(provPath, i.provData, 0644); err != nil {
-			// Non-fatal error
+			slog.Warn("failed to write provenance file", "path", provPath, "error", err)
 		}
 	}
 

@@ -22,9 +22,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"helm.sh/helm/v4/pkg/artifact"
 	chartutil "helm.sh/helm/v4/pkg/chart/v2/util"
 	"helm.sh/helm/v4/pkg/cli"
-	"helm.sh/helm/v4/pkg/downloader"
 	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/registry"
 	"helm.sh/helm/v4/pkg/repo/v1"
@@ -73,10 +73,10 @@ func (p *Pull) SetRegistryClient(client *registry.Client) {
 func (p *Pull) Run(chartRef string) (string, error) {
 	var out strings.Builder
 
-	c := downloader.ChartDownloader{
+	c := artifact.ChartDownloader{
 		Out:     &out,
 		Keyring: p.Keyring,
-		Verify:  downloader.VerifyNever,
+		Verify:  artifact.VerifyNever,
 		Getters: getter.All(p.Settings),
 		Options: []getter.Option{
 			getter.WithBasicAuth(p.Username, p.Password),
@@ -98,9 +98,9 @@ func (p *Pull) Run(chartRef string) (string, error) {
 	}
 
 	if p.Verify {
-		c.Verify = downloader.VerifyAlways
+		c.Verify = artifact.VerifyAlways
 	} else if p.VerifyLater {
-		c.Verify = downloader.VerifyLater
+		c.Verify = artifact.VerifyLater
 	}
 
 	// If untar is set, we fetch to a tempdir, then untar and copy after

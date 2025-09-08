@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/url"
 	"os"
@@ -28,8 +29,10 @@ import (
 	"strings"
 
 	"helm.sh/helm/v4/internal/fileutil"
+	"helm.sh/helm/v4/pkg/helmpath"
 	"helm.sh/helm/v4/pkg/provenance"
 	"helm.sh/helm/v4/pkg/registry"
+	"helm.sh/helm/v4/pkg/repo/v1"
 	"helm.sh/helm/v4/pkg/transport"
 )
 
@@ -59,7 +62,6 @@ const (
 	// perform verification.
 	VerifyLater
 )
-
 
 // ErrNoOwnerRepo indicates that a given artifact URL can't be found in any repos.
 var ErrNoOwnerRepo = errors.New("could not find a repo containing the given URL")
@@ -302,16 +304,13 @@ func (d *Downloader) ResolveArtifactVersion(ref, version string, artifactType Ty
 	// Handle repository-based references (reponame/artifactname)
 	switch artifactType {
 	case TypeChart:
-		// Chart repository resolution requires pkg/getter which would create import cycles
-		// Use pkg/downloader.ChartDownloader for backward compatibility
-		return "", nil, fmt.Errorf("repository-based chart resolution should use pkg/downloader.ChartDownloader for backward compatibility")
+		return d.resolveChartFromRepository(ref, version, u)
 
 	case TypePlugin:
 		// Plugins use modern OCI-based distribution, not repository-based like charts
 		// Repository-based plugin distribution is not planned due to scalability issues
 		// with the chart repository index model
 		return "", nil, fmt.Errorf("repository-based plugin distribution is not supported - use OCI references instead (oci://registry/plugin:version)")
-
 
 	default:
 		return "", nil, fmt.Errorf("unknown artifact type: %s", artifactType)
@@ -352,3 +351,131 @@ func (d *Downloader) VerifyArtifact(artifactPath, provPath string) (*provenance.
 	return sig.Verify(artifactData, provData, filepath.Base(artifactPath))
 }
 
+// loadRepoConfig loads the repository configuration file.
+func loadRepoConfig(file string) (*repo.File, error) {
+	r, err := repo.LoadFile(file)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	return r, nil
+}
+
+// pickChartRepositoryConfigByName returns the repository configuration for the given name.
+func pickChartRepositoryConfigByName(name string, cfgs []*repo.Entry) (*repo.Entry, error) {
+	for _, rc := range cfgs {
+		if rc.Name == name {
+			if rc.URL == "" {
+				return nil, fmt.Errorf("no URL found for repository %s", name)
+			}
+			return rc, nil
+		}
+	}
+	return nil, fmt.Errorf("repository name (%s) not found. You must add the repository before using it", name)
+}
+
+// scanReposForURL scans all repositories for a URL that matches the given reference.
+func (d *Downloader) scanReposForURL(ref string, rf *repo.File) (*repo.Entry, error) {
+	// Scan all of the repositories looking for a URL match
+	for _, rc := range rf.Repositories {
+		if strings.Index(ref, rc.URL) == 0 {
+			return rc, nil
+		}
+	}
+
+	// This means that the URL is not associated with a known repository
+	return nil, ErrNoOwnerRepo
+}
+
+// resolveChartFromRepository resolves a chart reference from a repository.
+func (d *Downloader) resolveChartFromRepository(ref, version string, u *url.URL) (string, *url.URL, error) {
+	rf, err := loadRepoConfig(d.repositoryConfig)
+	if err != nil {
+		return "", u, err
+	}
+
+	// Handle direct URLs that might be in a known repository
+	if u.IsAbs() && len(u.Host) > 0 && len(u.Path) > 0 {
+		// Try to find the parent repo that contains this chart URL
+		rc, err := d.scanReposForURL(ref, rf)
+		if err != nil {
+			// If there is no special config, return the URL for direct download
+			if err == ErrNoOwnerRepo {
+				// This will be handled by the transport layer
+				return "", u, nil
+			}
+			return "", u, err
+		}
+
+		// Configure transport options based on repository config
+		d.configureRepositoryOptions(rc)
+		return "", u, nil
+	}
+
+	// Handle repository-based references in the form "reponame/chartname"
+	p := strings.SplitN(u.Path, "/", 2)
+	if len(p) < 2 {
+		return "", u, fmt.Errorf("non-absolute URLs should be in form of repo_name/path_to_chart, got: %s", u)
+	}
+
+	repoName := p[0]
+	chartName := p[1]
+	rc, err := pickChartRepositoryConfigByName(repoName, rf.Repositories)
+	if err != nil {
+		return "", u, err
+	}
+
+	// Configure transport options for this repository
+	d.configureRepositoryOptions(rc)
+
+	// Load the repository index to find the chart
+	idxFile := filepath.Join(d.repositoryCache, helmpath.CacheIndexFile(rc.Name))
+	i, err := repo.LoadIndexFile(idxFile)
+	if err != nil {
+		return "", u, fmt.Errorf("no cached repo found. (try 'helm repo update'): %w", err)
+	}
+
+	cv, err := i.Get(chartName, version)
+	if err != nil {
+		return "", u, fmt.Errorf("chart %q matching %s not found in %s index. (try 'helm repo update'): %w", chartName, version, rc.Name, err)
+	}
+
+	if len(cv.URLs) == 0 {
+		return "", u, fmt.Errorf("chart %q has no downloadable URLs", ref)
+	}
+
+	// TODO: Seems that picking first URL is not fully correct
+	resolvedURL, err := repo.ResolveReferenceURL(rc.URL, cv.URLs[0])
+	if err != nil {
+		return cv.Digest, u, fmt.Errorf("invalid chart URL format: %s", ref)
+	}
+
+	loc, err := url.Parse(resolvedURL)
+	return cv.Digest, loc, err
+}
+
+// configureRepositoryOptions configures transport options for a repository.
+func (d *Downloader) configureRepositoryOptions(rc *repo.Entry) {
+	if rc == nil {
+		return
+	}
+
+	// Add TLS configuration if available
+	if rc.CertFile != "" || rc.KeyFile != "" || rc.CAFile != "" {
+		d.Options = append(d.Options, transport.WithTLS(rc.CertFile, rc.KeyFile, rc.CAFile, rc.InsecureSkipTLSverify))
+	}
+
+	// Add basic auth if available
+	if rc.Username != "" && rc.Password != "" {
+		d.Options = append(d.Options, transport.WithBasicAuth(rc.Username, rc.Password))
+	}
+
+	// Add pass credentials all flag if set
+	if rc.PassCredentialsAll {
+		d.Options = append(d.Options, transport.WithPassCredentialsAll(true))
+	}
+
+	// Set the repository URL for the transport
+	if rc.URL != "" {
+		d.Options = append(d.Options, transport.WithURL(rc.URL))
+	}
+}

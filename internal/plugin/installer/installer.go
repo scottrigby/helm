@@ -133,7 +133,7 @@ func Update(i Installer) error {
 }
 
 // NewForSource determines the correct Installer for the given source.
-func NewForSource(source, version string) (Installer, error) {
+func NewForSource(source, _ string) (Installer, error) {
 	// Check if source is a local directory
 	if isLocalReference(source) {
 		return NewLocalInstaller(source)
@@ -156,7 +156,6 @@ func isLocalReference(source string) bool {
 	_, err := os.Stat(source)
 	return err == nil
 }
-
 
 // isPlugin checks if the directory contains a plugin.yaml file.
 func isPlugin(dirname string) bool {

@@ -33,12 +33,12 @@ import (
 	"github.com/spf13/pflag"
 
 	"helm.sh/helm/v4/pkg/action"
+	"helm.sh/helm/v4/pkg/artifact"
 	chart "helm.sh/helm/v4/pkg/chart/v2"
 	"helm.sh/helm/v4/pkg/chart/v2/loader"
 	"helm.sh/helm/v4/pkg/cli/output"
 	"helm.sh/helm/v4/pkg/cli/values"
 	"helm.sh/helm/v4/pkg/cmd/require"
-	"helm.sh/helm/v4/pkg/downloader"
 	"helm.sh/helm/v4/pkg/getter"
 	release "helm.sh/helm/v4/pkg/release/v1"
 )
@@ -284,7 +284,7 @@ func runInstall(args []string, client *action.Install, valueOpts *values.Options
 		// https://github.com/helm/helm/issues/2209
 		if err := action.CheckDependencies(chartRequested, req); err != nil {
 			if client.DependencyUpdate {
-				man := &downloader.Manager{
+				man := &artifact.Manager{
 					Out:              out,
 					ChartPath:        cp,
 					Keyring:          client.Keyring,

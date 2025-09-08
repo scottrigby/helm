@@ -125,6 +125,12 @@ func WithPlainHTTP() Option {
 	}
 }
 
+func WithPassCredentialsAll(passCredentialsAll bool) Option {
+	return func(opts *Options) {
+		opts.PassCredentialsAll = passCredentialsAll
+	}
+}
+
 func WithArtifactType(artifactType string) Option {
 	return func(opts *Options) {
 		opts.ArtifactType = artifactType

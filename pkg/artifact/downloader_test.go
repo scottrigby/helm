@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"helm.sh/helm/v4/pkg/transport"
@@ -152,73 +154,67 @@ func TestDownloader_Download(t *testing.T) {
 	}
 }
 
-func TestChartDownloader_Compatibility(t *testing.T) {
-	// Test that ChartDownloader wrapper works
-	chartDownloader := NewChartDownloader()
+// Note: ChartDownloader and PluginDownloader compatibility tests moved to
+// their respective test files (chart_test.go, plugin_test.go) since they
+// now have proper implementations rather than wrappers
 
-	if chartDownloader.Downloader == nil {
-		t.Error("Expected ChartDownloader to have embedded Downloader")
-	}
+func TestDownloader_ResolveArtifactVersion_DirectURL(t *testing.T) {
+	downloader := &Downloader{}
 
-	// Test method call (this will fail without proper setup, but shows the API works)
-	tmpdir := t.TempDir()
-	mockTransport := &MockTransport{
-		data: map[string][]byte{
-			"http://example.com/chart.tgz": []byte("chart data"),
-		},
-	}
-
-	chartDownloader.Transports = transport.Providers{
-		"http": mockTransport,
-	}
-	chartDownloader.Cache = &MockCache{data: make(map[string][]byte)}
-	chartDownloader.ContentCache = tmpdir
-	chartDownloader.Verify = VerifyNever
-
-	path, verification, err := chartDownloader.DownloadTo("http://example.com/chart.tgz", "", tmpdir)
+	// Test direct HTTP URL resolution
+	hash, u, err := downloader.ResolveArtifactVersion("https://example.com/chart.tgz", "", TypeChart)
 	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
+		t.Errorf("Expected no error for direct URL, got %v", err)
 	}
-	if path == "" {
-		t.Error("Expected path, got empty string")
+	if hash != "" {
+		t.Errorf("Expected empty hash for direct URL, got %s", hash)
 	}
-	if verification == nil {
-		t.Error("Expected verification object, got nil")
+	if u == nil || u.String() != "https://example.com/chart.tgz" {
+		t.Errorf("Expected URL https://example.com/chart.tgz, got %v", u)
+	}
+
+	// Test OCI URL resolution without registry client
+	hash, u, err = downloader.ResolveArtifactVersion("oci://example.com/chart:v1.0.0", "", TypeChart)
+	if err != nil {
+		t.Errorf("Expected no error for OCI URL without client, got %v", err)
+	}
+	if hash != "" {
+		t.Errorf("Expected empty hash for OCI URL without client, got %s", hash)
+	}
+	if u == nil || u.String() != "oci://example.com/chart:v1.0.0" {
+		t.Errorf("Expected URL oci://example.com/chart:v1.0.0, got %v", u)
+	}
+
+	// Test plugin repository reference rejection
+	_, _, err = downloader.ResolveArtifactVersion("repo/plugin", "1.0.0", TypePlugin)
+	if err == nil {
+		t.Error("Expected error for plugin repository reference")
+	}
+	if !strings.Contains(err.Error(), "repository-based plugin distribution is not supported") {
+		t.Errorf("Expected plugin distribution error message, got: %v", err)
 	}
 }
 
-func TestPluginDownloader_Compatibility(t *testing.T) {
-	// Test that PluginDownloader wrapper works
-	pluginDownloader := NewPluginDownloader()
+func TestDownloader_ResolveArtifactVersion_RepositoryChart(t *testing.T) {
+	// Create temporary directory for repository config
+	tmpDir := t.TempDir()
 
-	if pluginDownloader.Downloader == nil {
-		t.Error("Expected PluginDownloader to have embedded Downloader")
-	}
-
-	// Test method call
-	tmpdir := t.TempDir()
-	mockTransport := &MockTransport{
-		data: map[string][]byte{
-			"http://example.com/plugin.tgz": []byte("plugin data"),
-		},
+	downloader := &Downloader{
+		repositoryConfig: filepath.Join(tmpDir, "repositories.yaml"),
+		repositoryCache:  filepath.Join(tmpDir, "cache"),
 	}
 
-	pluginDownloader.Transports = transport.Providers{
-		"http": mockTransport,
-	}
-	pluginDownloader.Cache = &MockCache{data: make(map[string][]byte)}
-	pluginDownloader.ContentCache = tmpdir
-	pluginDownloader.Verify = VerifyNever
+	// Test chart repository reference when config doesn't exist
+	_, _, err := downloader.ResolveArtifactVersion("stable/nginx", "1.0.0", TypeChart)
 
-	path, verification, err := pluginDownloader.DownloadTo("http://example.com/plugin.tgz", "", tmpdir)
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
+	// Should not panic and should handle missing config gracefully
+	if err == nil {
+		t.Error("Expected error when repository config doesn't exist")
 	}
-	if path == "" {
-		t.Error("Expected path, got empty string")
-	}
-	if verification == nil {
-		t.Error("Expected verification object, got nil")
+
+	// The error should be about missing config or repository not found, not a panic
+	if strings.Contains(err.Error(), "panic") {
+		t.Errorf("Got panic-related error: %v", err)
 	}
 }
 
