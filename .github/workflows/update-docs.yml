@@ -1,0 +1,21 @@
+name: Release Published
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  trigger-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger docs update
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.RELEASE_TOKEN }}
+          repository: ${{ github.repository_owner }}/helm-www
+          event-type: helm-release
+          client-payload: |
+            {
+              "version": "${{ github.event.release.tag_name }}",
+              "release_url": "${{ github.event.release.html_url }}"
+            }

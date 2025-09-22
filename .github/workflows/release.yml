@@ -1,23 +1,20 @@
-name: release
+name: Release
+
 on:
-  create:
-    tags:
-      - v*
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v3.2.0, v4.0.1)'
+        required: true
+        type: string
 
 permissions: read-all
 
-# Note the only differences between release and canary-release jobs are:
-# - only canary passes --overwrite flag
-# - the VERSION make variable passed to 'make dist checksum' is expected to
-#   be "canary" if the job is triggered by a push to "main" branch. If the
-#   job is triggered by a tag push, VERSION should be the tag ref.
 jobs:
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest-16-cores
+    permissions:
+      contents: write
     steps:
       - name: Checkout source code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # pin@v5.0.0
@@ -27,22 +24,104 @@ jobs:
       - name: Add variables to environment file
         run: cat ".github/env" >> "$GITHUB_ENV"
 
+      - name: Setup Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Determine base and release branches
+        id: branches
+        run: |
+          VERSION="${{ inputs.version }}"
+          MAJOR=$(echo "$VERSION" | cut -d. -f1 | sed 's/v//')
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          RELEASE_BRANCH="release-$MAJOR.$MINOR"
+
+          if [ "$MAJOR" = "3" ]; then
+            BASE_BRANCH="dev-v3"
+          else
+            BASE_BRANCH="main"
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "base_branch=$BASE_BRANCH" >> $GITHUB_OUTPUT
+          echo "release_branch=$RELEASE_BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Setup release branch and update versions
+        run: |
+          VERSION="${{ steps.branches.outputs.version }}"
+          RELEASE_BRANCH="${{ steps.branches.outputs.release_branch }}"
+          BASE_BRANCH="${{ steps.branches.outputs.base_branch }}"
+
+          # Function to update version.go
+          update_version() {
+            local branch="$1"
+            local version="$2"
+            local major_minor=$(echo "$version" | sed 's/^\(v[0-9]*\.[0-9]*\).*/\1/')
+
+            # Check current version in version.go
+            local current_version=$(grep -E '^\s*version\s*=' internal/version/version.go | sed 's/.*"\([^"]*\)".*/\1/')
+
+            if [[ "$current_version" != "$major_minor" ]]; then
+              echo "Updating version.go in $branch to $major_minor"
+              sed -i "s/version = \"[^\"]*\"/version = \"$major_minor\"/" internal/version/version.go
+
+              # Update corresponding test files
+              find . -name "*.txt" -path "*/testdata/output/version*" -exec sed -i "s/Version:\"[^\"]*\"/Version:\"$major_minor\"/" {} \;
+              find . -name "*.go" -path "*/capabilities_test.go" -exec sed -i "s/KubeVersion:.*APIVersions:/KubeVersion: version.MustParseGeneric(\"$major_minor\"), APIVersions:/" {} \;
+
+              git add .
+              git commit -s -m "bump version to $version"
+              git push origin "$branch"
+              return 0
+            else
+              echo "Version $major_minor already present in $branch"
+              return 1
+            fi
+          }
+
+          # Create or checkout release branch
+          if ! git show-ref --verify --quiet refs/remotes/origin/"$RELEASE_BRANCH"; then
+            echo "Creating new release branch $RELEASE_BRANCH from $BASE_BRANCH"
+            git checkout -b "$RELEASE_BRANCH" origin/"$BASE_BRANCH"
+            git push -u origin "$RELEASE_BRANCH"
+          else
+            echo "Checking out existing release branch $RELEASE_BRANCH"
+            git checkout "$RELEASE_BRANCH"
+          fi
+
+          # Update version on release branch
+          update_version "$RELEASE_BRANCH" "$VERSION" || true
+
+          # Update version on source branch
+          echo "Updating source branch $BASE_BRANCH"
+          git checkout "$BASE_BRANCH"
+          git pull origin "$BASE_BRANCH"
+          update_version "$BASE_BRANCH" "$VERSION" || true
+
+          # Switch back to release branch for artifact creation
+          git checkout "$RELEASE_BRANCH"
+
       - name: Setup Go
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # pin@5.5.0
         with:
           go-version: '${{ env.GOLANG_VERSION }}'
+
       - name: Run unit tests
         run: make test-coverage
+
       - name: Build Helm Binaries
         run: |
           set -eu -o pipefail
+          VERSION="${{ steps.branches.outputs.version }}"
 
-          make build-cross VERSION="${{ github.ref_name }}"
-          make dist checksum VERSION="${{ github.ref_name }}"
+          make build-cross VERSION="$VERSION"
+          make dist checksum VERSION="$VERSION"
 
       - name: Set latest version
         run: |
           set -eu -o pipefail
+          VERSION="${{ steps.branches.outputs.version }}"
 
           mkdir -p _dist_versions
 
@@ -52,58 +131,86 @@ jobs:
           echo "${LATEST_VERSION}" > _dist_versions/helm-latest-version
           echo "${LATEST_VERSION}" > _dist_versions/helm3-latest-version
 
-      - name: Upload Binaries
-        uses: bacongobbler/azure-blob-storage-upload@50f7d898b7697e864130ea04c303ca38b5751c50 # pin@3.0.0
-        env:
-          AZURE_STORAGE_CONNECTION_STRING: "${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}"
-          AZURE_STORAGE_CONTAINER_NAME: "${{ secrets.AZURE_STORAGE_CONTAINER_NAME }}"
+      - name: Upload Binaries to Azure
+        uses: bacongobbler/azure-blob-storage-upload@50f7d898b7697e2d2351bc0c93fee22a4b4d4f68 # pin@v3.0.0
         with:
           source_dir: _dist
-          container_name: ${{ secrets.AZURE_STORAGE_CONTAINER_NAME }}
-          connection_string: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
-          extra_args: '--pattern helm-*'
+          container_name: '${{ secrets.AZURE_STORAGE_CONTAINER_NAME }}'
+          connection_string: '${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}'
+          sync: 'false'
 
-      - name: Upload Version tag files
-        uses: bacongobbler/azure-blob-storage-upload@50f7d898b7697e864130ea04c303ca38b5751c50 # pin@3.0.0
-        env:
-          AZURE_STORAGE_CONNECTION_STRING: "${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}"
-          AZURE_STORAGE_CONTAINER_NAME: "${{ secrets.AZURE_STORAGE_CONTAINER_NAME }}"
+      - name: Upload Version Info to Azure
+        uses: bacongobbler/azure-blob-storage-upload@50f7d898b7697e2d2351bc0c93fee22a4b4d4f68 # pin@v3.0.0
         with:
-          overwrite: 'true'
           source_dir: _dist_versions
-          container_name: ${{ secrets.AZURE_STORAGE_CONTAINER_NAME }}
-          connection_string: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+          container_name: '${{ secrets.AZURE_STORAGE_CONTAINER_NAME }}'
+          connection_string: '${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}'
+          sync: 'false'
 
-  canary-release:
-    runs-on: ubuntu-latest-16-cores
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - name: Checkout source code
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # pin@v5.0.0
-
-      - name: Add variables to environment file
-        run: cat ".github/env" >> "$GITHUB_ENV"
-
-      - name: Setup Go
-        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # pin@5.5.0
-        with:
-          go-version: '${{ env.GOLANG_VERSION }}'
-          check-latest: true
-
-      - name: Run unit tests
-        run: make test-coverage
-
-      - name: Build Helm Binaries
+      - name: Sign release artifacts
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
-          make build-cross
-          make dist checksum VERSION="canary"
+          VERSION="${{ steps.branches.outputs.version }}"
 
-      - name: Upload Binaries
-        uses: bacongobbler/azure-blob-storage-upload@50f7d898b7697e864130ea04c303ca38b5751c50 # pin@3.0.0
-        with:
-          source_dir: _dist
-          container_name: ${{ secrets.AZURE_STORAGE_CONTAINER_NAME }}
-          connection_string: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
-          extra_args: '--pattern helm-*'
-          # WARNING: this will overwrite existing blobs in your blob storage
-          overwrite: 'true'
+          # Import GPG key and sign artifacts
+          if [[ -n "$GPG_PRIVATE_KEY" ]]; then
+            echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+            make sign VERSION="$VERSION"
+          else
+            echo "Warning: No GPG key provided, skipping signing"
+          fi
+
+      - name: Create signed tag and draft release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          VERSION="${{ steps.branches.outputs.version }}"
+
+          # Create annotated tag from main branch (for workflow discovery)
+          git checkout main
+          git pull origin main
+          git tag --annotate "$VERSION" --message "Helm release $VERSION"
+          git push origin "$VERSION"
+          git checkout "${{ steps.branches.outputs.release_branch }}"
+
+          # Generate release notes (skip for pre-releases)
+          if [[ "$VERSION" != *"-"* ]]; then
+            # Find the most recent non-prerelease tag for the same major version
+            MAJOR=$(echo "$VERSION" | cut -d. -f1)
+            PREVIOUS_RELEASE=$(git tag --list "${MAJOR}.*" --sort=-version:refname | grep -v '-' | head -n2 | tail -n1)
+
+            if [[ -n "$PREVIOUS_RELEASE" ]]; then
+              echo "Generating release notes from $PREVIOUS_RELEASE to $VERSION"
+              # The release-notes make target requires _dist directory to exist
+              mkdir -p _dist
+              RELEASE_NOTES=$(PREVIOUS_RELEASE="$PREVIOUS_RELEASE" VERSION="$VERSION" make release-notes)
+            else
+              echo "No previous release found, using basic release notes"
+              RELEASE_NOTES="Release $VERSION"
+            fi
+          else
+            echo "Skipping release notes generation for pre-release $VERSION"
+            RELEASE_NOTES="Pre-release $VERSION"
+          fi
+
+          # Create draft release with only signature files attached
+          # (Binaries are distributed via Azure Blob Storage)
+          if [[ "$VERSION" == *"-"* ]]; then
+            gh release create "$VERSION" \
+              --title "Helm $VERSION" \
+              --notes "$RELEASE_NOTES" \
+              --draft \
+              --prerelease \
+              _dist/*.asc
+          else
+            gh release create "$VERSION" \
+              --title "Helm $VERSION" \
+              --notes "$RELEASE_NOTES" \
+              --draft \
+              _dist/*.asc
+          fi
+
+      # Note: Docs update is triggered automatically when release is published
+      # via the release-published.yml workflow

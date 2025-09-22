@@ -200,7 +200,20 @@ fetch-dist:
 	done
 
 .PHONY: sign
-sign:
+sign: ## Sign artifacts with GPG (automation-compatible)
+	@set -e; \
+	: "$${GPG_PRIVATE_KEY:?GPG_PRIVATE_KEY environment variable is required}"; \
+	: "$${GPG_PASSPHRASE:?GPG_PASSPHRASE environment variable is required}"; \
+	echo "$$GPG_PRIVATE_KEY" | gpg --batch --import; \
+	find _dist -maxdepth 1 -type f \( -name "helm-${VERSION}-*.gz" -o -name "helm-${VERSION}-*.zip" -o -name "helm-${VERSION}-*.sha256sum" \) -print | while read f; do \
+		gpg --batch --yes --pinentry-mode loopback \
+			--passphrase "$$GPG_PASSPHRASE" \
+			--detach-sign --armor "$$f"; \
+	done; \
+	echo "✓ Artifacts signed"
+
+.PHONY: sign-manual
+sign-manual: ## Sign artifacts with GPG (manual/local use)
 	for f in $$(ls _dist/*.{gz,zip,sha256,sha256sum} 2>/dev/null) ; do \
 		gpg --armor --detach-sign $${f} ; \
 	done
