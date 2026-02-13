@@ -33,6 +33,14 @@ type Runtime interface {
 	// UnmarshalConfig(runtimeConfigRaw map[string]any) (RuntimeConfig, error)
 }
 
+// RuntimeWithDataSupport is an optional interface that runtimes can implement
+// to support creating plugins from in-memory data (e.g., loaded from an archive).
+type RuntimeWithDataSupport interface {
+	Runtime
+	// CreatePluginFromData creates a plugin instance from in-memory wasm data
+	CreatePluginFromData(wasmData []byte, metadata *Metadata) (Plugin, error)
+}
+
 // RuntimeConfig represents the assertable type for a plugin's runtime configuration.
 // It is expected to type assert (cast) the a RuntimeConfig to its expected type
 type RuntimeConfig interface {

@@ -16,7 +16,9 @@ limitations under the License.
 package plugin
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"fmt"
 	"testing"
 
@@ -360,4 +362,120 @@ runtime: subprocess
 			}
 		})
 	}
+}
+
+// createPluginArchive creates a gzipped tar archive for testing LoadArchive.
+// The archive format matches what helm would produce: pluginname/plugin.yaml, pluginname/plugin.wasm
+func createPluginArchive(t *testing.T, pluginYaml []byte, wasmData []byte) *bytes.Buffer {
+	t.Helper()
+
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gw)
+
+	// Add plugin.yaml with directory prefix (archive loader strips first path component)
+	if len(pluginYaml) > 0 {
+		hdr := &tar.Header{
+			Name: "test-plugin/plugin.yaml",
+			Mode: 0644,
+			Size: int64(len(pluginYaml)),
+		}
+		require.NoError(t, tw.WriteHeader(hdr))
+		_, err := tw.Write(pluginYaml)
+		require.NoError(t, err)
+	}
+
+	// Add plugin.wasm
+	if len(wasmData) > 0 {
+		hdr := &tar.Header{
+			Name: "test-plugin/plugin.wasm",
+			Mode: 0644,
+			Size: int64(len(wasmData)),
+		}
+		require.NoError(t, tw.WriteHeader(hdr))
+		_, err := tw.Write(wasmData)
+		require.NoError(t, err)
+	}
+
+	require.NoError(t, tw.Close())
+	require.NoError(t, gw.Close())
+
+	return &buf
+}
+
+func TestLoadArchive(t *testing.T) {
+	t.Run("extism v1 plugin", func(t *testing.T) {
+		pluginYaml := []byte(`apiVersion: v1
+name: test-render
+version: 1.0.0
+type: render/v1
+runtime: extism/v1
+config:
+  patterns:
+    - "*.yaml"
+runtimeConfig:
+  memory:
+    maxPages: 16
+`)
+		// Minimal wasm module (just needs to be non-empty for the test)
+		wasmData := []byte{0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00}
+
+		archive := createPluginArchive(t, pluginYaml, wasmData)
+
+		data, err := LoadArchive(archive)
+		require.NoError(t, err)
+		require.NotNil(t, data)
+
+		assert.Equal(t, "test-render", data.Metadata.Name)
+		assert.Equal(t, "1.0.0", data.Metadata.Version)
+		assert.Equal(t, "render/v1", data.Metadata.Type)
+		assert.Equal(t, "extism/v1", data.Metadata.Runtime)
+		assert.Equal(t, wasmData, data.WasmData)
+	})
+
+	t.Run("missing plugin.yaml", func(t *testing.T) {
+		wasmData := []byte{0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00}
+		archive := createPluginArchive(t, nil, wasmData)
+
+		_, err := LoadArchive(archive)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no plugin.yaml found in archive")
+	})
+
+	t.Run("extism v1 missing wasm", func(t *testing.T) {
+		pluginYaml := []byte(`apiVersion: v1
+name: test-render
+version: 1.0.0
+type: render/v1
+runtime: extism/v1
+config:
+  patterns:
+    - "*.yaml"
+`)
+		archive := createPluginArchive(t, pluginYaml, nil)
+
+		_, err := LoadArchive(archive)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no plugin.wasm found in archive for extism/v1 plugin")
+	})
+
+	t.Run("subprocess plugin without wasm is ok", func(t *testing.T) {
+		pluginYaml := []byte(`apiVersion: v1
+name: test-cli
+version: 1.0.0
+type: cli/v1
+runtime: subprocess
+runtimeConfig:
+  command: echo test
+`)
+		archive := createPluginArchive(t, pluginYaml, nil)
+
+		data, err := LoadArchive(archive)
+		require.NoError(t, err)
+		require.NotNil(t, data)
+
+		assert.Equal(t, "test-cli", data.Metadata.Name)
+		assert.Equal(t, "subprocess", data.Metadata.Runtime)
+		assert.Nil(t, data.WasmData)
+	})
 }

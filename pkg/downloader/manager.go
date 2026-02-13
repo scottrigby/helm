@@ -169,54 +169,64 @@ func (m *Manager) Update() error {
 		return err
 	}
 
-	// If no dependencies are found, we consider this a successful
-	// completion.
 	req := c.Metadata.Dependencies
-	if req == nil {
+	hasPlugins := len(c.Metadata.Plugins) > 0
+
+	// If no dependencies and no plugins, we consider this a successful completion.
+	if req == nil && !hasPlugins {
 		return nil
 	}
 
-	// Get the names of the repositories the dependencies need that Helm is
-	// configured to know about.
-	repoNames, err := m.resolveRepoNames(req)
-	if err != nil {
-		return err
-	}
+	var lock *chart.Lock
+	var repoNames map[string]string
 
-	// For the repositories Helm is not configured to know about, ensure Helm
-	// has some information about them and, when possible, the index files
-	// locally.
-	// TODO(mattfarina): Repositories should be explicitly added by end users
-	// rather than automatic. In Helm v4 require users to add repositories. They
-	// should have to add them in order to make sure they are aware of the
-	// repositories and opt-in to any locations, for security.
-	repoNames, err = m.ensureMissingRepos(repoNames, req)
-	if err != nil {
-		return err
-	}
-
-	// For each of the repositories Helm is configured to know about, update
-	// the index information locally.
-	if !m.SkipUpdate {
-		if err := m.UpdateRepositories(); err != nil {
+	// Process chart dependencies if present
+	if req != nil {
+		// Get the names of the repositories the dependencies need that Helm is
+		// configured to know about.
+		repoNames, err = m.resolveRepoNames(req)
+		if err != nil {
 			return err
 		}
+
+		// For the repositories Helm is not configured to know about, ensure Helm
+		// has some information about them and, when possible, the index files
+		// locally.
+		// TODO(mattfarina): Repositories should be explicitly added by end users
+		// rather than automatic. In Helm v4 require users to add repositories. They
+		// should have to add them in order to make sure they are aware of the
+		// repositories and opt-in to any locations, for security.
+		repoNames, err = m.ensureMissingRepos(repoNames, req)
+		if err != nil {
+			return err
+		}
+
+		// For each of the repositories Helm is configured to know about, update
+		// the index information locally.
+		if !m.SkipUpdate {
+			if err := m.UpdateRepositories(); err != nil {
+				return err
+			}
+		}
+
+		// Now we need to find out which version of a chart best satisfies the
+		// dependencies in the Chart.yaml
+		lock, err = m.resolve(req, repoNames)
+		if err != nil {
+			return err
+		}
+
+		// Now we need to fetch every package here into charts/
+		if err := m.downloadAll(lock.Dependencies); err != nil {
+			return err
+		}
+	} else {
+		// No chart dependencies, but we have plugins - create an empty lock
+		lock = &chart.Lock{}
 	}
 
-	// Now we need to find out which version of a chart best satisfies the
-	// dependencies in the Chart.yaml
-	lock, err := m.resolve(req, repoNames)
-	if err != nil {
-		return err
-	}
-
-	// Now we need to fetch every package here into charts/
-	if err := m.downloadAll(lock.Dependencies); err != nil {
-		return err
-	}
-
-	// Download chart-defined plugins to the versioned plugin cache
-	if len(c.Metadata.Plugins) > 0 {
+	// Download chart-defined plugins to the content cache
+	if hasPlugins {
 		if err := m.downloadPlugins(c.Metadata.Plugins); err != nil {
 			return err
 		}

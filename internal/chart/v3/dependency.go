@@ -85,6 +85,9 @@ type PluginDependency struct {
 	// A lock file will always produce a single version, while a dependency
 	// may contain a semantic version range.
 	Version string `json:"version,omitempty" yaml:"version,omitempty"`
+	// Digest is the SHA256 hash of the plugin tarball content.
+	// This enables content-addressable caching in $HELM_CACHE_HOME/content/.
+	Digest string `json:"digest,omitempty" yaml:"digest,omitempty"`
 }
 
 // Validate checks for common problems with the plugin dependency.
@@ -119,6 +122,9 @@ func (p *PluginDependency) GetRepository() string { return p.Repository }
 
 // GetVersion returns the plugin version.
 func (p *PluginDependency) GetVersion() string { return p.Version }
+
+// GetDigest returns the content digest for content-addressable caching.
+func (p *PluginDependency) GetDigest() string { return p.Digest }
 
 // Lock is a lock file for dependencies.
 //

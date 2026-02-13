@@ -43,6 +43,9 @@ var CacheChart = ".chart"
 // CacheProv specifies the content is a provenance file
 var CacheProv = ".prov"
 
+// CachePlugin specifies the content is a plugin tarball
+var CachePlugin = ".plugin"
+
 // TODO: The cache assumes files because much of Helm assumes files. Convert
 // Helm to pass content around instead of file locations.
 

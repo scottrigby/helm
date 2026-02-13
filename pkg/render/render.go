@@ -18,6 +18,7 @@ package render
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/gobwas/glob"
@@ -32,6 +33,9 @@ import (
 type PluginRenderer struct {
 	// PluginsDir is the directory where plugins are installed
 	PluginsDir string
+	// ContentCachePath is the path to the content cache directory.
+	// If set, plugins will be loaded from cached archives using their digest.
+	ContentCachePath string
 }
 
 // RenderContext contains all the Helm built-in objects needed for rendering.
@@ -167,23 +171,55 @@ func (r *PluginRenderer) Render(
 	return rendered, nil
 }
 
-// loadPlugin loads a render plugin by name and version.
-func (r *PluginRenderer) loadPlugin(dep ci.PluginDependency) (plugin.Plugin, error) {
-	// For versioned storage, the path would be:
-	// {PluginsDir}/{name}/{version}/
-	pluginPath := filepath.Join(r.PluginsDir, dep.GetName(), dep.GetVersion())
+// VersionsSubdir is the subdirectory name for downloaded plugin versions.
+const VersionsSubdir = "versions"
 
-	p, err := plugin.LoadDir(pluginPath)
-	if err != nil {
-		versionedErr := err
-		// Fallback to non-versioned path for backwards compatibility
-		pluginPath = filepath.Join(r.PluginsDir, dep.GetName())
-		p, err = plugin.LoadDir(pluginPath)
-		if err != nil {
-			// If both paths failed, return the versioned path error if it exists
-			// as it's likely more informative
-			return nil, fmt.Errorf("versioned path: %v; fallback path: %w", versionedErr, err)
+// loadPlugin loads a render plugin by name and version.
+// It tries the following locations in order:
+// 1. Content cache (archive-based) using digest if available
+// 2. Versioned plugin directory: $PLUGINS_DIR/versions/<name>/<version>/
+// 3. Globally installed plugin: $PLUGINS_DIR/<name>/ (fallback for helm plugin install)
+func (r *PluginRenderer) loadPlugin(dep ci.PluginDependency) (plugin.Plugin, error) {
+	var p plugin.Plugin
+	var err error
+
+	// 1. Try to load from content cache first if digest is available
+	if digest := dep.GetDigest(); digest != "" && r.ContentCachePath != "" {
+		p, err = r.loadPluginFromCache(digest)
+		if err == nil {
+			// Verify plugin type matches
+			if p.Metadata().Type != "render/v1" {
+				return nil, fmt.Errorf("plugin %q is type %q, expected render/v1", dep.GetName(), p.Metadata().Type)
+			}
+			return p, nil
 		}
+		// If cache loading failed, fall through to directory-based loading
+	}
+
+	// 2. Try versioned plugin directory: $PLUGINS_DIR/versions/<name>/<version>/
+	versionedPath := filepath.Join(r.PluginsDir, "versions", dep.GetName(), dep.GetVersion())
+	p, err = plugin.LoadDir(versionedPath)
+	if err == nil {
+		// Verify plugin type matches
+		if p.Metadata().Type != "render/v1" {
+			return nil, fmt.Errorf("plugin %q is type %q, expected render/v1", dep.GetName(), p.Metadata().Type)
+		}
+		return p, nil
+	}
+
+	// 3. Fallback to globally installed plugins (directory-based)
+	pluginPath := filepath.Join(r.PluginsDir, dep.GetName())
+	p, err = plugin.LoadDir(pluginPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load plugin %q: %w (hint: run 'helm dependency update' to download plugins)", dep.GetName(), err)
+	}
+
+	// Verify the installed plugin version matches what the chart requires
+	installedVersion := p.Metadata().Version
+	requiredVersion := dep.GetVersion()
+	if installedVersion != requiredVersion {
+		return nil, fmt.Errorf("plugin %q version mismatch: chart requires %s, but installed version is %s (at %s)",
+			dep.GetName(), requiredVersion, installedVersion, pluginPath)
 	}
 
 	// Verify plugin type matches
@@ -192,6 +228,25 @@ func (r *PluginRenderer) loadPlugin(dep ci.PluginDependency) (plugin.Plugin, err
 	}
 
 	return p, nil
+}
+
+// loadPluginFromCache loads a plugin from the content cache using its digest.
+func (r *PluginRenderer) loadPluginFromCache(digest string) (plugin.Plugin, error) {
+	// Build the cache file path: {ContentCachePath}/{digest}.plugin
+	cacheFile := filepath.Join(r.ContentCachePath, digest+".plugin")
+
+	f, err := os.Open(cacheFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open cached plugin: %w", err)
+	}
+	defer f.Close()
+
+	archiveData, err := plugin.LoadArchive(f)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load plugin archive: %w", err)
+	}
+
+	return plugin.CreatePluginFromArchive(archiveData)
 }
 
 // getPluginPatterns extracts the glob patterns from a render plugin's config.

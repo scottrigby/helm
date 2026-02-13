@@ -19,6 +19,8 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
@@ -37,17 +39,28 @@ type PluginDownloader struct {
 	// Out is used to print warnings and notifications.
 	Out io.Writer
 	// Getters collection for the operation
-	Getters []getter.Provider
+	Getters getter.Providers
 	// PluginsDir is the base plugins directory
 	PluginsDir string
+	// PlainHTTP enables plain HTTP for OCI registries (for local/insecure registries)
+	PlainHTTP bool
+
+	// ContentCache is the location where the content-addressed cache stores plugin tarballs.
+	// Defaults to $HELM_CACHE_HOME/content/
+	ContentCache string
+
+	// Cache specifies the cache implementation to use for storing plugin tarballs.
+	// If nil, a default DiskCache at ContentCache will be used.
+	Cache Cache
 }
 
 // NewPluginDownloader creates a new PluginDownloader with default settings.
-func NewPluginDownloader(out io.Writer, getters []getter.Provider) *PluginDownloader {
+func NewPluginDownloader(out io.Writer, getters getter.Providers) *PluginDownloader {
 	return &PluginDownloader{
-		Out:        out,
-		Getters:    getters,
-		PluginsDir: helmpath.PluginsDir(),
+		Out:          out,
+		Getters:      getters,
+		PluginsDir:   helmpath.PluginsDir(),
+		ContentCache: helmpath.CachePath("content"),
 	}
 }
 
@@ -62,32 +75,94 @@ func (d *PluginDownloader) DownloadAll(plugins []*chart.PluginDependency) error 
 	return nil
 }
 
-// Download downloads a single plugin to the versioned plugin cache.
-func (d *PluginDownloader) Download(p *chart.PluginDependency) error {
-	// Compute the versioned plugin path
-	pluginPath := filepath.Join(d.PluginsDir, p.Name, p.Version)
+// VersionsSubdir is the subdirectory name for downloaded plugin versions.
+// This keeps downloaded versions separate from globally installed plugins.
+const VersionsSubdir = "versions"
 
-	// Check if already downloaded
+// Download downloads a single plugin to the versioned plugin cache.
+// Plugin tarballs are stored in the content-addressed cache at $HELM_CACHE_HOME/content/
+// for efficient storage and deduplication. The extracted plugin is placed at
+// $PLUGINS_DIR/versions/<name>/<version>/ for execution.
+func (d *PluginDownloader) Download(p *chart.PluginDependency) error {
+	// Initialize cache if not set
+	if d.Cache == nil {
+		if d.ContentCache == "" {
+			d.ContentCache = helmpath.CachePath("content")
+		}
+		d.Cache = &DiskCache{Root: d.ContentCache}
+		slog.Debug("set up default plugin downloader cache", "path", d.ContentCache)
+	}
+
+	// Compute the versioned plugin path: $PLUGINS_DIR/versions/<name>/<version>/
+	// This is separate from installed plugins at $PLUGINS_DIR/<name>/
+	pluginPath := filepath.Join(d.PluginsDir, VersionsSubdir, p.Name, p.Version)
+
+	// Check if already extracted and available
 	if isPluginDir(pluginPath) {
-		slog.Debug("plugin already cached", "name", p.Name, "version", p.Version, "path", pluginPath)
+		slog.Debug("plugin already extracted", "name", p.Name, "version", p.Version, "path", pluginPath)
 		return nil
 	}
 
-	fmt.Fprintf(d.Out, "Downloading plugin %s version %s from %s\n", p.Name, p.Version, p.Repository)
+	// Try to get plugin data from content cache using digest if available
+	var pluginData []byte
+	var digest32 [sha256.Size]byte
+	var fromCache bool
 
-	// Get the OCI getter
-	g, err := d.getOCIGetter()
-	if err != nil {
-		return fmt.Errorf("failed to get OCI getter: %w", err)
+	if p.Digest != "" {
+		digestBytes, err := hex.DecodeString(p.Digest)
+		if err == nil && len(digestBytes) == sha256.Size {
+			copy(digest32[:], digestBytes)
+			if cachedPath, err := d.Cache.Get(digest32, CachePlugin); err == nil {
+				// Found in cache, read the tarball
+				pluginData, err = os.ReadFile(cachedPath)
+				if err == nil {
+					fromCache = true
+					slog.Debug("plugin found in content cache", "name", p.Name, "version", p.Version, "digest", p.Digest)
+				}
+			}
+		}
 	}
 
-	// Construct the full OCI reference with version tag
-	ociRef := fmt.Sprintf("%s:%s", p.Repository, p.Version)
+	// If not in cache, download from OCI registry
+	if !fromCache {
+		fmt.Fprintf(d.Out, "Downloading plugin %s version %s from %s\n", p.Name, p.Version, p.Repository)
 
-	// Download the plugin
-	pluginData, err := g.Get(ociRef, getter.WithArtifactType("plugin"))
-	if err != nil {
-		return fmt.Errorf("failed to download plugin from %s: %w", ociRef, err)
+		// Get the OCI getter
+		g, err := d.getOCIGetter()
+		if err != nil {
+			return fmt.Errorf("failed to get OCI getter: %w", err)
+		}
+
+		// Construct the full OCI reference with version tag
+		ociRef := fmt.Sprintf("%s:%s", p.Repository, p.Version)
+
+		// Build getter options
+		getterOpts := []getter.Option{
+			getter.WithArtifactType("plugin"),
+		}
+		if d.PlainHTTP {
+			getterOpts = append(getterOpts, getter.WithPlainHTTP(true))
+		}
+
+		// Download the plugin
+		data, err := g.Get(ociRef, getterOpts...)
+		if err != nil {
+			return fmt.Errorf("failed to download plugin from %s: %w", ociRef, err)
+		}
+		pluginData = data.Bytes()
+
+		// Compute SHA256 digest and store in content cache
+		digest32 = sha256.Sum256(pluginData)
+		digestStr := hex.EncodeToString(digest32[:])
+		slog.Debug("computed plugin digest", "name", p.Name, "version", p.Version, "digest", digestStr)
+
+		// Store in content cache
+		if _, err := d.Cache.Put(digest32, bytes.NewReader(pluginData), CachePlugin); err != nil {
+			// Log but don't fail - we can still proceed with extraction
+			slog.Warn("failed to cache plugin tarball", "name", p.Name, "error", err)
+		} else {
+			slog.Debug("stored plugin in content cache", "name", p.Name, "version", p.Version, "digest", digestStr)
+		}
 	}
 
 	// Create a temporary directory for extraction
@@ -98,7 +173,7 @@ func (d *PluginDownloader) Download(p *chart.PluginDependency) error {
 	defer os.RemoveAll(tmpDir)
 
 	// Extract the plugin tarball
-	if err := extractTarGz(bytes.NewReader(pluginData.Bytes()), tmpDir); err != nil {
+	if err := extractTarGz(bytes.NewReader(pluginData), tmpDir); err != nil {
 		return fmt.Errorf("failed to extract plugin: %w", err)
 	}
 
@@ -125,16 +200,8 @@ func (d *PluginDownloader) Download(p *chart.PluginDependency) error {
 
 // getOCIGetter returns an OCI getter from the providers.
 func (d *PluginDownloader) getOCIGetter() (getter.Getter, error) {
-	for _, p := range d.Getters {
-		g, err := p.New()
-		if err != nil {
-			continue
-		}
-		// Check if this is an OCI getter by trying to get the scheme
-		// OCI getters handle "oci://" scheme
-		return g, nil
-	}
-	return nil, fmt.Errorf("no OCI getter available")
+	// Use ByScheme to get the correct getter for OCI URLs
+	return d.Getters.ByScheme("oci")
 }
 
 // isPluginDir checks if a directory contains a valid plugin.

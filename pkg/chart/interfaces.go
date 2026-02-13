@@ -30,6 +30,9 @@ type PluginDependency interface {
 	GetType() string
 	GetRepository() string
 	GetVersion() string
+	// GetDigest returns the content digest for content-addressable caching.
+	// Returns empty string if not available (e.g., not yet resolved from Chart.lock).
+	GetDigest() string
 }
 
 type Accessor interface {

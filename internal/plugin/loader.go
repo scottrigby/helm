@@ -26,6 +26,7 @@ import (
 	"github.com/tetratelabs/wazero"
 	"go.yaml.in/yaml/v3"
 
+	"helm.sh/helm/v4/pkg/chart/loader/archive"
 	"helm.sh/helm/v4/pkg/helmpath"
 )
 
@@ -156,6 +157,87 @@ func LoadDir(dirname string) (Plugin, error) {
 		return nil, fmt.Errorf("failed to create plugin manager: %w", err)
 	}
 	return pm.CreatePlugin(dirname, m)
+}
+
+// PluginArchiveData contains the data extracted from a plugin archive.
+type PluginArchiveData struct {
+	Metadata *Metadata
+	WasmData []byte
+}
+
+// LoadArchive loads a plugin from a gzipped tar archive reader.
+// This reads plugin.yaml and the .wasm file into memory without extracting to disk.
+// Uses the shared archive.LoadArchiveFiles function for consistent archive handling.
+func LoadArchive(in io.Reader) (*PluginArchiveData, error) {
+	// Use the shared archive loader (same as charts use)
+	files, err := archive.LoadArchiveFiles(in)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load plugin archive: %w", err)
+	}
+
+	var metadataData []byte
+	var wasmData []byte
+
+	for _, f := range files {
+		switch f.Name {
+		case PluginFileName:
+			metadataData = f.Data
+		case ExtismV1WasmBinaryFilename:
+			wasmData = f.Data
+		}
+	}
+
+	if len(metadataData) == 0 {
+		return nil, fmt.Errorf("no %s found in archive", PluginFileName)
+	}
+
+	metadata, err := loadMetadata(metadataData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load plugin metadata: %w", err)
+	}
+
+	// Wasm data is required for extism/v1 runtime
+	if metadata.Runtime == "extism/v1" && len(wasmData) == 0 {
+		return nil, fmt.Errorf("no %s found in archive for extism/v1 plugin", ExtismV1WasmBinaryFilename)
+	}
+
+	return &PluginArchiveData{
+		Metadata: metadata,
+		WasmData: wasmData,
+	}, nil
+}
+
+// LoadArchiveFile loads a plugin from a gzipped tar archive file.
+func LoadArchiveFile(filename string) (*PluginArchiveData, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open plugin archive: %w", err)
+	}
+	defer f.Close()
+	return LoadArchive(f)
+}
+
+// CreatePluginFromArchive creates a plugin instance from archive data.
+// This is the main entry point for loading chart-defined plugins from the content cache.
+func CreatePluginFromArchive(archiveData *PluginArchiveData) (Plugin, error) {
+	pm, err := newPrototypePluginManager()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create plugin manager: %w", err)
+	}
+
+	// Check if the runtime supports data-based loading
+	rt, ok := pm.runtimes[archiveData.Metadata.Runtime]
+	if !ok {
+		return nil, fmt.Errorf("unsupported plugin runtime type: %q", archiveData.Metadata.Runtime)
+	}
+
+	// Use data-based loading if supported
+	if rtWithData, ok := rt.(RuntimeWithDataSupport); ok {
+		return rtWithData.CreatePluginFromData(archiveData.WasmData, archiveData.Metadata)
+	}
+
+	// Fallback: runtime doesn't support data-based loading
+	return nil, fmt.Errorf("runtime %q does not support loading from archive data", archiveData.Metadata.Runtime)
 }
 
 // LoadAll loads all plugins found beneath the base directory.

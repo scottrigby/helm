@@ -97,6 +97,7 @@ type RuntimeExtismV1 struct {
 }
 
 var _ Runtime = (*RuntimeExtismV1)(nil)
+var _ RuntimeWithDataSupport = (*RuntimeExtismV1)(nil)
 
 func (r *RuntimeExtismV1) CreatePlugin(pluginDir string, metadata *Metadata) (Plugin, error) {
 
@@ -119,6 +120,111 @@ func (r *RuntimeExtismV1) CreatePlugin(pluginDir string, metadata *Metadata) (Pl
 		rc:       rc,
 		r:        r,
 	}, nil
+}
+
+// CreatePluginFromData creates a plugin instance from in-memory wasm data.
+// This is used when loading plugins from archives without extracting to disk.
+func (r *RuntimeExtismV1) CreatePluginFromData(wasmData []byte, metadata *Metadata) (Plugin, error) {
+	rc, ok := metadata.RuntimeConfig.(*RuntimeConfigExtismV1)
+	if !ok {
+		return nil, fmt.Errorf("invalid extism/v1 plugin runtime config type: %T", metadata.RuntimeConfig)
+	}
+
+	if len(wasmData) == 0 {
+		return nil, fmt.Errorf("wasm data is empty for extism/v1 plugin %q", metadata.Name)
+	}
+
+	return &ExtismV1PluginFromData{
+		metadata: *metadata,
+		wasmData: wasmData,
+		rc:       rc,
+		r:        r,
+	}, nil
+}
+
+// ExtismV1PluginFromData is a plugin loaded from in-memory wasm data (from archive).
+type ExtismV1PluginFromData struct {
+	metadata Metadata
+	wasmData []byte
+	rc       *RuntimeConfigExtismV1
+	r        *RuntimeExtismV1
+}
+
+var _ Plugin = (*ExtismV1PluginFromData)(nil)
+
+func (p *ExtismV1PluginFromData) Metadata() Metadata {
+	return p.metadata
+}
+
+func (p *ExtismV1PluginFromData) Dir() string {
+	// No directory for archive-loaded plugins
+	return ""
+}
+
+func (p *ExtismV1PluginFromData) Invoke(ctx context.Context, input *Input) (*Output, error) {
+	var tmpDir string
+	if p.rc.FileSystem.CreateTempDir {
+		tmpDirInner, err := os.MkdirTemp(os.TempDir(), "helm-plugin-*")
+		slog.Debug("created plugin temp dir", slog.String("dir", tmpDirInner), slog.String("plugin", p.metadata.Name))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create temp dir for extism plugin: %w", err)
+		}
+		defer func() {
+			if err := os.RemoveAll(tmpDir); err != nil {
+				slog.Warn("failed to remove plugin temp dir", slog.String("dir", tmpDir), slog.String("plugin", p.metadata.Name), slog.String("error", err.Error()))
+			}
+		}()
+		tmpDir = tmpDirInner
+	}
+
+	manifest := buildManifestFromData(p.wasmData, tmpDir, p.rc)
+	config := buildPluginConfig(input, p.r)
+
+	hostFunctions, err := buildHostFunctions(p.r.HostFunctions, p.rc)
+	if err != nil {
+		return nil, err
+	}
+
+	pe, err := extism.NewPlugin(ctx, manifest, config, hostFunctions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create plugin from data: %w", err)
+	}
+
+	pe.SetLogger(func(logLevel extism.LogLevel, s string) {
+		slog.Debug(s, slog.String("level", logLevel.String()), slog.String("plugin", p.metadata.Name))
+	})
+
+	inputData, err := json.Marshal(input.Message)
+	if err != nil {
+		return nil, fmt.Errorf("failed to json marshal plugin input message: %T: %w", input.Message, err)
+	}
+
+	slog.Debug("plugin input", slog.String("plugin", p.metadata.Name), slog.String("inputData", string(inputData)))
+
+	entryFuncName := p.rc.EntryFuncName
+	if entryFuncName == "" {
+		entryFuncName = "helm_plugin_main"
+	}
+
+	exitCode, outputData, err := pe.Call(entryFuncName, inputData)
+	if err != nil {
+		return nil, fmt.Errorf("plugin error: %w", err)
+	}
+
+	if exitCode != 0 {
+		return nil, &InvokeExecError{
+			ExitCode: int(exitCode),
+		}
+	}
+
+	slog.Debug("plugin output", slog.String("plugin", p.metadata.Name), slog.String("outputData", string(outputData)))
+
+	outputMessage := reflect.New(pluginTypesIndex[p.metadata.Type].outputType)
+	if err := json.Unmarshal(outputData, outputMessage.Interface()); err != nil {
+		return nil, fmt.Errorf("failed to json unmarshal plugin output message: %w", err)
+	}
+
+	return &Output{Message: outputMessage.Elem().Interface()}, nil
 }
 
 type ExtismV1PluginRuntime struct {
@@ -244,6 +350,37 @@ func buildManifest(pluginDir string, tmpDir string, rc *RuntimeConfigExtismV1) (
 		AllowedPaths: allowedPaths,
 		Timeout:      rc.Timeout,
 	}, nil
+}
+
+// buildManifestFromData creates an Extism manifest from in-memory wasm data.
+func buildManifestFromData(wasmData []byte, tmpDir string, rc *RuntimeConfigExtismV1) extism.Manifest {
+	allowedHosts := rc.AllowedHosts
+	if allowedHosts == nil {
+		allowedHosts = []string{}
+	}
+
+	allowedPaths := map[string]string{}
+	if tmpDir != "" {
+		allowedPaths[tmpDir] = "/tmp"
+	}
+
+	return extism.Manifest{
+		Wasm: []extism.Wasm{
+			extism.WasmData{
+				Data: wasmData,
+				Name: "plugin.wasm",
+			},
+		},
+		Memory: &extism.ManifestMemory{
+			MaxPages:             rc.Memory.MaxPages,
+			MaxHttpResponseBytes: rc.Memory.MaxHTTPResponseBytes,
+			MaxVarBytes:          rc.Memory.MaxVarBytes,
+		},
+		Config:       rc.Config,
+		AllowedHosts: allowedHosts,
+		AllowedPaths: allowedPaths,
+		Timeout:      rc.Timeout,
+	}
 }
 
 func buildPluginConfig(input *Input, r *RuntimeExtismV1) extism.PluginConfig {
