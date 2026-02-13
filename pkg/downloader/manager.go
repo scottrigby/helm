@@ -144,7 +144,18 @@ func (m *Manager) Build() error {
 	}
 
 	// Now we need to fetch every package here into charts/
-	return m.downloadAll(lock.Dependencies)
+	if err := m.downloadAll(lock.Dependencies); err != nil {
+		return err
+	}
+
+	// Download locked plugins to the versioned plugin cache
+	if len(lock.Plugins) > 0 {
+		if err := m.downloadPlugins(lock.Plugins); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Update updates a local charts directory.
@@ -204,6 +215,15 @@ func (m *Manager) Update() error {
 		return err
 	}
 
+	// Download chart-defined plugins to the versioned plugin cache
+	if len(c.Metadata.Plugins) > 0 {
+		if err := m.downloadPlugins(c.Metadata.Plugins); err != nil {
+			return err
+		}
+		// Copy plugins to the lock file
+		lock.Plugins = c.Metadata.Plugins
+	}
+
 	// downloadAll might overwrite dependency version, recalculate lock digest
 	newDigest, err := resolver.HashReq(req, lock.Dependencies)
 	if err != nil {
@@ -213,7 +233,7 @@ func (m *Manager) Update() error {
 
 	// If the lock file hasn't changed, don't write a new one.
 	oldLock := c.Lock
-	if oldLock != nil && oldLock.Digest == lock.Digest {
+	if oldLock != nil && oldLock.Digest == lock.Digest && pluginsUnchanged(oldLock.Plugins, lock.Plugins) {
 		return nil
 	}
 
@@ -228,6 +248,33 @@ func (m *Manager) loadChartDir() (*chart.Chart, error) {
 		return nil, errors.New("only unpacked charts can be updated")
 	}
 	return loader.LoadDir(m.ChartPath)
+}
+
+// downloadPlugins downloads chart-defined plugins to the versioned plugin cache.
+func (m *Manager) downloadPlugins(plugins []*chart.PluginDependency) error {
+	if len(plugins) == 0 {
+		return nil
+	}
+
+	fmt.Fprintf(m.Out, "Downloading %d plugins\n", len(plugins))
+	downloader := NewPluginDownloader(m.Out, m.Getters)
+	return downloader.DownloadAll(plugins)
+}
+
+// pluginsUnchanged checks if two plugin lists are identical.
+func pluginsUnchanged(old, new []*chart.PluginDependency) bool {
+	if len(old) != len(new) {
+		return false
+	}
+	for i := range old {
+		if old[i].Name != new[i].Name ||
+			old[i].Type != new[i].Type ||
+			old[i].Repository != new[i].Repository ||
+			old[i].Version != new[i].Version {
+			return false
+		}
+	}
+	return true
 }
 
 // resolve takes a list of dependencies and translates them into an exact version to download.

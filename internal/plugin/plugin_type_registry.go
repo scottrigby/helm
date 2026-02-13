@@ -95,6 +95,12 @@ var pluginTypes = []pluginTypeMeta{
 		outputType: reflect.TypeFor[schema.OutputMessagePostRendererV1](),
 		configType: reflect.TypeFor[schema.ConfigPostRendererV1](),
 	},
+	{
+		pluginType: "render/v1",
+		inputType:  reflect.TypeFor[schema.InputMessageRenderV1](),
+		outputType: reflect.TypeFor[schema.OutputMessageRenderV1](),
+		configType: reflect.TypeFor[schema.ConfigRenderV1](),
+	},
 }
 
 var pluginTypesIndex = func() map[string]*pluginTypeMeta {

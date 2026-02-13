@@ -23,6 +23,15 @@ type Charter any
 
 type Dependency any
 
+// PluginDependency represents a plugin dependency for the Accessor interface.
+// This is a common interface that both v2 and v3 plugin dependencies implement.
+type PluginDependency interface {
+	GetName() string
+	GetType() string
+	GetRepository() string
+	GetVersion() string
+}
+
 type Accessor interface {
 	Name() string
 	IsRoot() bool
@@ -33,6 +42,9 @@ type Accessor interface {
 	IsLibraryChart() bool
 	Dependencies() []Charter
 	MetaDependencies() []Dependency
+	// Plugins returns the list of plugin dependencies for this chart.
+	// These are processed sequentially in list order.
+	Plugins() []PluginDependency
 	Values() map[string]any
 	Schema() []byte
 	Deprecated() bool

@@ -113,6 +113,14 @@ func (r *v2Accessor) Deprecated() bool {
 	return r.chrt.Metadata.Deprecated
 }
 
+func (r *v2Accessor) Plugins() []PluginDependency {
+	var plugins = make([]PluginDependency, len(r.chrt.Metadata.Plugins))
+	for i, p := range r.chrt.Metadata.Plugins {
+		plugins[i] = p
+	}
+	return plugins
+}
+
 type v3Accessor struct {
 	chrt *v3chart.Chart
 }
@@ -180,6 +188,14 @@ func (r *v3Accessor) Schema() []byte {
 
 func (r *v3Accessor) Deprecated() bool {
 	return r.chrt.Metadata.Deprecated
+}
+
+func (r *v3Accessor) Plugins() []PluginDependency {
+	var plugins = make([]PluginDependency, len(r.chrt.Metadata.Plugins))
+	for i, p := range r.chrt.Metadata.Plugins {
+		plugins[i] = p
+	}
+	return plugins
 }
 
 func structToMap(obj any) (map[string]any, error) {

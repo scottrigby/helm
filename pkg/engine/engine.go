@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -32,6 +33,9 @@ import (
 
 	ci "helm.sh/helm/v4/pkg/chart"
 	"helm.sh/helm/v4/pkg/chart/common"
+	"helm.sh/helm/v4/pkg/render"
+
+	"helm.sh/helm/v4/internal/plugin/schema"
 )
 
 // Engine is an implementation of the Helm rendering implementation for templates.
@@ -47,6 +51,9 @@ type Engine struct {
 	EnableDNS bool
 	// CustomTemplateFuncs is defined by users to provide custom template funcs
 	CustomTemplateFuncs template.FuncMap
+	// PluginsDir is the directory where chart-defined plugins are installed.
+	// If set, render plugins will be used for files matching their patterns.
+	PluginsDir string
 }
 
 // New creates a new instance of Engine using the passed in rest config.
@@ -76,9 +83,147 @@ func New(config *rest.Config) Engine {
 // that section of the values will be passed into the "foo" chart. And if that
 // section contains a value named "bar", that value will be passed on to the
 // bar chart during render time.
+//
+// If the chart has render plugins defined and PluginsDir is set, render plugins
+// will be used to process files matching their patterns.
 func (e Engine) Render(chrt ci.Charter, values common.Values) (map[string]string, error) {
+	// Check if we should use render plugins
+	if e.PluginsDir != "" {
+		accessor, err := ci.NewAccessor(chrt)
+		if err == nil {
+			plugins := accessor.Plugins()
+			if hasRenderPlugins(plugins) {
+				// Use render plugins for files they manage
+				pluginRendered, err := e.renderWithPlugins(chrt, values, accessor)
+				if err != nil {
+					return nil, fmt.Errorf("render plugins: %w", err)
+				}
+
+				// Render remaining files with gotemplate, excluding plugin-managed files
+				tmap := allTemplates(chrt, values)
+				// Filter out files that were handled by plugins
+				for k := range pluginRendered {
+					delete(tmap, k)
+				}
+				// Also filter out source files that match plugin patterns (e.g., .pkl files)
+				// by removing templates whose names end with plugin-specific extensions
+				for k := range tmap {
+					if isPluginManagedFile(k) {
+						delete(tmap, k)
+					}
+				}
+
+				goTemplateRendered, err := e.render(tmap)
+				if err != nil {
+					return nil, err
+				}
+
+				// Merge results (plugin output takes precedence)
+				for k, v := range pluginRendered {
+					goTemplateRendered[k] = v
+				}
+				return goTemplateRendered, nil
+			}
+		}
+	}
+
+	// Default: render all with gotemplate
 	tmap := allTemplates(chrt, values)
 	return e.render(tmap)
+}
+
+// isPluginManagedFile checks if a file path should be handled by a render plugin
+// rather than the default gotemplate engine. This is a simple check based on file extensions.
+// TODO: This should be improved to use the actual plugin patterns instead of hardcoded extensions.
+func isPluginManagedFile(path string) bool {
+	// Common render plugin file extensions
+	// Note: .test and .renamed are for testing the sequential plugin handoff
+	pluginExtensions := []string{".pkl", ".cue", ".jsonnet", ".kustomize", ".test", ".renamed"}
+	for _, ext := range pluginExtensions {
+		if strings.HasSuffix(path, ext) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasRenderPlugins checks if the plugin list contains any render/v1 plugins.
+func hasRenderPlugins(plugins []ci.PluginDependency) bool {
+	for _, p := range plugins {
+		if p.GetType() == "render/v1" {
+			return true
+		}
+	}
+	return false
+}
+
+// renderWithPlugins invokes render plugins to process matching files.
+func (e Engine) renderWithPlugins(chrt ci.Charter, values common.Values, accessor ci.Accessor) (map[string]string, error) {
+	// Build render context from values
+	renderCtx := e.buildRenderContext(values)
+
+	// Create plugin renderer
+	pr := &render.PluginRenderer{
+		PluginsDir: e.PluginsDir,
+	}
+
+	// Render with plugins
+	return pr.Render(context.Background(), chrt, renderCtx)
+}
+
+// buildRenderContext extracts render context from values.
+func (e Engine) buildRenderContext(values common.Values) *render.RenderContext {
+	ctx := &render.RenderContext{
+		Values: make(map[string]interface{}),
+	}
+
+	// Extract Release info
+	if release, ok := values["Release"].(map[string]interface{}); ok {
+		ctx.Release = schema.ReleaseInfo{
+			Name:      getString(release, "Name"),
+			Namespace: getString(release, "Namespace"),
+			Revision:  getInt(release, "Revision"),
+			IsInstall: getBool(release, "IsInstall"),
+			IsUpgrade: getBool(release, "IsUpgrade"),
+			Service:   getString(release, "Service"),
+		}
+	}
+
+	// Extract Values - could be common.Values or map[string]interface{}
+	if vals, ok := values["Values"].(map[string]interface{}); ok {
+		ctx.Values = vals
+	} else if vals, ok := values["Values"].(common.Values); ok {
+		ctx.Values = vals.AsMap()
+	}
+
+	// Extract Capabilities
+	if caps, ok := values["Capabilities"].(*common.Capabilities); ok {
+		ctx.Capabilities = caps
+	}
+
+	return ctx
+}
+
+// Helper functions for type conversion
+func getString(m map[string]interface{}, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+func getInt(m map[string]interface{}, key string) int {
+	if v, ok := m[key].(int); ok {
+		return v
+	}
+	return 0
+}
+
+func getBool(m map[string]interface{}, key string) bool {
+	if v, ok := m[key].(bool); ok {
+		return v
+	}
+	return false
 }
 
 // Render takes a chart, optional values, and value overrides, and attempts to

@@ -69,6 +69,57 @@ func (d *Dependency) Validate() error {
 	return nil
 }
 
+// PluginDependency describes a plugin required by a chart.
+//
+// Chart-defined plugins are downloaded and cached globally by version,
+// then used when rendering or building chart dependencies.
+type PluginDependency struct {
+	// Name is the name of the plugin.
+	Name string `json:"name" yaml:"name"`
+	// Type is the plugin type (e.g., "render/v1", "getter/v1").
+	Type string `json:"type" yaml:"type"`
+	// Repository is the OCI URL where the plugin is stored.
+	Repository string `json:"repository" yaml:"repository"`
+	// Version is the version (range) of this plugin.
+	//
+	// A lock file will always produce a single version, while a dependency
+	// may contain a semantic version range.
+	Version string `json:"version,omitempty" yaml:"version,omitempty"`
+}
+
+// Validate checks for common problems with the plugin dependency.
+func (p *PluginDependency) Validate() error {
+	if p == nil {
+		return ValidationError("plugins must not contain empty or null nodes")
+	}
+	p.Name = sanitizeString(p.Name)
+	p.Type = sanitizeString(p.Type)
+	p.Repository = sanitizeString(p.Repository)
+	p.Version = sanitizeString(p.Version)
+	if p.Name == "" {
+		return ValidationError("plugin name is required")
+	}
+	if p.Type == "" {
+		return ValidationError("plugin type is required")
+	}
+	if p.Repository == "" {
+		return ValidationError("plugin repository is required")
+	}
+	return nil
+}
+
+// GetName returns the plugin name.
+func (p *PluginDependency) GetName() string { return p.Name }
+
+// GetType returns the plugin type (e.g., "render/v1", "getter/v1").
+func (p *PluginDependency) GetType() string { return p.Type }
+
+// GetRepository returns the OCI repository URL.
+func (p *PluginDependency) GetRepository() string { return p.Repository }
+
+// GetVersion returns the plugin version.
+func (p *PluginDependency) GetVersion() string { return p.Version }
+
 // Lock is a lock file for dependencies.
 //
 // It represents the state that the dependencies should be in.
@@ -79,4 +130,6 @@ type Lock struct {
 	Digest string `json:"digest"`
 	// Dependencies is the list of dependencies that this lock file has locked.
 	Dependencies []*Dependency `json:"dependencies"`
+	// Plugins is the list of plugins that this lock file has locked.
+	Plugins []*PluginDependency `json:"plugins,omitempty"`
 }

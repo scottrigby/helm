@@ -42,3 +42,18 @@ func CacheChartsFile(name string) string {
 	}
 	return name + "charts.txt"
 }
+
+// PluginPath returns the path to a plugin directory.
+// For unversioned plugins (legacy): plugins/<name>
+// For versioned plugins: plugins/<name>/<version>
+func PluginPath(name string, version ...string) string {
+	if len(version) > 0 && version[0] != "" {
+		return DataPath("plugins", name, version[0])
+	}
+	return DataPath("plugins", name)
+}
+
+// PluginsDir returns the base plugins directory.
+func PluginsDir() string {
+	return DataPath("plugins")
+}

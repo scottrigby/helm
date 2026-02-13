@@ -36,6 +36,9 @@ type MetadataV1 struct {
 	// Version is a SemVer 2 version of the plugin.
 	Version string `yaml:"version"`
 
+	// Description provides a brief description of the plugin.
+	Description string `yaml:"description,omitempty"`
+
 	// SourceURL is the URL where this plugin can be found
 	SourceURL string `yaml:"sourceURL,omitempty"`
 
