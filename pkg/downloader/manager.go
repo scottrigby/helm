@@ -78,6 +78,8 @@ type Manager struct {
 
 	// ContentCache is a location where a cache of charts can be stored
 	ContentCache string
+	// PlainHTTP enables plain HTTP for OCI registries (for local/insecure registries)
+	PlainHTTP bool
 }
 
 // Build rebuilds a local charts directory from a lockfile.
@@ -268,6 +270,7 @@ func (m *Manager) downloadPlugins(plugins []*chart.PluginDependency) error {
 
 	fmt.Fprintf(m.Out, "Downloading %d plugins\n", len(plugins))
 	downloader := NewPluginDownloader(m.Out, m.Getters)
+	downloader.PlainHTTP = m.PlainHTTP
 	return downloader.DownloadAll(plugins)
 }
 
