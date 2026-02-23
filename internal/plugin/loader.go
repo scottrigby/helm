@@ -109,10 +109,22 @@ type prototypePluginManager struct {
 }
 
 func newPrototypePluginManager() (*prototypePluginManager, error) {
+	return newPluginManagerWithCache(nil)
+}
 
-	cc, err := wazero.NewCompilationCacheWithDir(helmpath.CachePath("wazero-build"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create wazero compilation cache: %w", err)
+// newPluginManagerWithCache creates a plugin manager with a custom compilation cache.
+// If cache is nil, a disk-based cache at $HELM_CACHE_HOME/wazero-build/ is used.
+func newPluginManagerWithCache(cache wazero.CompilationCache) (*prototypePluginManager, error) {
+	var cc wazero.CompilationCache
+	var err error
+
+	if cache != nil {
+		cc = cache
+	} else {
+		cc, err = wazero.NewCompilationCacheWithDir(helmpath.CachePath("wazero-build"))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create wazero compilation cache: %w", err)
+		}
 	}
 
 	return &prototypePluginManager{
@@ -159,8 +171,8 @@ func LoadDir(dirname string) (Plugin, error) {
 	return pm.CreatePlugin(dirname, m)
 }
 
-// PluginArchiveData contains the data extracted from a plugin archive.
-type PluginArchiveData struct {
+// ArchiveData contains the data extracted from a plugin archive.
+type ArchiveData struct {
 	Metadata *Metadata
 	WasmData []byte
 }
@@ -168,7 +180,7 @@ type PluginArchiveData struct {
 // LoadArchive loads a plugin from a gzipped tar archive reader.
 // This reads plugin.yaml and the .wasm file into memory without extracting to disk.
 // Uses the shared archive.LoadArchiveFiles function for consistent archive handling.
-func LoadArchive(in io.Reader) (*PluginArchiveData, error) {
+func LoadArchive(in io.Reader) (*ArchiveData, error) {
 	// Use the shared archive loader (same as charts use)
 	files, err := archive.LoadArchiveFiles(in)
 	if err != nil {
@@ -201,14 +213,14 @@ func LoadArchive(in io.Reader) (*PluginArchiveData, error) {
 		return nil, fmt.Errorf("no %s found in archive for extism/v1 plugin", ExtismV1WasmBinaryFilename)
 	}
 
-	return &PluginArchiveData{
+	return &ArchiveData{
 		Metadata: metadata,
 		WasmData: wasmData,
 	}, nil
 }
 
 // LoadArchiveFile loads a plugin from a gzipped tar archive file.
-func LoadArchiveFile(filename string) (*PluginArchiveData, error) {
+func LoadArchiveFile(filename string) (*ArchiveData, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open plugin archive: %w", err)
@@ -219,8 +231,19 @@ func LoadArchiveFile(filename string) (*PluginArchiveData, error) {
 
 // CreatePluginFromArchive creates a plugin instance from archive data.
 // This is the main entry point for loading chart-defined plugins from the content cache.
-func CreatePluginFromArchive(archiveData *PluginArchiveData) (Plugin, error) {
-	pm, err := newPrototypePluginManager()
+// Uses the default disk-based compilation cache at $HELM_CACHE_HOME/wazero-build/.
+func CreatePluginFromArchive(archiveData *ArchiveData) (Plugin, error) {
+	return CreatePluginFromArchiveWithCache(archiveData, nil)
+}
+
+// CreatePluginFromArchiveWithCache creates a plugin instance from archive data
+// using a custom Wasm compilation cache. If cache is nil, a disk-based cache
+// at $HELM_CACHE_HOME/wazero-build/ is used.
+//
+// SDK users can pass wazero.NewCompilationCache() for in-memory caching,
+// useful for non-writable filesystems.
+func CreatePluginFromArchiveWithCache(archiveData *ArchiveData, cache wazero.CompilationCache) (Plugin, error) {
+	pm, err := newPluginManagerWithCache(cache)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create plugin manager: %w", err)
 	}

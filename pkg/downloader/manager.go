@@ -282,15 +282,15 @@ func (m *Manager) downloadPlugins(plugins []*chart.PluginDependency) error {
 }
 
 // pluginsUnchanged checks if two plugin lists are identical.
-func pluginsUnchanged(old, new []*chart.PluginDependency) bool {
-	if len(old) != len(new) {
+func pluginsUnchanged(old, updated []*chart.PluginDependency) bool {
+	if len(old) != len(updated) {
 		return false
 	}
 	for i := range old {
-		if old[i].Name != new[i].Name ||
-			old[i].Type != new[i].Type ||
-			old[i].Repository != new[i].Repository ||
-			old[i].Version != new[i].Version {
+		if old[i].Name != updated[i].Name ||
+			old[i].Type != updated[i].Type ||
+			old[i].Repository != updated[i].Repository ||
+			old[i].Version != updated[i].Version {
 			return false
 		}
 	}

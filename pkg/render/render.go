@@ -16,12 +16,14 @@ limitations under the License.
 package render
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/gobwas/glob"
+	"github.com/tetratelabs/wazero"
 
 	"helm.sh/helm/v4/internal/plugin"
 	"helm.sh/helm/v4/internal/plugin/schema"
@@ -36,12 +38,42 @@ type PluginRenderer struct {
 	// ContentCachePath is the path to the content cache directory.
 	// If set, plugins will be loaded from cached archives using their digest.
 	ContentCachePath string
+
+	// SDK options for customizing plugin loading behavior
+
+	// CompilationCache allows providing a custom Wasm compilation cache.
+	// If nil, a disk-based cache at $HELM_CACHE_HOME/wazero-build/ is used.
+	// For non-writable filesystems, use wazero.NewCompilationCache() for in-memory.
+	CompilationCache wazero.CompilationCache
+
+	// PreloadedPlugins allows providing pre-loaded plugin archive data as raw bytes.
+	// Key is the plugin digest (SHA256 hex string from Chart.lock).
+	// Value is the raw tarball bytes (gzipped tar archive containing plugin.yaml and plugin.wasm).
+	// Useful for non-writable filesystems where plugins are bundled with the application.
+	PreloadedPlugins map[string][]byte
 }
 
-// RenderContext contains all the Helm built-in objects needed for rendering.
-type RenderContext struct {
+// ReleaseInfo contains release metadata passed to render plugins.
+// This is the public SDK type that mirrors the internal schema type.
+type ReleaseInfo struct {
+	// Name is the release name
+	Name string
+	// Namespace is the release namespace
+	Namespace string
+	// Revision is the release revision number
+	Revision int
+	// IsInstall is true if this is an install operation
+	IsInstall bool
+	// IsUpgrade is true if this is an upgrade operation
+	IsUpgrade bool
+	// Service is the name of the rendering engine (always "Helm")
+	Service string
+}
+
+// Context contains all the Helm built-in objects needed for rendering.
+type Context struct {
 	// Release contains release metadata
-	Release schema.ReleaseInfo
+	Release ReleaseInfo
 	// Values contains merged values
 	Values map[string]interface{}
 	// Capabilities contains cluster capabilities
@@ -64,7 +96,7 @@ type FileAssignment struct {
 func (r *PluginRenderer) Render(
 	ctx context.Context,
 	chart ci.Charter,
-	renderCtx *RenderContext,
+	renderCtx *Context,
 ) (map[string]string, error) {
 	accessor, err := ci.NewAccessor(chart)
 	if err != nil {
@@ -123,7 +155,7 @@ func (r *PluginRenderer) Render(
 		// Build input message
 		input := &plugin.Input{
 			Message: schema.InputMessageRenderV1{
-				Release:      renderCtx.Release,
+				Release:      toSchemaReleaseInfo(renderCtx.Release),
 				Values:       renderCtx.Values,
 				Chart:        chartInfo,
 				Subcharts:    subchartsInfo,
@@ -171,20 +203,32 @@ func (r *PluginRenderer) Render(
 	return rendered, nil
 }
 
-// VersionsSubdir is the subdirectory name for downloaded plugin versions.
-const VersionsSubdir = "versions"
-
 // loadPlugin loads a render plugin by name and version.
 // It tries the following locations in order:
-// 1. Content cache (archive-based) using digest if available
-// 2. Versioned plugin directory: $PLUGINS_DIR/versions/<name>/<version>/
+// 1. Preloaded plugins (SDK: in-memory, for non-writable filesystems)
+// 2. Content cache (archive-based) using digest if available
 // 3. Globally installed plugin: $PLUGINS_DIR/<name>/ (fallback for helm plugin install)
 func (r *PluginRenderer) loadPlugin(dep ci.PluginDependency) (plugin.Plugin, error) {
 	var p plugin.Plugin
 	var err error
+	digest := dep.GetDigest()
 
-	// 1. Try to load from content cache first if digest is available
-	if digest := dep.GetDigest(); digest != "" && r.ContentCachePath != "" {
+	// 1. Check preloaded plugins first (SDK: non-writable filesystem support)
+	if digest != "" && r.PreloadedPlugins != nil {
+		if rawData, ok := r.PreloadedPlugins[digest]; ok {
+			p, err = r.loadPluginFromBytes(rawData)
+			if err == nil {
+				if p.Metadata().Type != "render/v1" {
+					return nil, fmt.Errorf("plugin %q is type %q, expected render/v1", dep.GetName(), p.Metadata().Type)
+				}
+				return p, nil
+			}
+			// If preloaded plugin failed, fall through
+		}
+	}
+
+	// 2. Try to load from content cache if digest is available
+	if digest != "" && r.ContentCachePath != "" {
 		p, err = r.loadPluginFromCache(digest)
 		if err == nil {
 			// Verify plugin type matches
@@ -194,17 +238,6 @@ func (r *PluginRenderer) loadPlugin(dep ci.PluginDependency) (plugin.Plugin, err
 			return p, nil
 		}
 		// If cache loading failed, fall through to directory-based loading
-	}
-
-	// 2. Try versioned plugin directory: $PLUGINS_DIR/versions/<name>/<version>/
-	versionedPath := filepath.Join(r.PluginsDir, "versions", dep.GetName(), dep.GetVersion())
-	p, err = plugin.LoadDir(versionedPath)
-	if err == nil {
-		// Verify plugin type matches
-		if p.Metadata().Type != "render/v1" {
-			return nil, fmt.Errorf("plugin %q is type %q, expected render/v1", dep.GetName(), p.Metadata().Type)
-		}
-		return p, nil
 	}
 
 	// 3. Fallback to globally installed plugins (directory-based)
@@ -235,18 +268,22 @@ func (r *PluginRenderer) loadPluginFromCache(digest string) (plugin.Plugin, erro
 	// Build the cache file path: {ContentCachePath}/{digest}.plugin
 	cacheFile := filepath.Join(r.ContentCachePath, digest+".plugin")
 
-	f, err := os.Open(cacheFile)
+	data, err := os.ReadFile(cacheFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open cached plugin: %w", err)
-	}
-	defer f.Close()
-
-	archiveData, err := plugin.LoadArchive(f)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load plugin archive: %w", err)
+		return nil, fmt.Errorf("failed to read cached plugin: %w", err)
 	}
 
-	return plugin.CreatePluginFromArchive(archiveData)
+	return r.loadPluginFromBytes(data)
+}
+
+// loadPluginFromBytes parses plugin archive bytes and creates a plugin instance.
+// Uses the configured compilation cache if set.
+func (r *PluginRenderer) loadPluginFromBytes(data []byte) (plugin.Plugin, error) {
+	archiveData, err := plugin.LoadArchive(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse plugin archive: %w", err)
+	}
+	return plugin.CreatePluginFromArchiveWithCache(archiveData, r.CompilationCache)
 }
 
 // getPluginPatterns extracts the glob patterns from a render plugin's config.
@@ -403,4 +440,16 @@ func buildFiles(files []*common.File) []schema.SourceFile {
 		})
 	}
 	return result
+}
+
+// toSchemaReleaseInfo converts public ReleaseInfo to internal schema type.
+func toSchemaReleaseInfo(r ReleaseInfo) schema.ReleaseInfo {
+	return schema.ReleaseInfo{
+		Name:      r.Name,
+		Namespace: r.Namespace,
+		Revision:  r.Revision,
+		IsInstall: r.IsInstall,
+		IsUpgrade: r.IsUpgrade,
+		Service:   r.Service,
+	}
 }

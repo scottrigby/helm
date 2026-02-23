@@ -34,8 +34,6 @@ import (
 	ci "helm.sh/helm/v4/pkg/chart"
 	"helm.sh/helm/v4/pkg/chart/common"
 	"helm.sh/helm/v4/pkg/render"
-
-	"helm.sh/helm/v4/internal/plugin/schema"
 )
 
 // Engine is an implementation of the Helm rendering implementation for templates.
@@ -158,7 +156,7 @@ func hasRenderPlugins(plugins []ci.PluginDependency) bool {
 }
 
 // renderWithPlugins invokes render plugins to process matching files.
-func (e Engine) renderWithPlugins(chrt ci.Charter, values common.Values, accessor ci.Accessor) (map[string]string, error) {
+func (e Engine) renderWithPlugins(chrt ci.Charter, values common.Values, _ ci.Accessor) (map[string]string, error) {
 	// Build render context from values
 	renderCtx := e.buildRenderContext(values)
 
@@ -172,14 +170,14 @@ func (e Engine) renderWithPlugins(chrt ci.Charter, values common.Values, accesso
 }
 
 // buildRenderContext extracts render context from values.
-func (e Engine) buildRenderContext(values common.Values) *render.RenderContext {
-	ctx := &render.RenderContext{
+func (e Engine) buildRenderContext(values common.Values) *render.Context {
+	ctx := &render.Context{
 		Values: make(map[string]interface{}),
 	}
 
 	// Extract Release info
 	if release, ok := values["Release"].(map[string]interface{}); ok {
-		ctx.Release = schema.ReleaseInfo{
+		ctx.Release = render.ReleaseInfo{
 			Name:      getString(release, "Name"),
 			Namespace: getString(release, "Namespace"),
 			Revision:  getInt(release, "Revision"),
