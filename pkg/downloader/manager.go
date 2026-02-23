@@ -36,6 +36,7 @@ import (
 	"helm.sh/helm/v4/internal/resolver"
 	"helm.sh/helm/v4/internal/third_party/dep/fs"
 	"helm.sh/helm/v4/internal/urlutil"
+	ci "helm.sh/helm/v4/pkg/chart"
 	chart "helm.sh/helm/v4/pkg/chart/v2"
 	"helm.sh/helm/v4/pkg/chart/v2/loader"
 	chartutil "helm.sh/helm/v4/pkg/chart/v2/util"
@@ -262,7 +263,7 @@ func (m *Manager) loadChartDir() (*chart.Chart, error) {
 	return loader.LoadDir(m.ChartPath)
 }
 
-// downloadPlugins downloads chart-defined plugins to the versioned plugin cache.
+// downloadPlugins downloads chart-defined plugins to the content cache.
 func (m *Manager) downloadPlugins(plugins []*chart.PluginDependency) error {
 	if len(plugins) == 0 {
 		return nil
@@ -271,7 +272,13 @@ func (m *Manager) downloadPlugins(plugins []*chart.PluginDependency) error {
 	fmt.Fprintf(m.Out, "Downloading %d plugins\n", len(plugins))
 	downloader := NewPluginDownloader(m.Out, m.Getters)
 	downloader.PlainHTTP = m.PlainHTTP
-	return downloader.DownloadAll(plugins)
+
+	// Convert to interface slice
+	deps := make([]ci.PluginDependency, len(plugins))
+	for i, p := range plugins {
+		deps[i] = p
+	}
+	return downloader.DownloadAll(deps)
 }
 
 // pluginsUnchanged checks if two plugin lists are identical.
