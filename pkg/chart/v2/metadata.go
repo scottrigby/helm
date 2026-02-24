@@ -79,10 +79,6 @@ type Metadata struct {
 	KubeVersion string `json:"kubeVersion,omitempty"`
 	// Dependencies are a list of dependencies for a chart.
 	Dependencies []*Dependency `json:"dependencies,omitempty"`
-	// Plugins are a list of plugin dependencies for a chart.
-	// These are processed sequentially in list order, which matters for
-	// render plugins that may modify a shared SourceFiles object.
-	Plugins []*PluginDependency `json:"plugins,omitempty"`
 	// Specifies the chart type: application or library
 	Type string `json:"type,omitempty"`
 }
@@ -153,17 +149,6 @@ func (md *Metadata) Validate() error {
 		dependencies[key] = dependency
 	}
 
-	// Validate plugins
-	plugins := map[string]*PluginDependency{}
-	for _, plugin := range md.Plugins {
-		if err := plugin.Validate(); err != nil {
-			return err
-		}
-		if plugins[plugin.Name] != nil {
-			return ValidationErrorf("more than one plugin with name %q", plugin.Name)
-		}
-		plugins[plugin.Name] = plugin
-	}
 	return nil
 }
 

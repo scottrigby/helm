@@ -114,11 +114,8 @@ func (r *v2Accessor) Deprecated() bool {
 }
 
 func (r *v2Accessor) Plugins() []PluginDependency {
-	var plugins = make([]PluginDependency, len(r.chrt.Metadata.Plugins))
-	for i, p := range r.chrt.Metadata.Plugins {
-		plugins[i] = p
-	}
-	return plugins
+	// Chart-defined plugins are only supported in chart API v3+
+	return nil
 }
 
 type v3Accessor struct {
@@ -192,8 +189,25 @@ func (r *v3Accessor) Deprecated() bool {
 
 func (r *v3Accessor) Plugins() []PluginDependency {
 	var plugins = make([]PluginDependency, len(r.chrt.Metadata.Plugins))
+
+	// Build a map of locked plugins for digest lookup
+	lockedPlugins := make(map[string]*v3chart.PluginDependency)
+	if r.chrt.Lock != nil {
+		for _, lp := range r.chrt.Lock.Plugins {
+			lockedPlugins[lp.Name] = lp
+		}
+	}
+
 	for i, p := range r.chrt.Metadata.Plugins {
-		plugins[i] = p
+		// If there's a locked version, use its digest
+		if lp, ok := lockedPlugins[p.Name]; ok && lp.Digest != "" {
+			// Create a copy with the digest from lock
+			pluginCopy := *p
+			pluginCopy.Digest = lp.Digest
+			plugins[i] = &pluginCopy
+		} else {
+			plugins[i] = p
+		}
 	}
 	return plugins
 }

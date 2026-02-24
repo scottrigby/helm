@@ -265,8 +265,10 @@ func (r *PluginRenderer) loadPlugin(dep ci.PluginDependency) (plugin.Plugin, err
 
 // loadPluginFromCache loads a plugin from the content cache using its digest.
 func (r *PluginRenderer) loadPluginFromCache(digest string) (plugin.Plugin, error) {
-	// Build the cache file path: {ContentCachePath}/{digest}.plugin
-	cacheFile := filepath.Join(r.ContentCachePath, digest+".plugin")
+	// Build the cache file path: {ContentCachePath}/{first2chars}/{digest}.plugin
+	// This matches the directory structure used by pkg/downloader/cache.go
+	subdir := digest[:2]
+	cacheFile := filepath.Join(r.ContentCachePath, subdir, digest+".plugin")
 
 	data, err := os.ReadFile(cacheFile)
 	if err != nil {

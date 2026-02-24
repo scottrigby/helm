@@ -44,6 +44,10 @@ import (
 	"helm.sh/helm/v4/pkg/helmpath"
 	"helm.sh/helm/v4/pkg/registry"
 	"helm.sh/helm/v4/pkg/repo/v1"
+
+	// v3 chart types for chart-defined plugins (v3-only feature)
+	v3chart "helm.sh/helm/v4/internal/chart/v3"
+	v3loader "helm.sh/helm/v4/internal/chart/v3/loader"
 )
 
 // ErrRepoNotFound indicates that chart repositories can't be found in local repo cache.
@@ -89,6 +93,21 @@ type Manager struct {
 //
 // If SkipUpdate is set, this will not update the repository.
 func (m *Manager) Build() error {
+	// Detect chart version and dispatch to appropriate handler
+	apiVersion, err := m.detectChartAPIVersion()
+	if err != nil {
+		return err
+	}
+
+	if apiVersion == v3chart.APIVersionV3 {
+		return m.buildV3()
+	}
+	return m.buildV2()
+}
+
+// buildV2 handles build for v2 (and v1) charts.
+// These charts do not support plugins.
+func (m *Manager) buildV2() error {
 	c, err := m.loadChartDir()
 	if err != nil {
 		return err
@@ -98,7 +117,7 @@ func (m *Manager) Build() error {
 	// an update.
 	lock := c.Lock
 	if lock == nil {
-		return m.Update()
+		return m.updateV2()
 	}
 
 	// Check that all of the repos we're dependent on actually exist.
@@ -147,13 +166,57 @@ func (m *Manager) Build() error {
 	}
 
 	// Now we need to fetch every package here into charts/
-	if err := m.downloadAll(lock.Dependencies); err != nil {
+	return m.downloadAll(lock.Dependencies)
+}
+
+// buildV3 handles build for v3 charts.
+// V3 charts support plugins in addition to dependencies.
+func (m *Manager) buildV3() error {
+	c, err := m.loadChartDirV3()
+	if err != nil {
 		return err
 	}
 
-	// Download locked plugins to the versioned plugin cache
+	// If a lock file is found, run a build from that. Otherwise, just do
+	// an update.
+	lock := c.Lock
+	if lock == nil {
+		return m.updateV3()
+	}
+
+	req := c.Metadata.Dependencies
+
+	if req != nil {
+		if _, err := m.resolveRepoNamesV3(req); err != nil {
+			return err
+		}
+
+		// Verify lock digest matches
+		if sum, err := hashReqV3(req, lock.Dependencies); err != nil || sum != lock.Digest {
+			return errors.New("the lock file (Chart.lock) is out of sync with the dependencies file (Chart.yaml). Please update the dependencies")
+		}
+
+		// Check that all of the repos we're dependent on actually exist.
+		if err := m.hasAllReposV3(lock.Dependencies); err != nil {
+			return err
+		}
+
+		if !m.SkipUpdate {
+			// For each repo in the file, update the cached copy of that repo
+			if err := m.UpdateRepositories(); err != nil {
+				return err
+			}
+		}
+
+		// Now we need to fetch every package here into charts/
+		if err := m.downloadAllV3(lock.Dependencies); err != nil {
+			return err
+		}
+	}
+
+	// Download locked plugins to the content cache
 	if len(lock.Plugins) > 0 {
-		if err := m.downloadPlugins(lock.Plugins); err != nil {
+		if err := m.downloadPlugins(lockEntriesToPlugins(lock.Plugins)); err != nil {
 			return err
 		}
 	}
@@ -167,74 +230,66 @@ func (m *Manager) Build() error {
 // negotiate versions based on that. It will download the versions
 // from remote chart repositories unless SkipUpdate is true.
 func (m *Manager) Update() error {
+	// Detect chart version and dispatch to appropriate handler
+	apiVersion, err := m.detectChartAPIVersion()
+	if err != nil {
+		return err
+	}
+
+	if apiVersion == v3chart.APIVersionV3 {
+		return m.updateV3()
+	}
+	return m.updateV2()
+}
+
+// updateV2 handles dependency updates for v2 (and v1) charts.
+// These charts do not support plugins.
+func (m *Manager) updateV2() error {
 	c, err := m.loadChartDir()
 	if err != nil {
 		return err
 	}
 
 	req := c.Metadata.Dependencies
-	hasPlugins := len(c.Metadata.Plugins) > 0
 
-	// If no dependencies and no plugins, we consider this a successful completion.
-	if req == nil && !hasPlugins {
+	// If no dependencies, we consider this a successful completion.
+	if req == nil {
 		return nil
 	}
 
-	var lock *chart.Lock
-	var repoNames map[string]string
-
-	// Process chart dependencies if present
-	if req != nil {
-		// Get the names of the repositories the dependencies need that Helm is
-		// configured to know about.
-		repoNames, err = m.resolveRepoNames(req)
-		if err != nil {
-			return err
-		}
-
-		// For the repositories Helm is not configured to know about, ensure Helm
-		// has some information about them and, when possible, the index files
-		// locally.
-		// TODO(mattfarina): Repositories should be explicitly added by end users
-		// rather than automatic. In Helm v4 require users to add repositories. They
-		// should have to add them in order to make sure they are aware of the
-		// repositories and opt-in to any locations, for security.
-		repoNames, err = m.ensureMissingRepos(repoNames, req)
-		if err != nil {
-			return err
-		}
-
-		// For each of the repositories Helm is configured to know about, update
-		// the index information locally.
-		if !m.SkipUpdate {
-			if err := m.UpdateRepositories(); err != nil {
-				return err
-			}
-		}
-
-		// Now we need to find out which version of a chart best satisfies the
-		// dependencies in the Chart.yaml
-		lock, err = m.resolve(req, repoNames)
-		if err != nil {
-			return err
-		}
-
-		// Now we need to fetch every package here into charts/
-		if err := m.downloadAll(lock.Dependencies); err != nil {
-			return err
-		}
-	} else {
-		// No chart dependencies, but we have plugins - create an empty lock
-		lock = &chart.Lock{}
+	// Get the names of the repositories the dependencies need that Helm is
+	// configured to know about.
+	repoNames, err := m.resolveRepoNames(req)
+	if err != nil {
+		return err
 	}
 
-	// Download chart-defined plugins to the content cache
-	if hasPlugins {
-		if err := m.downloadPlugins(c.Metadata.Plugins); err != nil {
+	// For the repositories Helm is not configured to know about, ensure Helm
+	// has some information about them and, when possible, the index files
+	// locally.
+	repoNames, err = m.ensureMissingRepos(repoNames, req)
+	if err != nil {
+		return err
+	}
+
+	// For each of the repositories Helm is configured to know about, update
+	// the index information locally.
+	if !m.SkipUpdate {
+		if err := m.UpdateRepositories(); err != nil {
 			return err
 		}
-		// Copy plugins to the lock file
-		lock.Plugins = c.Metadata.Plugins
+	}
+
+	// Now we need to find out which version of a chart best satisfies the
+	// dependencies in the Chart.yaml
+	lock, err := m.resolve(req, repoNames)
+	if err != nil {
+		return err
+	}
+
+	// Now we need to fetch every package here into charts/
+	if err := m.downloadAll(lock.Dependencies); err != nil {
+		return err
 	}
 
 	// downloadAll might overwrite dependency version, recalculate lock digest
@@ -246,12 +301,119 @@ func (m *Manager) Update() error {
 
 	// If the lock file hasn't changed, don't write a new one.
 	oldLock := c.Lock
-	if oldLock != nil && oldLock.Digest == lock.Digest && pluginsUnchanged(oldLock.Plugins, lock.Plugins) {
+	if oldLock != nil && oldLock.Digest == lock.Digest {
 		return nil
 	}
 
 	// Finally, we need to write the lockfile.
 	return writeLock(m.ChartPath, lock, c.Metadata.APIVersion == chart.APIVersionV1)
+}
+
+// updateV3 handles dependency updates for v3 charts.
+// V3 charts support plugins in addition to dependencies.
+func (m *Manager) updateV3() error {
+	c, err := m.loadChartDirV3()
+	if err != nil {
+		return err
+	}
+
+	// Use accessor for version-agnostic plugin access
+	accessor, err := ci.NewAccessor(c)
+	if err != nil {
+		return err
+	}
+	plugins := accessor.Plugins()
+
+	req := c.Metadata.Dependencies
+	hasPlugins := len(plugins) > 0
+
+	// If no dependencies and no plugins, we consider this a successful completion.
+	if req == nil && !hasPlugins {
+		return nil
+	}
+
+	var lock *v3chart.Lock
+	var repoNames map[string]string
+
+	// Process chart dependencies if present
+	if req != nil {
+		// Get the names of the repositories the dependencies need
+		repoNames, err = m.resolveRepoNamesV3(req)
+		if err != nil {
+			return err
+		}
+
+		// Ensure missing repos have information
+		repoNames, err = m.ensureMissingReposV3(repoNames, req)
+		if err != nil {
+			return err
+		}
+
+		// Update repository information locally
+		if !m.SkipUpdate {
+			if err := m.UpdateRepositories(); err != nil {
+				return err
+			}
+		}
+
+		// Resolve dependency versions
+		lock, err = m.resolveV3(req, repoNames)
+		if err != nil {
+			return err
+		}
+
+		// Download dependencies
+		if err := m.downloadAllV3(lock.Dependencies); err != nil {
+			return err
+		}
+	} else {
+		// No chart dependencies, but we have plugins - create an empty lock
+		lock = &v3chart.Lock{}
+	}
+
+	// Download chart-defined plugins to the content cache
+	if hasPlugins {
+		if err := m.downloadPlugins(plugins); err != nil {
+			return err
+		}
+		// Copy plugins to the lock file
+		lock.Plugins = pluginsToV3Lock(plugins)
+	}
+
+	// Recalculate lock digest
+	newDigest, err := hashReqV3(req, lock.Dependencies)
+	if err != nil {
+		return err
+	}
+	lock.Digest = newDigest
+
+	// If the lock file hasn't changed, don't write a new one.
+	oldLock := c.Lock
+	if oldLock != nil && oldLock.Digest == lock.Digest && pluginsUnchanged(oldLock.Plugins, lock.Plugins) {
+		return nil
+	}
+
+	// Write the v3 lockfile
+	return writeLockV3(m.ChartPath, lock)
+}
+
+// detectChartAPIVersion reads Chart.yaml to determine the API version.
+func (m *Manager) detectChartAPIVersion() (string, error) {
+	chartFile := filepath.Join(m.ChartPath, "Chart.yaml")
+	data, err := os.ReadFile(chartFile)
+	if err != nil {
+		return "", fmt.Errorf("could not read Chart.yaml: %w", err)
+	}
+
+	type chartMeta struct {
+		APIVersion string `yaml:"apiVersion"`
+	}
+	var meta chartMeta
+	if err := yaml.Unmarshal(data, &meta); err != nil {
+		return "", fmt.Errorf("could not parse Chart.yaml: %w", err)
+	}
+
+	return meta.APIVersion, nil
 }
 
 func (m *Manager) loadChartDir() (*chart.Chart, error) {
@@ -264,7 +426,7 @@ func (m *Manager) loadChartDir() (*chart.Chart, error) {
 }
 
 // downloadPlugins downloads chart-defined plugins to the content cache.
-func (m *Manager) downloadPlugins(plugins []*chart.PluginDependency) error {
+func (m *Manager) downloadPlugins(plugins []ci.PluginDependency) error {
 	if len(plugins) == 0 {
 		return nil
 	}
@@ -273,16 +435,118 @@ func (m *Manager) downloadPlugins(plugins []*chart.PluginDependency) error {
 	downloader := NewPluginDownloader(m.Out, m.Getters)
 	downloader.PlainHTTP = m.PlainHTTP
 
-	// Convert to interface slice
-	deps := make([]ci.PluginDependency, len(plugins))
-	for i, p := range plugins {
-		deps[i] = p
-	}
-	return downloader.DownloadAll(deps)
+	return downloader.DownloadAll(plugins)
 }
 
-// pluginsUnchanged checks if two plugin lists are identical.
-func pluginsUnchanged(old, updated []*chart.PluginDependency) bool {
+// loadChartDirV3 loads a v3 chart from the chart path.
+func (m *Manager) loadChartDirV3() (*v3chart.Chart, error) {
+	if fi, err := os.Stat(m.ChartPath); err != nil {
+		return nil, fmt.Errorf("could not find %s: %w", m.ChartPath, err)
+	} else if !fi.IsDir() {
+		return nil, errors.New("only unpacked charts can be updated")
+	}
+	return v3loader.Load(m.ChartPath)
+}
+
+// resolveRepoNamesV3 is the v3 version of resolveRepoNames.
+func (m *Manager) resolveRepoNamesV3(req []*v3chart.Dependency) (map[string]string, error) {
+	// Convert to v2 dependencies for reuse of existing logic
+	v2Deps := make([]*chart.Dependency, len(req))
+	for i, d := range req {
+		v2Deps[i] = &chart.Dependency{
+			Name:       d.Name,
+			Repository: d.Repository,
+			Alias:      d.Alias,
+		}
+	}
+	return m.resolveRepoNames(v2Deps)
+}
+
+// ensureMissingReposV3 is the v3 version of ensureMissingRepos.
+func (m *Manager) ensureMissingReposV3(repoNames map[string]string, req []*v3chart.Dependency) (map[string]string, error) {
+	// Convert to v2 dependencies for reuse of existing logic
+	v2Deps := make([]*chart.Dependency, len(req))
+	for i, d := range req {
+		v2Deps[i] = &chart.Dependency{
+			Name:       d.Name,
+			Repository: d.Repository,
+			Alias:      d.Alias,
+		}
+	}
+	return m.ensureMissingRepos(repoNames, v2Deps)
+}
+
+// resolveV3 resolves v3 dependencies to a v3 lock.
+func (m *Manager) resolveV3(req []*v3chart.Dependency, repoNames map[string]string) (*v3chart.Lock, error) {
+	// Convert to v2 for resolver, then convert back
+	v2Deps := make([]*chart.Dependency, len(req))
+	for i, d := range req {
+		v2Deps[i] = &chart.Dependency{
+			Name:       d.Name,
+			Version:    d.Version,
+			Repository: d.Repository,
+			Alias:      d.Alias,
+			Condition:  d.Condition,
+			Tags:       d.Tags,
+		}
+	}
+
+	v2Lock, err := m.resolve(v2Deps, repoNames)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert v2 lock to v3 lock
+	v3Deps := make([]*v3chart.Dependency, len(v2Lock.Dependencies))
+	for i, d := range v2Lock.Dependencies {
+		v3Deps[i] = &v3chart.Dependency{
+			Name:       d.Name,
+			Version:    d.Version,
+			Repository: d.Repository,
+		}
+	}
+
+	return &v3chart.Lock{
+		Generated:    v2Lock.Generated,
+		Digest:       v2Lock.Digest,
+		Dependencies: v3Deps,
+	}, nil
+}
+
+// downloadAllV3 downloads v3 dependencies.
+func (m *Manager) downloadAllV3(deps []*v3chart.Dependency) error {
+	// Convert to v2 for download
+	v2Deps := make([]*chart.Dependency, len(deps))
+	for i, d := range deps {
+		v2Deps[i] = &chart.Dependency{
+			Name:       d.Name,
+			Version:    d.Version,
+			Repository: d.Repository,
+		}
+	}
+	return m.downloadAll(v2Deps)
+}
+
+// pluginsToV3Lock converts accessor plugins to v3 lock plugin entries.
+func pluginsToV3Lock(plugins []ci.PluginDependency) []*v3chart.PluginDependency {
+	if len(plugins) == 0 {
+		return nil
+	}
+	entries := make([]*v3chart.PluginDependency, len(plugins))
+	for i, p := range plugins {
+		entries[i] = &v3chart.PluginDependency{
+			Name:       p.GetName(),
+			Type:       p.GetType(),
+			Repository: p.GetRepository(),
+			Version:    p.GetVersion(),
+			Digest:     p.GetDigest(),
+		}
+	}
+	return entries
+}
+
+// pluginsUnchanged checks if two v3 plugin lists are identical.
+func pluginsUnchanged(old, updated []*v3chart.PluginDependency) bool {
 	if len(old) != len(updated) {
 		return false
 	}
@@ -296,6 +560,75 @@ func pluginsUnchanged(old, updated []*chart.PluginDependency) bool {
 	}
 	return true
 }
+
+// writeLockV3 writes a v3 lock file.
+func writeLockV3(chartPath string, lock *v3chart.Lock) error {
+	data, err := yaml.Marshal(lock)
+	if err != nil {
+		return err
+	}
+	dest := filepath.Join(chartPath, "Chart.lock")
+	return os.WriteFile(dest, data, 0644)
+}
+
+// hashReqV3 generates a hash of v3 dependencies by converting to v2 and using the existing hash function.
+func hashReqV3(req, lock []*v3chart.Dependency) (string, error) {
+	// Convert to v2 for hashing
+	v2Req := make([]*chart.Dependency, len(req))
+	for i, d := range req {
+		v2Req[i] = &chart.Dependency{
+			Name:       d.Name,
+			Version:    d.Version,
+			Repository: d.Repository,
+		}
+	}
+	v2Lock := make([]*chart.Dependency, len(lock))
+	for i, d := range lock {
+		v2Lock[i] = &chart.Dependency{
+			Name:       d.Name,
+			Version:    d.Version,
+			Repository: d.Repository,
+		}
+	}
+	return resolver.HashReq(v2Req, v2Lock)
+}
+
+// hasAllReposV3 ensures that all of the referenced deps are in the local repo cache.
+func (m *Manager) hasAllReposV3(deps []*v3chart.Dependency) error {
+	// Convert to v2 for reuse of existing logic
+	v2Deps := make([]*chart.Dependency, len(deps))
+	for i, d := range deps {
+		v2Deps[i] = &chart.Dependency{
+			Name:       d.Name,
+			Version:    d.Version,
+			Repository: d.Repository,
+		}
+	}
+	return m.hasAllRepos(v2Deps)
+}
+
+// lockEntriesToPlugins converts v3 lock plugin entries to accessor PluginDependency interface.
+func lockEntriesToPlugins(entries []*v3chart.PluginDependency) []ci.PluginDependency {
+	if len(entries) == 0 {
+		return nil
+	}
+	plugins := make([]ci.PluginDependency, len(entries))
+	for i, e := range entries {
+		plugins[i] = &v3PluginWrapper{e}
+	}
+	return plugins
+}
+
+// v3PluginWrapper wraps v3chart.PluginDependency to implement ci.PluginDependency interface.
+type v3PluginWrapper struct {
+	*v3chart.PluginDependency
+}
+
+func (w *v3PluginWrapper) GetName() string       { return w.Name }
+func (w *v3PluginWrapper) GetType() string       { return w.Type }
+func (w *v3PluginWrapper) GetRepository() string { return w.Repository }
+func (w *v3PluginWrapper) GetVersion() string    { return w.Version }
+func (w *v3PluginWrapper) GetDigest() string     { return w.Digest }
 
 // resolve takes a list of dependencies and translates them into an exact version to download.
 //
