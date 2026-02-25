@@ -33,10 +33,8 @@ import (
 
 // PluginRenderer renders chart files using render/v1 plugins.
 type PluginRenderer struct {
-	// PluginsDir is the directory where plugins are installed
-	PluginsDir string
 	// ContentCachePath is the path to the content cache directory.
-	// If set, plugins will be loaded from cached archives using their digest.
+	// Plugins are loaded from cached archives using their digest from Chart.lock.
 	ContentCachePath string
 
 	// SDK options for customizing plugin loading behavior
@@ -203,18 +201,23 @@ func (r *PluginRenderer) Render(
 	return rendered, nil
 }
 
-// loadPlugin loads a render plugin by name and version.
+// loadPlugin loads a render plugin by its content hash (digest).
+// Chart-defined plugins are identified by digest, not name/version.
 // It tries the following locations in order:
 // 1. Preloaded plugins (SDK: in-memory, for non-writable filesystems)
-// 2. Content cache (archive-based) using digest if available
-// 3. Globally installed plugin: $PLUGINS_DIR/<name>/ (fallback for helm plugin install)
+// 2. Content cache (archive-based) using digest from Chart.lock
 func (r *PluginRenderer) loadPlugin(dep ci.PluginDependency) (plugin.Plugin, error) {
 	var p plugin.Plugin
 	var err error
 	digest := dep.GetDigest()
 
+	// Plugin must have a digest from Chart.lock for deterministic loading
+	if digest == "" {
+		return nil, fmt.Errorf("plugin %q has no digest: run 'helm dependency update' to resolve plugin versions", dep.GetName())
+	}
+
 	// 1. Check preloaded plugins first (SDK: non-writable filesystem support)
-	if digest != "" && r.PreloadedPlugins != nil {
+	if r.PreloadedPlugins != nil {
 		if rawData, ok := r.PreloadedPlugins[digest]; ok {
 			p, err = r.loadPluginFromBytes(rawData)
 			if err == nil {
@@ -223,12 +226,12 @@ func (r *PluginRenderer) loadPlugin(dep ci.PluginDependency) (plugin.Plugin, err
 				}
 				return p, nil
 			}
-			// If preloaded plugin failed, fall through
+			// If preloaded plugin failed, fall through to cache
 		}
 	}
 
-	// 2. Try to load from content cache if digest is available
-	if digest != "" && r.ContentCachePath != "" {
+	// 2. Load from content cache using digest
+	if r.ContentCachePath != "" {
 		p, err = r.loadPluginFromCache(digest)
 		if err == nil {
 			// Verify plugin type matches
@@ -237,30 +240,10 @@ func (r *PluginRenderer) loadPlugin(dep ci.PluginDependency) (plugin.Plugin, err
 			}
 			return p, nil
 		}
-		// If cache loading failed, fall through to directory-based loading
 	}
 
-	// 3. Fallback to globally installed plugins (directory-based)
-	pluginPath := filepath.Join(r.PluginsDir, dep.GetName())
-	p, err = plugin.LoadDir(pluginPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load plugin %q: %w (hint: run 'helm dependency update' to download plugins)", dep.GetName(), err)
-	}
-
-	// Verify the installed plugin version matches what the chart requires
-	installedVersion := p.Metadata().Version
-	requiredVersion := dep.GetVersion()
-	if installedVersion != requiredVersion {
-		return nil, fmt.Errorf("plugin %q version mismatch: chart requires %s, but installed version is %s (at %s)",
-			dep.GetName(), requiredVersion, installedVersion, pluginPath)
-	}
-
-	// Verify plugin type matches
-	if p.Metadata().Type != "render/v1" {
-		return nil, fmt.Errorf("plugin %q is type %q, expected render/v1", dep.GetName(), p.Metadata().Type)
-	}
-
-	return p, nil
+	// Plugin not found in cache - user needs to download it
+	return nil, fmt.Errorf("plugin %q (digest: %s) not found in cache: run 'helm dependency update' to download plugins", dep.GetName(), digest[:12])
 }
 
 // loadPluginFromCache loads a plugin from the content cache using its digest.

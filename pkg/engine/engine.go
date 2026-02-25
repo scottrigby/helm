@@ -49,9 +49,10 @@ type Engine struct {
 	EnableDNS bool
 	// CustomTemplateFuncs is defined by users to provide custom template funcs
 	CustomTemplateFuncs template.FuncMap
-	// PluginsDir is the directory where chart-defined plugins are installed.
+	// ContentCachePath is the path to the content cache where chart-defined plugins are stored.
 	// If set, render plugins will be used for files matching their patterns.
-	PluginsDir string
+	// This is typically $HELM_CACHE_HOME/content/
+	ContentCachePath string
 }
 
 // New creates a new instance of Engine using the passed in rest config.
@@ -82,11 +83,11 @@ func New(config *rest.Config) Engine {
 // section contains a value named "bar", that value will be passed on to the
 // bar chart during render time.
 //
-// If the chart has render plugins defined and PluginsDir is set, render plugins
+// If the chart has render plugins defined and ContentCachePath is set, render plugins
 // will be used to process files matching their patterns.
 func (e Engine) Render(chrt ci.Charter, values common.Values) (map[string]string, error) {
 	// Check if we should use render plugins
-	if e.PluginsDir != "" {
+	if e.ContentCachePath != "" {
 		accessor, err := ci.NewAccessor(chrt)
 		if err == nil {
 			plugins := accessor.Plugins()
@@ -162,7 +163,7 @@ func (e Engine) renderWithPlugins(chrt ci.Charter, values common.Values, _ ci.Ac
 
 	// Create plugin renderer
 	pr := &render.PluginRenderer{
-		PluginsDir: e.PluginsDir,
+		ContentCachePath: e.ContentCachePath,
 	}
 
 	// Render with plugins

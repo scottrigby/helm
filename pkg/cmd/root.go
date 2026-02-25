@@ -117,8 +117,8 @@ func NewRootCmd(out io.Writer, args []string, logSetup func(bool)) (*cobra.Comma
 			loadReleasesInMemory(actionConfig)
 		}
 		actionConfig.SetHookOutputFunc(hookOutputWriter)
-		// Set the plugins directory for chart-defined render plugins
-		actionConfig.PluginsDir = settings.PluginsDirectory
+		// Set the content cache path for chart-defined plugins
+		actionConfig.ContentCachePath = settings.ContentCache
 	})
 	return cmd, nil
 }

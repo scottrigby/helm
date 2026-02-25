@@ -107,9 +107,10 @@ type Configuration struct {
 	// CustomTemplateFuncs is defined by users to provide custom template funcs
 	CustomTemplateFuncs template.FuncMap
 
-	// PluginsDir is the directory where chart-defined plugins are stored.
+	// ContentCachePath is the path to the content cache where chart-defined plugins are stored.
 	// If not set, render plugins will not be used.
-	PluginsDir string
+	// This is typically $HELM_CACHE_HOME/content/
+	ContentCachePath string
 
 	// HookOutputFunc called with container name and returns and expects writer that will receive the log output.
 	HookOutputFunc func(namespace, pod, container string) io.Writer
@@ -252,14 +253,14 @@ func (cfg *Configuration) renderResources(ch *chart.Chart, values common.Values,
 		e := engine.New(restConfig)
 		e.EnableDNS = enableDNS
 		e.CustomTemplateFuncs = cfg.CustomTemplateFuncs
-		e.PluginsDir = cfg.PluginsDir
+		e.ContentCachePath = cfg.ContentCachePath
 
 		files, err2 = e.Render(ch, values)
 	} else {
 		var e engine.Engine
 		e.EnableDNS = enableDNS
 		e.CustomTemplateFuncs = cfg.CustomTemplateFuncs
-		e.PluginsDir = cfg.PluginsDir
+		e.ContentCachePath = cfg.ContentCachePath
 
 		files, err2 = e.Render(ch, values)
 	}
