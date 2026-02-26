@@ -133,4 +133,5 @@ func addDependencySubcommandFlags(f *pflag.FlagSet, client *action.Dependency) {
 	f.BoolVar(&client.InsecureSkipTLSVerify, "insecure-skip-tls-verify", false, "skip tls certificate checks for the chart download")
 	f.BoolVar(&client.PlainHTTP, "plain-http", false, "use insecure HTTP connections for the chart download")
 	f.StringVar(&client.CaFile, "ca-file", "", "verify certificates of HTTPS-enabled servers using this CA bundle")
+	f.StringVar(&client.ArtifactHubEndpoint, "artifacthub-endpoint", "", "ArtifactHub API endpoint for plugin discovery (default: https://artifacthub.io)")
 }

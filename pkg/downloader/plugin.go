@@ -17,12 +17,14 @@ package downloader
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
 
+	"helm.sh/helm/v4/internal/artifacthub"
 	"helm.sh/helm/v4/pkg/chart"
 	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/helmpath"
@@ -44,6 +46,13 @@ type PluginDownloader struct {
 	// Cache specifies the cache implementation to use for storing plugin tarballs.
 	// If nil, a default DiskCache at ContentCache will be used.
 	Cache Cache
+
+	// ArtifactHubEndpoint is the ArtifactHub API URL for plugin discovery.
+	// Defaults to https://artifacthub.io if empty.
+	ArtifactHubEndpoint string
+
+	// artifactHubClient is the lazily-initialized ArtifactHub client.
+	artifactHubClient *artifacthub.Client
 }
 
 // NewPluginDownloader creates a new PluginDownloader with default settings.
@@ -136,4 +145,47 @@ func (d *PluginDownloader) Download(p chart.PluginDependency) error {
 // getOCIGetter returns an OCI getter from the providers.
 func (d *PluginDownloader) getOCIGetter() (getter.Getter, error) {
 	return d.Getters.ByScheme("oci")
+}
+
+// getArtifactHubClient returns a lazily-initialized ArtifactHub client.
+func (d *PluginDownloader) getArtifactHubClient() *artifacthub.Client {
+	if d.artifactHubClient == nil {
+		opts := []artifacthub.ClientOption{}
+		if d.ArtifactHubEndpoint != "" {
+			opts = append(opts, artifacthub.WithBaseURL(d.ArtifactHubEndpoint))
+		}
+		d.artifactHubClient = artifacthub.NewClient(opts...)
+	}
+	return d.artifactHubClient
+}
+
+// LookupPluginInfo queries ArtifactHub for plugin metadata.
+// This can be used for plugin discovery and signing key retrieval.
+// repoName is the ArtifactHub repository name (e.g., "ref-hip-chart-defined-plugins").
+func (d *PluginDownloader) LookupPluginInfo(repoName, pluginName, version string) (*artifacthub.PluginPackage, error) {
+	client := d.getArtifactHubClient()
+	ctx := context.Background()
+
+	pkg, err := client.GetPlugin(ctx, repoName, pluginName, version)
+	if err != nil {
+		slog.Debug("ArtifactHub lookup failed", "repo", repoName, "plugin", pluginName, "version", version, "error", err)
+		return nil, err
+	}
+
+	slog.Debug("ArtifactHub lookup succeeded", "repo", repoName, "plugin", pluginName, "version", version, "signed", pkg.Signed)
+	return pkg, nil
+}
+
+// GetSigningKey retrieves the signing key for a plugin from ArtifactHub.
+// Returns the signing key metadata, or an error if the plugin is not signed or not found.
+func (d *PluginDownloader) GetSigningKey(repoName, pluginName, version string) (*artifacthub.SignKey, error) {
+	client := d.getArtifactHubClient()
+	ctx := context.Background()
+
+	signKey, err := client.GetSigningKey(ctx, repoName, pluginName, version)
+	if err != nil {
+		return nil, err
+	}
+
+	return signKey, nil
 }

@@ -45,6 +45,9 @@ type Dependency struct {
 	CaFile                string
 	InsecureSkipTLSVerify bool
 	PlainHTTP             bool
+	// ArtifactHubEndpoint is the URL for plugin discovery via ArtifactHub API.
+	// Defaults to https://artifacthub.io if not set.
+	ArtifactHubEndpoint string
 }
 
 // NewDependency creates a new Dependency object with the given configuration.

@@ -85,6 +85,8 @@ type Manager struct {
 	ContentCache string
 	// PlainHTTP enables plain HTTP for OCI registries (for local/insecure registries)
 	PlainHTTP bool
+	// ArtifactHubEndpoint is the URL for plugin discovery via ArtifactHub API.
+	ArtifactHubEndpoint string
 }
 
 // Build rebuilds a local charts directory from a lockfile.

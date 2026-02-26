@@ -65,17 +65,18 @@ func newDependencyUpdateCmd(_ *action.Configuration, out io.Writer) *cobra.Comma
 			}
 
 			man := &downloader.Manager{
-				Out:              out,
-				ChartPath:        chartpath,
-				Keyring:          client.Keyring,
-				SkipUpdate:       client.SkipRefresh,
-				Getters:          getter.All(settings),
-				RegistryClient:   registryClient,
-				RepositoryConfig: settings.RepositoryConfig,
-				RepositoryCache:  settings.RepositoryCache,
-				ContentCache:     settings.ContentCache,
-				Debug:            settings.Debug,
-				PlainHTTP:        client.PlainHTTP,
+				Out:                 out,
+				ChartPath:           chartpath,
+				Keyring:             client.Keyring,
+				SkipUpdate:          client.SkipRefresh,
+				Getters:             getter.All(settings),
+				RegistryClient:      registryClient,
+				RepositoryConfig:    settings.RepositoryConfig,
+				RepositoryCache:     settings.RepositoryCache,
+				ContentCache:        settings.ContentCache,
+				Debug:               settings.Debug,
+				PlainHTTP:           client.PlainHTTP,
+				ArtifactHubEndpoint: client.ArtifactHubEndpoint,
 			}
 			if client.Verify {
 				man.Verify = downloader.VerifyAlways
