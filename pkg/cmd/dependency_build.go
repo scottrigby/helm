@@ -73,6 +73,11 @@ func newDependencyBuildCmd(out io.Writer) *cobra.Command {
 				ContentCache:        settings.ContentCache,
 				Debug:               settings.Debug,
 				ArtifactHubEndpoint: client.ArtifactHubEndpoint,
+				// Plugin trust verification
+				In:            os.Stdin,
+				VerifyPlugins: client.VerifyPlugins,
+				TrustUnsigned: client.TrustUnsigned,
+				AutoApprove:   client.AutoApprove,
 			}
 			if client.Verify {
 				man.Verify = downloader.VerifyIfPossible

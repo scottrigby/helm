@@ -87,6 +87,19 @@ type Manager struct {
 	PlainHTTP bool
 	// ArtifactHubEndpoint is the URL for plugin discovery via ArtifactHub API.
 	ArtifactHubEndpoint string
+
+	// Plugin trust verification options
+
+	// In is used to read user input for trust prompts.
+	// If nil, prompts are skipped and plugins are rejected unless auto-trusted.
+	In io.Reader
+	// VerifyPlugins enables plugin verification via ArtifactHub.
+	VerifyPlugins bool
+	// TrustUnsigned allows downloading unsigned plugins without prompting.
+	TrustUnsigned bool
+	// AutoApprove skips all trust prompts and allows all plugins.
+	// This is intended for CI environments where interactive prompts are not possible.
+	AutoApprove bool
 }
 
 // Build rebuilds a local charts directory from a lockfile.
@@ -439,6 +452,11 @@ func (m *Manager) downloadPlugins(plugins []ci.PluginDependency) ([]DownloadResu
 	fmt.Fprintf(m.Out, "Downloading %d plugins\n", len(plugins))
 	downloader := NewPluginDownloader(m.Out, m.Getters)
 	downloader.PlainHTTP = m.PlainHTTP
+	downloader.ArtifactHubEndpoint = m.ArtifactHubEndpoint
+	downloader.In = m.In
+	downloader.VerifyPlugins = m.VerifyPlugins
+	downloader.TrustUnsigned = m.TrustUnsigned
+	downloader.AutoApprove = m.AutoApprove
 
 	return downloader.DownloadAll(plugins)
 }

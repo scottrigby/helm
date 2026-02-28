@@ -134,4 +134,9 @@ func addDependencySubcommandFlags(f *pflag.FlagSet, client *action.Dependency) {
 	f.BoolVar(&client.PlainHTTP, "plain-http", false, "use insecure HTTP connections for the chart download")
 	f.StringVar(&client.CaFile, "ca-file", "", "verify certificates of HTTPS-enabled servers using this CA bundle")
 	f.StringVar(&client.ArtifactHubEndpoint, "artifacthub-endpoint", "", "ArtifactHub API endpoint for plugin discovery (default: https://artifacthub.io)")
+
+	// Plugin trust verification flags
+	f.BoolVar(&client.VerifyPlugins, "verify-plugins", false, "verify chart-defined plugins via ArtifactHub before downloading")
+	f.BoolVar(&client.TrustUnsigned, "trust-unsigned", false, "trust unsigned plugins without prompting (use with caution)")
+	f.BoolVar(&client.AutoApprove, "auto-approve", false, "skip all plugin trust prompts (for CI environments)")
 }

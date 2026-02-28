@@ -18,6 +18,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -77,6 +78,11 @@ func newDependencyUpdateCmd(_ *action.Configuration, out io.Writer) *cobra.Comma
 				Debug:               settings.Debug,
 				PlainHTTP:           client.PlainHTTP,
 				ArtifactHubEndpoint: client.ArtifactHubEndpoint,
+				// Plugin trust verification
+				In:            os.Stdin,
+				VerifyPlugins: client.VerifyPlugins,
+				TrustUnsigned: client.TrustUnsigned,
+				AutoApprove:   client.AutoApprove,
 			}
 			if client.Verify {
 				man.Verify = downloader.VerifyAlways

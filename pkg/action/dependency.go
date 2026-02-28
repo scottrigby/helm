@@ -48,6 +48,19 @@ type Dependency struct {
 	// ArtifactHubEndpoint is the URL for plugin discovery via ArtifactHub API.
 	// Defaults to https://artifacthub.io if not set.
 	ArtifactHubEndpoint string
+
+	// Plugin trust verification options
+
+	// VerifyPlugins enables plugin verification via ArtifactHub.
+	// When enabled, plugins are looked up on ArtifactHub to check signatures
+	// and publisher verification status.
+	VerifyPlugins bool
+	// TrustUnsigned allows downloading unsigned plugins without prompting.
+	// Use with caution - this bypasses signature verification.
+	TrustUnsigned bool
+	// AutoApprove skips all trust prompts and allows all plugins.
+	// This is intended for CI environments where interactive prompts are not possible.
+	AutoApprove bool
 }
 
 // NewDependency creates a new Dependency object with the given configuration.

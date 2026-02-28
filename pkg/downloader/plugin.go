@@ -34,6 +34,9 @@ import (
 type PluginDownloader struct {
 	// Out is used to print warnings and notifications.
 	Out io.Writer
+	// In is used to read user input for trust prompts.
+	// If nil, prompts are skipped and plugins are rejected unless auto-trusted.
+	In io.Reader
 	// Getters collection for the operation
 	Getters getter.Providers
 	// PlainHTTP enables plain HTTP for OCI registries (for local/insecure registries)
@@ -50,6 +53,23 @@ type PluginDownloader struct {
 	// ArtifactHubEndpoint is the ArtifactHub API URL for plugin discovery.
 	// Defaults to https://artifacthub.io if empty.
 	ArtifactHubEndpoint string
+
+	// VerifyPlugins enables plugin verification via ArtifactHub.
+	// When enabled, plugins are looked up on ArtifactHub to check signatures
+	// and publisher verification status.
+	VerifyPlugins bool
+
+	// TrustUnsigned allows downloading unsigned plugins without prompting.
+	// Use with caution - this bypasses signature verification.
+	TrustUnsigned bool
+
+	// TrustConfig is the trusted publishers configuration.
+	// If nil, it will be loaded from disk when needed.
+	TrustConfig *TrustConfig
+
+	// AutoApprove skips all trust prompts and allows all plugins.
+	// This is intended for CI environments where interactive prompts are not possible.
+	AutoApprove bool
 
 	// artifactHubClient is the lazily-initialized ArtifactHub client.
 	artifactHubClient *artifacthub.Client
@@ -116,6 +136,17 @@ func (d *PluginDownloader) Download(p chart.PluginDependency) (string, error) {
 		}
 	}
 
+	// Verify plugin trust before downloading
+	if d.VerifyPlugins {
+		trustInfo := d.getPluginTrustInfo(p)
+		DisplayPluginSignatureStatus(d.Out, trustInfo)
+
+		// Check if plugin is trusted
+		if err := d.checkPluginTrust(trustInfo); err != nil {
+			return "", err
+		}
+	}
+
 	// Download from OCI registry
 	fmt.Fprintf(d.Out, "Downloading plugin %s version %s from %s\n", p.GetName(), p.GetVersion(), p.GetRepository())
 
@@ -156,6 +187,122 @@ func (d *PluginDownloader) Download(p chart.PluginDependency) (string, error) {
 	slog.Debug("stored plugin in content cache", "name", p.GetName(), "version", p.GetVersion(), "digest", digestStr, "path", cachePath)
 	fmt.Fprintf(d.Out, "Plugin %s version %s cached (%s)\n", p.GetName(), p.GetVersion(), digestStr[:12])
 	return digestStr, nil
+}
+
+// getPluginTrustInfo retrieves trust information for a plugin.
+func (d *PluginDownloader) getPluginTrustInfo(p chart.PluginDependency) *PluginTrustInfo {
+	info := &PluginTrustInfo{
+		Name:                p.GetName(),
+		Version:             p.GetVersion(),
+		Repository:          p.GetRepository(),
+		ArtifactHubRepoName: ParseArtifactHubRepoName(p.GetRepository()),
+	}
+
+	// Try to look up plugin on ArtifactHub
+	if info.ArtifactHubRepoName != "" {
+		pkg, err := d.LookupPluginInfo(info.ArtifactHubRepoName, p.GetName(), p.GetVersion())
+		if err == nil && pkg != nil {
+			info.Package = pkg
+			info.Signed = pkg.Signed
+			info.Signatures = pkg.Signatures
+			if pkg.SignKey != nil {
+				info.Fingerprint = pkg.SignKey.Fingerprint
+			}
+			if pkg.Repository != nil {
+				info.PublisherName = pkg.Repository.DisplayName
+				if info.PublisherName == "" {
+					info.PublisherName = pkg.Repository.Name
+				}
+				info.VerifiedPublisher = pkg.Repository.VerifiedPublisher
+				info.Official = pkg.Repository.Official
+			}
+		} else {
+			slog.Debug("failed to lookup plugin on ArtifactHub", "plugin", p.GetName(), "error", err)
+		}
+	}
+
+	// Check if publisher is trusted locally
+	if d.TrustConfig != nil && info.ArtifactHubRepoName != "" {
+		info.TrustedPublisher = d.TrustConfig.IsTrustedPublisher(info.ArtifactHubRepoName, info.Fingerprint)
+	}
+
+	return info
+}
+
+// checkPluginTrust checks if a plugin should be trusted and prompts the user if needed.
+func (d *PluginDownloader) checkPluginTrust(info *PluginTrustInfo) error {
+	// Auto-approve mode - allow everything
+	if d.AutoApprove {
+		slog.Debug("auto-approving plugin", "plugin", info.Name)
+		return nil
+	}
+
+	// Trusted publisher - allow without prompt
+	if info.TrustedPublisher {
+		slog.Debug("plugin from trusted publisher", "plugin", info.Name, "publisher", info.PublisherName)
+		return nil
+	}
+
+	// Verified publisher with signature - allow without prompt
+	if info.VerifiedPublisher && info.Signed {
+		slog.Debug("plugin signed by verified publisher", "plugin", info.Name, "publisher", info.PublisherName)
+		return nil
+	}
+
+	// Unsigned plugin with TrustUnsigned flag - allow
+	if !info.Signed && d.TrustUnsigned {
+		slog.Debug("allowing unsigned plugin with --trust-unsigned", "plugin", info.Name)
+		return nil
+	}
+
+	// Interactive mode - prompt for trust
+	if d.In != nil {
+		decision, err := PromptForTrust(d.Out, d.In, info)
+		if err != nil {
+			return fmt.Errorf("failed to prompt for trust: %w", err)
+		}
+
+		switch decision {
+		case TrustDecisionAllow:
+			return nil
+		case TrustDecisionTrustPublisher:
+			// Save to trusted publishers config
+			if err := d.addTrustedPublisher(info); err != nil {
+				fmt.Fprintf(d.Out, "Warning: failed to save trusted publisher: %v\n", err)
+			} else {
+				fmt.Fprintf(d.Out, "Added %s to trusted publishers\n", info.PublisherName)
+			}
+			return nil
+		case TrustDecisionDeny:
+			return fmt.Errorf("plugin %s v%s not trusted by user", info.Name, info.Version)
+		}
+	}
+
+	// Non-interactive mode without auto-approve - reject unsigned/unverified plugins
+	if !info.Signed {
+		return fmt.Errorf("plugin %s v%s is unsigned; use --trust-unsigned to allow", info.Name, info.Version)
+	}
+
+	if !info.VerifiedPublisher && !info.TrustedPublisher {
+		return fmt.Errorf("plugin %s v%s is from unverified publisher; use interactive mode or add to trusted publishers", info.Name, info.Version)
+	}
+
+	return nil
+}
+
+// addTrustedPublisher adds a publisher to the trusted publishers config.
+func (d *PluginDownloader) addTrustedPublisher(info *PluginTrustInfo) error {
+	// Load current config
+	config, err := LoadTrustConfig()
+	if err != nil {
+		return err
+	}
+
+	// Add the publisher
+	config.AddTrustedPublisher(info.PublisherName, info.ArtifactHubRepoName, info.Fingerprint)
+
+	// Save config
+	return SaveTrustConfig(config)
 }
 
 // getOCIGetter returns an OCI getter from the providers.
