@@ -183,11 +183,12 @@ const MaxPluginFileSize int64 = 20 * 1024 * 1024 // 20 MiB
 
 // LoadArchive loads a plugin from a gzipped tar archive reader.
 // This reads plugin.yaml and the .wasm file into memory without extracting to disk.
-// Uses flat archive loading since plugin tarballs don't have a parent directory.
+// Plugin archives must include a parent directory matching the plugin name,
+// following the same format as chart archives.
 func LoadArchive(in io.Reader) (*ArchiveData, error) {
-	// Use flat archive loading for plugins (no parent directory like charts)
-	// and a higher file size limit (Wasm binaries can be large)
-	files, err := archive.LoadFlatArchiveFilesWithLimits(in, 0, MaxPluginFileSize)
+	// Use standard archive loading (with parent directory) and a higher file size
+	// limit since Wasm binaries can be larger than typical chart files.
+	files, err := archive.LoadArchiveFilesWithLimits(in, 0, MaxPluginFileSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load plugin archive: %w", err)
 	}

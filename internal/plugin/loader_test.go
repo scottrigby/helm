@@ -365,19 +365,23 @@ runtime: subprocess
 }
 
 // createPluginArchive creates a gzipped tar archive for testing LoadArchive.
-// The archive format is flat (no parent directory): plugin.yaml, plugin.wasm
-// This matches the format used by plugin tarballs published to OCI registries.
+// The archive format matches chart archives: files are under a parent directory
+// named after the plugin (e.g., test-plugin/plugin.yaml, test-plugin/plugin.wasm).
+// This matches the format produced by "helm plugin package".
 func createPluginArchive(t *testing.T, pluginYaml []byte, wasmData []byte) *bytes.Buffer {
 	t.Helper()
+
+	// Default plugin name for test archives
+	pluginName := "test-plugin"
 
 	var buf bytes.Buffer
 	gw := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(gw)
 
-	// Add plugin.yaml (flat, no directory prefix)
+	// Add plugin.yaml (with parent directory)
 	if len(pluginYaml) > 0 {
 		hdr := &tar.Header{
-			Name: "plugin.yaml",
+			Name: pluginName + "/plugin.yaml",
 			Mode: 0644,
 			Size: int64(len(pluginYaml)),
 		}
@@ -386,10 +390,10 @@ func createPluginArchive(t *testing.T, pluginYaml []byte, wasmData []byte) *byte
 		require.NoError(t, err)
 	}
 
-	// Add plugin.wasm (flat, no directory prefix)
+	// Add plugin.wasm (with parent directory)
 	if len(wasmData) > 0 {
 		hdr := &tar.Header{
-			Name: "plugin.wasm",
+			Name: pluginName + "/plugin.wasm",
 			Mode: 0644,
 			Size: int64(len(wasmData)),
 		}

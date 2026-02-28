@@ -90,8 +90,9 @@ func (e Engine) Render(chrt ci.Charter, values common.Values) (map[string]string
 	if e.ContentCachePath != "" {
 		accessor, err := ci.NewAccessor(chrt)
 		if err == nil {
-			plugins := accessor.Plugins()
-			if hasRenderPlugins(plugins) {
+			// Check if accessor supports plugins (v3+ charts only)
+			pluginAccessor, ok := accessor.(ci.PluginAccessor)
+			if ok && hasRenderPlugins(pluginAccessor.Plugins()) {
 				// Use render plugins for files they manage
 				pluginRendered, err := e.renderWithPlugins(chrt, values, accessor)
 				if err != nil {

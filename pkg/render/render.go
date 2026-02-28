@@ -101,8 +101,15 @@ func (r *PluginRenderer) Render(
 		return nil, fmt.Errorf("failed to access chart: %w", err)
 	}
 
+	// Check if accessor supports plugins (v3+ charts only)
+	pluginAccessor, ok := accessor.(ci.PluginAccessor)
+	if !ok {
+		// Accessor doesn't support plugins, return empty (caller should use default engine)
+		return nil, nil
+	}
+
 	// Get plugins from the accessor
-	plugins := accessor.Plugins()
+	plugins := pluginAccessor.Plugins()
 
 	// If no plugins defined, return empty (caller should use default engine)
 	if len(plugins) == 0 {

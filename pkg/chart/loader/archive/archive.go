@@ -206,14 +206,6 @@ func LoadArchiveFilesWithLimits(in io.Reader, maxTotalSize, maxFileSize int64) (
 			delimiter = "\\"
 		}
 
-		// Skip macOS AppleDouble resource fork files (e.g., ._plugin.yaml)
-		// These files are created by macOS tar and should be ignored.
-		// Check the base name of the original path before splitting.
-		baseName := path.Base(hd.Name)
-		if strings.HasPrefix(baseName, "._") {
-			continue
-		}
-
 		parts := strings.Split(hd.Name, delimiter)
 		n := strings.Join(parts[1:], delimiter)
 		n = strings.ReplaceAll(n, delimiter, "/")
@@ -230,96 +222,6 @@ func LoadArchiveFilesWithLimits(in io.Reader, maxTotalSize, maxFileSize int64) (
 			return nil, errors.New("archive illegally references parent directory")
 		}
 
-		if drivePathPattern.MatchString(n) {
-			return nil, errors.New("archive contains illegally named files")
-		}
-
-		if hd.Size > remainingSize {
-			return nil, fmt.Errorf("decompressed archive is larger than the maximum size %d", maxTotalSize)
-		}
-
-		if hd.Size > maxFileSize {
-			return nil, fmt.Errorf("decompressed file %q is larger than the maximum file size %d", hd.Name, maxFileSize)
-		}
-
-		limitedReader := io.LimitReader(tr, remainingSize)
-
-		bytesWritten, err := io.Copy(b, limitedReader)
-		if err != nil {
-			return nil, err
-		}
-
-		remainingSize -= bytesWritten
-		if bytesWritten < hd.Size || remainingSize <= 0 {
-			return nil, fmt.Errorf("decompressed archive is larger than the maximum size %d", maxTotalSize)
-		}
-
-		data := bytes.TrimPrefix(b.Bytes(), utf8bom)
-		files = append(files, &BufferedFile{Name: n, ModTime: hd.ModTime, Data: data})
-		b.Reset()
-	}
-
-	if len(files) == 0 {
-		return nil, errors.New("no files in archive")
-	}
-	return files, nil
-}
-
-// LoadFlatArchiveFilesWithLimits loads a flat archive (no parent directory) with custom size limits.
-// This is used for plugin archives which don't have a parent directory like chart archives.
-// Plugin archives contain files directly at the root (e.g., plugin.yaml, plugin.wasm).
-func LoadFlatArchiveFilesWithLimits(in io.Reader, maxTotalSize, maxFileSize int64) ([]*BufferedFile, error) {
-	if maxTotalSize <= 0 {
-		maxTotalSize = MaxDecompressedChartSize
-	}
-	if maxFileSize <= 0 {
-		maxFileSize = MaxDecompressedFileSize
-	}
-
-	unzipped, err := gzip.NewReader(in)
-	if err != nil {
-		return nil, err
-	}
-	defer unzipped.Close()
-
-	files := []*BufferedFile{}
-	tr := tar.NewReader(unzipped)
-	remainingSize := maxTotalSize
-	for {
-		b := bytes.NewBuffer(nil)
-		hd, err := tr.Next()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		if hd.FileInfo().IsDir() {
-			continue
-		}
-
-		switch hd.Typeflag {
-		case tar.TypeXGlobalHeader, tar.TypeXHeader:
-			continue
-		}
-
-		// Skip macOS AppleDouble resource fork files (e.g., ._plugin.yaml)
-		baseName := path.Base(hd.Name)
-		if strings.HasPrefix(baseName, "._") {
-			continue
-		}
-
-		// For flat archives, use the filename directly (cleaned)
-		n := path.Clean(hd.Name)
-
-		// Security checks
-		if path.IsAbs(n) {
-			return nil, errors.New("archive illegally contains absolute paths")
-		}
-		if strings.HasPrefix(n, "..") {
-			return nil, errors.New("archive illegally references parent directory")
-		}
 		if drivePathPattern.MatchString(n) {
 			return nil, errors.New("archive contains illegally named files")
 		}

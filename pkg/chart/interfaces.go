@@ -35,6 +35,8 @@ type PluginDependency interface {
 	GetDigest() string
 }
 
+// Accessor provides version-agnostic access to chart data.
+// This interface is intentionally kept stable for backwards compatibility.
 type Accessor interface {
 	Name() string
 	IsRoot() bool
@@ -45,12 +47,25 @@ type Accessor interface {
 	IsLibraryChart() bool
 	Dependencies() []Charter
 	MetaDependencies() []Dependency
-	// Plugins returns the list of plugin dependencies for this chart.
-	// These are processed sequentially in list order.
-	Plugins() []PluginDependency
 	Values() map[string]any
 	Schema() []byte
 	Deprecated() bool
+}
+
+// PluginAccessor extends Accessor with plugin support.
+// Use type assertion to check if an Accessor supports plugins:
+//
+//	if pa, ok := accessor.(PluginAccessor); ok {
+//	    plugins := pa.Plugins()
+//	}
+//
+// This pattern maintains backwards compatibility with existing Accessor implementations.
+type PluginAccessor interface {
+	Accessor
+	// Plugins returns the list of plugin dependencies for this chart.
+	// These are processed sequentially in list order.
+	// Returns nil for chart API versions that don't support plugins.
+	Plugins() []PluginDependency
 }
 
 type DependencyAccessor interface {

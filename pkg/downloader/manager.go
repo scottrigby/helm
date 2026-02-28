@@ -338,7 +338,12 @@ func (m *Manager) updateV3() error {
 	if err != nil {
 		return err
 	}
-	plugins := accessor.Plugins()
+
+	// Check if accessor supports plugins (v3+ charts only)
+	var plugins []ci.PluginDependency
+	if pluginAccessor, ok := accessor.(ci.PluginAccessor); ok {
+		plugins = pluginAccessor.Plugins()
+	}
 
 	req := c.Metadata.Dependencies
 	hasPlugins := len(plugins) > 0
