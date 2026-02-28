@@ -160,6 +160,103 @@ func LoadArchiveFiles(in io.Reader) ([]*BufferedFile, error) {
 	return files, nil
 }
 
+// LoadArchiveFilesWithLimits is like LoadArchiveFiles but allows specifying custom size limits.
+// This is useful for loading plugin archives which may contain larger files (like .wasm binaries)
+// than what is appropriate for chart files.
+// If maxTotalSize is 0, MaxDecompressedChartSize is used.
+// If maxFileSize is 0, MaxDecompressedFileSize is used.
+func LoadArchiveFilesWithLimits(in io.Reader, maxTotalSize, maxFileSize int64) ([]*BufferedFile, error) {
+	if maxTotalSize <= 0 {
+		maxTotalSize = MaxDecompressedChartSize
+	}
+	if maxFileSize <= 0 {
+		maxFileSize = MaxDecompressedFileSize
+	}
+
+	unzipped, err := gzip.NewReader(in)
+	if err != nil {
+		return nil, err
+	}
+	defer unzipped.Close()
+
+	files := []*BufferedFile{}
+	tr := tar.NewReader(unzipped)
+	remainingSize := maxTotalSize
+	for {
+		b := bytes.NewBuffer(nil)
+		hd, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		if hd.FileInfo().IsDir() {
+			continue
+		}
+
+		switch hd.Typeflag {
+		case tar.TypeXGlobalHeader, tar.TypeXHeader:
+			continue
+		}
+
+		delimiter := "/"
+		if strings.ContainsRune(hd.Name, '\\') {
+			delimiter = "\\"
+		}
+
+		parts := strings.Split(hd.Name, delimiter)
+		n := strings.Join(parts[1:], delimiter)
+		n = strings.ReplaceAll(n, delimiter, "/")
+
+		if path.IsAbs(n) {
+			return nil, errors.New("archive illegally contains absolute paths")
+		}
+
+		n = path.Clean(n)
+		if n == "." {
+			return nil, fmt.Errorf("archive illegally contains content outside the base directory: %q", hd.Name)
+		}
+		if strings.HasPrefix(n, "..") {
+			return nil, errors.New("archive illegally references parent directory")
+		}
+
+		if drivePathPattern.MatchString(n) {
+			return nil, errors.New("archive contains illegally named files")
+		}
+
+		if hd.Size > remainingSize {
+			return nil, fmt.Errorf("decompressed archive is larger than the maximum size %d", maxTotalSize)
+		}
+
+		if hd.Size > maxFileSize {
+			return nil, fmt.Errorf("decompressed file %q is larger than the maximum file size %d", hd.Name, maxFileSize)
+		}
+
+		limitedReader := io.LimitReader(tr, remainingSize)
+
+		bytesWritten, err := io.Copy(b, limitedReader)
+		if err != nil {
+			return nil, err
+		}
+
+		remainingSize -= bytesWritten
+		if bytesWritten < hd.Size || remainingSize <= 0 {
+			return nil, fmt.Errorf("decompressed archive is larger than the maximum size %d", maxTotalSize)
+		}
+
+		data := bytes.TrimPrefix(b.Bytes(), utf8bom)
+		files = append(files, &BufferedFile{Name: n, ModTime: hd.ModTime, Data: data})
+		b.Reset()
+	}
+
+	if len(files) == 0 {
+		return nil, errors.New("no files in archive")
+	}
+	return files, nil
+}
+
 // ensureArchive's job is to return an informative error if the file does not appear to be a gzipped archive.
 //
 // Sometimes users will provide a values.yaml for an argument where a chart is expected. One common occurrence

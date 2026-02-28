@@ -177,12 +177,16 @@ type ArchiveData struct {
 	WasmData []byte
 }
 
+// MaxPluginFileSize is the maximum size of a single file in a plugin archive.
+// This is larger than the chart file limit because Wasm binaries can be larger.
+const MaxPluginFileSize int64 = 20 * 1024 * 1024 // 20 MiB
+
 // LoadArchive loads a plugin from a gzipped tar archive reader.
 // This reads plugin.yaml and the .wasm file into memory without extracting to disk.
-// Uses the shared archive.LoadArchiveFiles function for consistent archive handling.
+// Uses the shared archive loader with a higher file size limit for Wasm binaries.
 func LoadArchive(in io.Reader) (*ArchiveData, error) {
-	// Use the shared archive loader (same as charts use)
-	files, err := archive.LoadArchiveFiles(in)
+	// Use a higher file size limit for plugins (Wasm binaries can be large)
+	files, err := archive.LoadArchiveFilesWithLimits(in, 0, MaxPluginFileSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load plugin archive: %w", err)
 	}

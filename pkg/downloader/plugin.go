@@ -64,20 +64,36 @@ func NewPluginDownloader(out io.Writer, getters getter.Providers) *PluginDownloa
 	}
 }
 
+// DownloadResult holds the download result for a plugin.
+type DownloadResult struct {
+	Name    string
+	Version string
+	Digest  string
+}
+
 // DownloadAll downloads all plugins from the given list to the content cache.
-func (d *PluginDownloader) DownloadAll(plugins []chart.PluginDependency) error {
+// It returns a slice of DownloadResults containing the digest for each plugin.
+func (d *PluginDownloader) DownloadAll(plugins []chart.PluginDependency) ([]DownloadResult, error) {
+	results := make([]DownloadResult, 0, len(plugins))
 	for _, p := range plugins {
-		if err := d.Download(p); err != nil {
-			return fmt.Errorf("failed to download plugin %q: %w", p.GetName(), err)
+		digest, err := d.Download(p)
+		if err != nil {
+			return nil, fmt.Errorf("failed to download plugin %q: %w", p.GetName(), err)
 		}
+		results = append(results, DownloadResult{
+			Name:    p.GetName(),
+			Version: p.GetVersion(),
+			Digest:  digest,
+		})
 	}
-	return nil
+	return results, nil
 }
 
 // Download downloads a single plugin to the content-addressed cache.
 // Plugin tarballs are stored at $HELM_CACHE_HOME/content/{digest}.plugin
 // and loaded directly from the archive at render time (no extraction needed).
-func (d *PluginDownloader) Download(p chart.PluginDependency) error {
+// Returns the computed SHA256 digest of the plugin tarball.
+func (d *PluginDownloader) Download(p chart.PluginDependency) (string, error) {
 	// Initialize cache if not set
 	if d.Cache == nil {
 		if d.ContentCache == "" {
@@ -95,7 +111,7 @@ func (d *PluginDownloader) Download(p chart.PluginDependency) error {
 			copy(digest32[:], digestBytes)
 			if _, err := d.Cache.Get(digest32, CachePlugin); err == nil {
 				slog.Debug("plugin already in content cache", "name", p.GetName(), "version", p.GetVersion(), "digest", p.GetDigest())
-				return nil
+				return p.GetDigest(), nil
 			}
 		}
 	}
@@ -105,7 +121,7 @@ func (d *PluginDownloader) Download(p chart.PluginDependency) error {
 
 	g, err := d.getOCIGetter()
 	if err != nil {
-		return fmt.Errorf("failed to get OCI getter: %w", err)
+		return "", fmt.Errorf("failed to get OCI getter: %w", err)
 	}
 
 	// Construct the full OCI reference with version tag
@@ -122,7 +138,7 @@ func (d *PluginDownloader) Download(p chart.PluginDependency) error {
 	// Download the plugin
 	data, err := g.Get(ociRef, getterOpts...)
 	if err != nil {
-		return fmt.Errorf("failed to download plugin from %s: %w", ociRef, err)
+		return "", fmt.Errorf("failed to download plugin from %s: %w", ociRef, err)
 	}
 	pluginData := data.Bytes()
 
@@ -134,12 +150,12 @@ func (d *PluginDownloader) Download(p chart.PluginDependency) error {
 	// Store in content cache
 	cachePath, err := d.Cache.Put(digest32, bytes.NewReader(pluginData), CachePlugin)
 	if err != nil {
-		return fmt.Errorf("failed to cache plugin tarball: %w", err)
+		return "", fmt.Errorf("failed to cache plugin tarball: %w", err)
 	}
 
 	slog.Debug("stored plugin in content cache", "name", p.GetName(), "version", p.GetVersion(), "digest", digestStr, "path", cachePath)
 	fmt.Fprintf(d.Out, "Plugin %s version %s cached (%s)\n", p.GetName(), p.GetVersion(), digestStr[:12])
-	return nil
+	return digestStr, nil
 }
 
 // getOCIGetter returns an OCI getter from the providers.

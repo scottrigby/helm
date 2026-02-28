@@ -218,7 +218,8 @@ func (m *Manager) buildV3() error {
 
 	// Download locked plugins to the content cache
 	if len(lock.Plugins) > 0 {
-		if err := m.downloadPlugins(lockEntriesToPlugins(lock.Plugins)); err != nil {
+		// Plugins from lock file already have digests, so we can ignore the returned results
+		if _, err := m.downloadPlugins(lockEntriesToPlugins(lock.Plugins)); err != nil {
 			return err
 		}
 	}
@@ -375,11 +376,12 @@ func (m *Manager) updateV3() error {
 
 	// Download chart-defined plugins to the content cache
 	if hasPlugins {
-		if err := m.downloadPlugins(plugins); err != nil {
+		results, err := m.downloadPlugins(plugins)
+		if err != nil {
 			return err
 		}
-		// Copy plugins to the lock file
-		lock.Plugins = pluginsToV3Lock(plugins)
+		// Copy plugins to the lock file with downloaded digests
+		lock.Plugins = pluginsToV3LockWithDigests(plugins, results)
 	}
 
 	// Recalculate lock digest
@@ -428,9 +430,10 @@ func (m *Manager) loadChartDir() (*chart.Chart, error) {
 }
 
 // downloadPlugins downloads chart-defined plugins to the content cache.
-func (m *Manager) downloadPlugins(plugins []ci.PluginDependency) error {
+// Returns the download results including computed digests for each plugin.
+func (m *Manager) downloadPlugins(plugins []ci.PluginDependency) ([]DownloadResult, error) {
 	if len(plugins) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	fmt.Fprintf(m.Out, "Downloading %d plugins\n", len(plugins))
@@ -542,6 +545,37 @@ func pluginsToV3Lock(plugins []ci.PluginDependency) []*v3chart.PluginDependency 
 			Repository: p.GetRepository(),
 			Version:    p.GetVersion(),
 			Digest:     p.GetDigest(),
+		}
+	}
+	return entries
+}
+
+// pluginsToV3LockWithDigests converts accessor plugins to v3 lock plugin entries
+// using the digests from download results.
+func pluginsToV3LockWithDigests(plugins []ci.PluginDependency, results []DownloadResult) []*v3chart.PluginDependency {
+	if len(plugins) == 0 {
+		return nil
+	}
+
+	// Build a map of name+version -> digest for quick lookup
+	digestMap := make(map[string]string)
+	for _, r := range results {
+		key := r.Name + "@" + r.Version
+		digestMap[key] = r.Digest
+	}
+
+	entries := make([]*v3chart.PluginDependency, len(plugins))
+	for i, p := range plugins {
+		// Look up the digest from the download results
+		key := p.GetName() + "@" + p.GetVersion()
+		digest := digestMap[key]
+
+		entries[i] = &v3chart.PluginDependency{
+			Name:       p.GetName(),
+			Type:       p.GetType(),
+			Repository: p.GetRepository(),
+			Version:    p.GetVersion(),
+			Digest:     digest,
 		}
 	}
 	return entries
