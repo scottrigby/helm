@@ -212,6 +212,16 @@ func (r *v3Accessor) Plugins() []PluginDependency {
 	return plugins
 }
 
+// IsV3Chart returns true if the charter is a v3 chart.
+func IsV3Chart(chrt Charter) bool {
+	switch chrt.(type) {
+	case *v3chart.Chart, v3chart.Chart:
+		return true
+	default:
+		return false
+	}
+}
+
 func structToMap(obj any) (map[string]any, error) {
 	objValue := reflect.ValueOf(obj)
 

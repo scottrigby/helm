@@ -28,6 +28,9 @@ import (
 	"golang.org/x/term"
 	"sigs.k8s.io/yaml"
 
+	chartv3 "helm.sh/helm/v4/internal/chart/v3"
+	chartutilv3 "helm.sh/helm/v4/internal/chart/v3/util"
+	"helm.sh/helm/v4/internal/gates"
 	ci "helm.sh/helm/v4/pkg/chart"
 	"helm.sh/helm/v4/pkg/chart/loader"
 	chart "helm.sh/helm/v4/pkg/chart/v2"
@@ -75,16 +78,30 @@ func (p *Package) Run(path string, _ map[string]interface{}) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var ch *chart.Chart
+
+	// Handle chart based on API version
 	switch c := chrt.(type) {
 	case *chart.Chart:
-		ch = c
+		return p.runV2(c)
 	case chart.Chart:
-		ch = &c
+		return p.runV2(&c)
+	case *chartv3.Chart:
+		if !gates.ChartV3.IsEnabled() {
+			return "", gates.ChartV3.Error()
+		}
+		return p.runV3(c)
+	case chartv3.Chart:
+		if !gates.ChartV3.IsEnabled() {
+			return "", gates.ChartV3.Error()
+		}
+		return p.runV3(&c)
 	default:
 		return "", errors.New("invalid chart apiVersion")
 	}
+}
 
+// runV2 packages a v2 chart.
+func (p *Package) runV2(ch *chart.Chart) (string, error) {
 	ac, err := ci.NewAccessor(ch)
 	if err != nil {
 		return "", err
@@ -109,16 +126,9 @@ func (p *Package) Run(path string, _ map[string]interface{}) (string, error) {
 		}
 	}
 
-	var dest string
-	if p.Destination == "." {
-		// Save to the current working directory.
-		dest, err = os.Getwd()
-		if err != nil {
-			return "", err
-		}
-	} else {
-		// Otherwise save to set destination
-		dest = p.Destination
+	dest, err := p.resolveDestination()
+	if err != nil {
+		return "", err
 	}
 
 	name, err := chartutil.Save(ch, dest)
@@ -131,6 +141,57 @@ func (p *Package) Run(path string, _ map[string]interface{}) (string, error) {
 	}
 
 	return name, err
+}
+
+// runV3 packages a v3 chart.
+func (p *Package) runV3(ch *chartv3.Chart) (string, error) {
+	ac, err := ci.NewAccessor(ch)
+	if err != nil {
+		return "", err
+	}
+
+	// If version is set, modify the version.
+	if p.Version != "" {
+		ch.Metadata.Version = p.Version
+	}
+
+	if err := validateVersion(ch.Metadata.Version); err != nil {
+		return "", err
+	}
+
+	if p.AppVersion != "" {
+		ch.Metadata.AppVersion = p.AppVersion
+	}
+
+	if reqs := ac.MetaDependencies(); len(reqs) > 0 {
+		if err := CheckDependencies(ch, reqs); err != nil {
+			return "", err
+		}
+	}
+
+	dest, err := p.resolveDestination()
+	if err != nil {
+		return "", err
+	}
+
+	name, err := chartutilv3.Save(ch, dest)
+	if err != nil {
+		return "", fmt.Errorf("failed to save: %w", err)
+	}
+
+	if p.Sign {
+		err = p.Clearsign(name)
+	}
+
+	return name, err
+}
+
+// resolveDestination returns the destination directory for the packaged chart.
+func (p *Package) resolveDestination() (string, error) {
+	if p.Destination == "." {
+		return os.Getwd()
+	}
+	return p.Destination, nil
 }
 
 // validateVersion Verify that version is a Version, and error out if it is not.
@@ -166,18 +227,27 @@ func (p *Package) Clearsign(filename string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load chart for signing: %w", err)
 	}
-	var ch *chart.Chart
+
+	// Get metadata bytes based on chart type
+	var metadataBytes []byte
 	switch c := chrt.(type) {
 	case *chart.Chart:
-		ch = c
+		metadataBytes, err = yaml.Marshal(c.Metadata)
 	case chart.Chart:
-		ch = &c
+		metadataBytes, err = yaml.Marshal(c.Metadata)
+	case *chartv3.Chart:
+		if !gates.ChartV3.IsEnabled() {
+			return gates.ChartV3.Error()
+		}
+		metadataBytes, err = yaml.Marshal(c.Metadata)
+	case chartv3.Chart:
+		if !gates.ChartV3.IsEnabled() {
+			return gates.ChartV3.Error()
+		}
+		metadataBytes, err = yaml.Marshal(c.Metadata)
 	default:
 		return errors.New("invalid chart apiVersion")
 	}
-
-	// Marshal chart metadata to YAML bytes
-	metadataBytes, err := yaml.Marshal(ch.Metadata)
 	if err != nil {
 		return fmt.Errorf("failed to marshal chart metadata: %w", err)
 	}
