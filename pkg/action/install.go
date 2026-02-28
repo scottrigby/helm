@@ -41,6 +41,9 @@ import (
 	"k8s.io/cli-runtime/pkg/resource"
 	"sigs.k8s.io/yaml"
 
+	chartv3 "helm.sh/helm/v4/internal/chart/v3"
+	chartutilv3 "helm.sh/helm/v4/internal/chart/v3/util"
+	"helm.sh/helm/v4/internal/gates"
 	ci "helm.sh/helm/v4/pkg/chart"
 	"helm.sh/helm/v4/pkg/chart/common"
 	"helm.sh/helm/v4/pkg/chart/common/util"
@@ -277,16 +280,29 @@ func (i *Install) Run(chrt ci.Charter, vals map[string]any) (ri.Releaser, error)
 // When the task is cancelled through ctx, the function returns and the install
 // proceeds in the background.
 func (i *Install) RunWithContext(ctx context.Context, ch ci.Charter, vals map[string]any) (ri.Releaser, error) {
-	var chrt *chart.Chart
+	// Handle chart based on API version
 	switch c := ch.(type) {
 	case *chart.Chart:
-		chrt = c
+		return i.runV2WithContext(ctx, c, vals)
 	case chart.Chart:
-		chrt = &c
+		return i.runV2WithContext(ctx, &c, vals)
+	case *chartv3.Chart:
+		if !gates.ChartV3.IsEnabled() {
+			return nil, gates.ChartV3.Error()
+		}
+		return i.runV3WithContext(ctx, c, vals)
+	case chartv3.Chart:
+		if !gates.ChartV3.IsEnabled() {
+			return nil, gates.ChartV3.Error()
+		}
+		return i.runV3WithContext(ctx, &c, vals)
 	default:
 		return nil, errors.New("invalid chart apiVersion")
 	}
+}
 
+// runV2WithContext executes installation for v2 charts.
+func (i *Install) runV2WithContext(ctx context.Context, chrt *chart.Chart, vals map[string]any) (ri.Releaser, error) {
 	if interactWithServer(i.DryRunStrategy) {
 		if err := i.cfg.KubeClient.IsReachable(); err != nil {
 			i.cfg.Logger().Error(fmt.Sprintf("cluster reachability check failed: %v", err))
@@ -469,6 +485,92 @@ func (i *Install) RunWithContext(ctx context.Context, ch ci.Charter, vals map[st
 		rel, err = i.failRelease(rel, err)
 	}
 	return rel, err
+}
+
+// runV3WithContext executes installation for v3 charts.
+// Currently only supports dry-run/template mode. Full install requires Release struct updates.
+func (i *Install) runV3WithContext(ctx context.Context, chrt *chartv3.Chart, vals map[string]any) (ri.Releaser, error) {
+	// For now, v3 charts only support dry-run (template) mode
+	// Full install support requires updating Release struct to handle v3 charts
+	if !isDryRun(i.DryRunStrategy) {
+		return nil, errors.New("v3 charts currently only support dry-run/template mode; full install support is pending")
+	}
+
+	// HideSecret must be used with dry run. Otherwise, return an error.
+	if !isDryRun(i.DryRunStrategy) && i.HideSecret {
+		i.cfg.Logger().Error("hiding Kubernetes secrets requires a dry-run mode")
+		return nil, errors.New("hiding Kubernetes secrets requires a dry-run mode")
+	}
+
+	if err := i.availableName(); err != nil {
+		i.cfg.Logger().Error("release name check failed", slog.Any("error", err))
+		return nil, fmt.Errorf("release name check failed: %w", err)
+	}
+
+	if err := chartutilv3.ProcessDependencies(chrt, vals); err != nil {
+		i.cfg.Logger().Error("chart dependencies processing failed", slog.Any("error", err))
+		return nil, fmt.Errorf("chart dependencies processing failed: %w", err)
+	}
+
+	// Pre-install anything in the crd/ directory.
+	if crds := chrt.CRDObjects(); !i.SkipCRDs && len(crds) > 0 {
+		i.cfg.Logger().Warn("This chart or one of its subcharts contains CRDs. Rendering may fail or contain inaccuracies.")
+	}
+
+	// Add mock objects in here so it doesn't use Kube API server
+	// NOTE(bacongobbler): used for `helm template`
+	i.cfg.Capabilities = common.DefaultCapabilities.Copy()
+	if i.KubeVersion != nil {
+		i.cfg.Capabilities.KubeVersion = *i.KubeVersion
+	}
+	i.cfg.Capabilities.APIVersions = append(i.cfg.Capabilities.APIVersions, i.APIVersions...)
+	i.cfg.KubeClient = &kubefake.PrintingKubeClient{Out: io.Discard}
+
+	mem := driver.NewMemory()
+	mem.SetNamespace(i.Namespace)
+	i.cfg.Releases = storage.Init(mem)
+
+	caps, err := i.cfg.getCapabilities()
+	if err != nil {
+		return nil, err
+	}
+
+	// special case for helm template --is-upgrade
+	isUpgrade := i.IsUpgrade && isDryRun(i.DryRunStrategy)
+	options := common.ReleaseOptions{
+		Name:      i.ReleaseName,
+		Namespace: i.Namespace,
+		Revision:  1,
+		IsInstall: !isUpgrade,
+		IsUpgrade: isUpgrade,
+	}
+	valuesToRender, err := util.ToRenderValuesWithSchemaValidation(chrt, vals, options, caps, i.SkipSchemaValidation)
+	if err != nil {
+		return nil, err
+	}
+
+	if driver.ContainsSystemLabels(i.Labels) {
+		return nil, fmt.Errorf("user supplied labels contains system reserved label name. System labels: %+v", driver.GetSystemLabels())
+	}
+
+	// Create a release with nil chart (chart field is v2-only, but we need the release for hooks/manifest)
+	rel := i.createReleaseV3(chrt, vals, i.Labels)
+
+	var manifestDoc *bytes.Buffer
+	rel.Hooks, manifestDoc, rel.Info.Notes, err = i.cfg.renderResourcesV3(chrt, valuesToRender, i.ReleaseName, i.OutputDir, i.SubNotes, i.UseReleaseName, i.IncludeCRDs, i.PostRenderer, false, i.EnableDNS, i.HideSecret)
+	// Even for errors, attach this if available
+	if manifestDoc != nil {
+		rel.Manifest = manifestDoc.String()
+	}
+	// Check error from render
+	if err != nil {
+		rel.SetStatus(rcommon.StatusFailed, fmt.Sprintf("failed to render resource: %s", err.Error()))
+		// Return a release with partial data so that the client can show debugging information.
+		return rel, err
+	}
+
+	rel.Info.Description = "Dry run complete"
+	return rel, nil
 }
 
 func (i *Install) performInstallCtx(ctx context.Context, rel *release.Release, toBeAdopted kube.ResourceList, resources kube.ResourceList) (*release.Release, error) {
@@ -660,6 +762,30 @@ func (i *Install) createRelease(chrt *chart.Chart, rawVals map[string]any, label
 		Name:      i.ReleaseName,
 		Namespace: i.Namespace,
 		Chart:     chrt,
+		Config:    rawVals,
+		Info: &release.Info{
+			FirstDeployed: ts,
+			LastDeployed:  ts,
+			Status:        rcommon.StatusUnknown,
+		},
+		Version:     1,
+		Labels:      labels,
+		ApplyMethod: string(determineReleaseSSApplyMethod(i.ServerSideApply)),
+	}
+
+	return r
+}
+
+// createReleaseV3 creates a new release object for v3 charts.
+// Note: The Chart field is nil because Release.Chart is v2-only.
+// This is acceptable for dry-run/template mode.
+func (i *Install) createReleaseV3(_ *chartv3.Chart, rawVals map[string]any, labels map[string]string) *release.Release {
+	ts := i.cfg.Now()
+
+	r := &release.Release{
+		Name:      i.ReleaseName,
+		Namespace: i.Namespace,
+		Chart:     nil, // v3 chart not compatible with v2 Release.Chart field
 		Config:    rawVals,
 		Info: &release.Info{
 			FirstDeployed: ts,

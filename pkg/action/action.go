@@ -40,6 +40,8 @@ import (
 	"sigs.k8s.io/kustomize/kyaml/kio"
 	kyaml "sigs.k8s.io/kustomize/kyaml/yaml"
 
+	chartv3 "helm.sh/helm/v4/internal/chart/v3"
+	chartutilv3 "helm.sh/helm/v4/internal/chart/v3/util"
 	"helm.sh/helm/v4/internal/logging"
 	"helm.sh/helm/v4/pkg/chart/common"
 	chart "helm.sh/helm/v4/pkg/chart/v2"
@@ -368,6 +370,121 @@ func (cfg *Configuration) renderResources(ch *chart.Chart, values common.Values,
 			// output dir is only used by `helm template`. In the next major
 			// release, we should move this logic to template only as it is not
 			// used by install or upgrade
+			err = writeToFile(newDir, m.Name, m.Content, fileWritten[m.Name])
+			if err != nil {
+				return hs, b, "", err
+			}
+			fileWritten[m.Name] = true
+		}
+	}
+
+	return hs, b, notes, nil
+}
+
+// renderResourcesV3 renders the templates in a v3 chart.
+// This is a provisional implementation for dry-run/template mode.
+// A full solution would update renderResources to use ci.Charter interface.
+func (cfg *Configuration) renderResourcesV3(ch *chartv3.Chart, values common.Values, releaseName, outputDir string, subNotes, useReleaseName, includeCrds bool, pr postrenderer.PostRenderer, interactWithRemote, enableDNS, hideSecret bool) ([]*release.Hook, *bytes.Buffer, string, error) {
+	var hs []*release.Hook
+	b := bytes.NewBuffer(nil)
+
+	caps, err := cfg.getCapabilities()
+	if err != nil {
+		return hs, b, "", err
+	}
+
+	if ch.Metadata.KubeVersion != "" {
+		if !chartutilv3.IsCompatibleRange(ch.Metadata.KubeVersion, caps.KubeVersion.String()) {
+			return hs, b, "", fmt.Errorf("chart requires kubeVersion: %s which is incompatible with Kubernetes %s", ch.Metadata.KubeVersion, caps.KubeVersion.Version)
+		}
+	}
+
+	var files map[string]string
+	var err2 error
+
+	// For dry-run/template mode, we don't interact with the remote cluster
+	var e engine.Engine
+	e.EnableDNS = enableDNS
+	e.CustomTemplateFuncs = cfg.CustomTemplateFuncs
+	e.ContentCachePath = cfg.ContentCachePath
+
+	files, err2 = e.Render(ch, values)
+
+	if err2 != nil {
+		return hs, b, "", err2
+	}
+
+	// NOTES.txt handling
+	var notesBuffer bytes.Buffer
+	for k, v := range files {
+		if strings.HasSuffix(k, notesFileSuffix) {
+			if subNotes || (k == path.Join(ch.Name(), "templates", notesFileSuffix)) {
+				if notesBuffer.Len() > 0 {
+					notesBuffer.WriteString("\n")
+				}
+				notesBuffer.WriteString(v)
+			}
+			delete(files, k)
+		}
+	}
+	notes := notesBuffer.String()
+
+	if pr != nil {
+		merged, err := annotateAndMerge(files)
+		if err != nil {
+			return hs, b, notes, fmt.Errorf("error merging manifests: %w", err)
+		}
+
+		postRendered, err := pr.Run(bytes.NewBufferString(merged))
+		if err != nil {
+			return hs, b, notes, fmt.Errorf("error while running post render on files: %w", err)
+		}
+
+		files, err = splitAndDeannotate(postRendered.String())
+		if err != nil {
+			return hs, b, notes, fmt.Errorf("error while parsing post rendered output: %w", err)
+		}
+	}
+
+	hs, manifests, err := releaseutil.SortManifests(files, nil, releaseutil.InstallOrder)
+	if err != nil {
+		for name, content := range files {
+			if strings.TrimSpace(content) == "" {
+				continue
+			}
+			fmt.Fprintf(b, "---\n# Source: %s\n%s\n", name, content)
+		}
+		return hs, b, "", err
+	}
+
+	fileWritten := make(map[string]bool)
+
+	if includeCrds {
+		for _, crd := range ch.CRDObjects() {
+			if outputDir == "" {
+				fmt.Fprintf(b, "---\n# Source: %s\n%s\n", crd.Filename, string(crd.File.Data[:]))
+			} else {
+				err = writeToFile(outputDir, crd.Filename, string(crd.File.Data[:]), fileWritten[crd.Filename])
+				if err != nil {
+					return hs, b, "", err
+				}
+				fileWritten[crd.Filename] = true
+			}
+		}
+	}
+
+	for _, m := range manifests {
+		if outputDir == "" {
+			if hideSecret && m.Head.Kind == "Secret" && m.Head.Version == "v1" {
+				fmt.Fprintf(b, "---\n# Source: %s\n# HIDDEN: The Secret output has been suppressed\n", m.Name)
+			} else {
+				fmt.Fprintf(b, "---\n# Source: %s\n%s\n", m.Name, m.Content)
+			}
+		} else {
+			newDir := outputDir
+			if useReleaseName {
+				newDir = filepath.Join(outputDir, releaseName)
+			}
 			err = writeToFile(newDir, m.Name, m.Content, fileWritten[m.Name])
 			if err != nil {
 				return hs, b, "", err
