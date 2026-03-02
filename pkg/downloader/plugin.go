@@ -234,24 +234,40 @@ func (d *PluginDownloader) checkPluginTrust(info *PluginTrustInfo) error {
 	// Auto-approve mode - allow everything
 	if d.AutoApprove {
 		slog.Debug("auto-approving plugin", "plugin", info.Name)
+		if d.Out != nil {
+			fmt.Fprintf(d.Out, "  ✓ %s v%s - auto-approved\n", info.Name, info.Version)
+		}
 		return nil
 	}
 
 	// Trusted publisher - allow without prompt
 	if info.TrustedPublisher {
 		slog.Debug("plugin from trusted publisher", "plugin", info.Name, "publisher", info.PublisherName)
+		if d.Out != nil {
+			publisherName := info.PublisherName
+			if publisherName == "" {
+				publisherName = info.ArtifactHubRepoName
+			}
+			fmt.Fprintf(d.Out, "  ✓ %s v%s - trusted publisher (%s)\n", info.Name, info.Version, publisherName)
+		}
 		return nil
 	}
 
 	// Verified publisher with signature - allow without prompt
 	if info.VerifiedPublisher && info.Signed {
 		slog.Debug("plugin signed by verified publisher", "plugin", info.Name, "publisher", info.PublisherName)
+		if d.Out != nil {
+			fmt.Fprintf(d.Out, "  ✓ %s v%s - verified publisher (%s)\n", info.Name, info.Version, info.PublisherName)
+		}
 		return nil
 	}
 
 	// Unsigned plugin with TrustUnsigned flag - allow
 	if !info.Signed && d.TrustUnsigned {
 		slog.Debug("allowing unsigned plugin with --trust-unsigned", "plugin", info.Name)
+		if d.Out != nil {
+			fmt.Fprintf(d.Out, "  ⚠ %s v%s - unsigned (allowed by --trust-unsigned)\n", info.Name, info.Version)
+		}
 		return nil
 	}
 
@@ -270,7 +286,11 @@ func (d *PluginDownloader) checkPluginTrust(info *PluginTrustInfo) error {
 			if err := d.addTrustedPublisher(info); err != nil {
 				fmt.Fprintf(d.Out, "Warning: failed to save trusted publisher: %v\n", err)
 			} else {
-				fmt.Fprintf(d.Out, "Added %s to trusted publishers\n", info.PublisherName)
+				publisherName := info.PublisherName
+				if publisherName == "" {
+					publisherName = info.ArtifactHubRepoName
+				}
+				fmt.Fprintf(d.Out, "✓ Added %s to trusted publishers (%s)\n", publisherName, TrustConfigPath())
 			}
 			return nil
 		case TrustDecisionDeny:

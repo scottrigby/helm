@@ -235,8 +235,13 @@ func PromptForTrust(out io.Writer, in io.Reader, info *PluginTrustInfo) (TrustDe
 
 	fmt.Fprintln(out)
 
-	// Prompt for decision
-	fmt.Fprintf(out, "Trust this plugin? [y/N/trust-publisher]: ")
+	// Prompt for decision with clear explanations
+	fmt.Fprintln(out, "Trust this plugin?")
+	fmt.Fprintln(out, "  y = yes, allow this download only")
+	fmt.Fprintln(out, "  N = no, reject this plugin")
+	fmt.Fprintf(out, "  t = trust publisher, add to %s\n", TrustConfigPath())
+	fmt.Fprintln(out)
+	fmt.Fprintf(out, "Choice [y/N/t]: ")
 
 	reader := bufio.NewReader(in)
 	response, err := reader.ReadString('\n')
