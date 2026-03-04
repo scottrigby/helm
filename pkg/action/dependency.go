@@ -53,7 +53,8 @@ type Dependency struct {
 
 	// VerifyPlugins enables plugin verification via ArtifactHub.
 	// When enabled, plugins are looked up on ArtifactHub to check signatures
-	// and publisher verification status.
+	// and publisher verification status. Defaults to true; pass
+	// --verify-plugins=false to disable (a warning will be printed).
 	VerifyPlugins bool
 	// TrustUnsigned allows downloading unsigned plugins without prompting.
 	// Use with caution - this bypasses signature verification.
@@ -66,7 +67,8 @@ type Dependency struct {
 // NewDependency creates a new Dependency object with the given configuration.
 func NewDependency() *Dependency {
 	return &Dependency{
-		ColumnWidth: 80,
+		ColumnWidth:   80,
+		VerifyPlugins: true,
 	}
 }
 

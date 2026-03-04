@@ -54,10 +54,13 @@ func newDependencyUpdateCmd(_ *action.Configuration, out io.Writer) *cobra.Comma
 		Short:   "update charts/ based on the contents of Chart.yaml",
 		Long:    dependencyUpDesc,
 		Args:    require.MaximumNArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			chartpath := "."
 			if len(args) > 0 {
 				chartpath = filepath.Clean(args[0])
+			}
+			if f := cmd.Flags().Lookup("verify-plugins"); f != nil && f.Changed && !client.VerifyPlugins {
+				fmt.Fprintf(out, "WARNING: Plugin verification disabled. Chart-defined plugins will be downloaded without signature verification.\n")
 			}
 			registryClient, err := newRegistryClient(client.CertFile, client.KeyFile, client.CaFile,
 				client.InsecureSkipTLSVerify, client.PlainHTTP, client.Username, client.Password)
