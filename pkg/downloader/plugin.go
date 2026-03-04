@@ -54,22 +54,14 @@ type PluginDownloader struct {
 	// Defaults to https://artifacthub.io if empty.
 	ArtifactHubEndpoint string
 
-	// VerifyPlugins enables plugin verification via ArtifactHub.
-	// When enabled, plugins are looked up on ArtifactHub to check signatures
-	// and publisher verification status.
-	VerifyPlugins bool
-
-	// TrustUnsigned allows downloading unsigned plugins without prompting.
-	// Use with caution - this bypasses signature verification.
-	TrustUnsigned bool
+	// SkipVerification disables plugin trust verification.
+	// Set when the user explicitly passes --verify=false to helm dependency update/build.
+	// By default (false), plugins are verified before downloading.
+	SkipVerification bool
 
 	// TrustConfig is the trusted publishers configuration.
 	// If nil, it will be loaded from disk when needed.
 	TrustConfig *TrustConfig
-
-	// AutoApprove skips all trust prompts and allows all plugins.
-	// This is intended for CI environments where interactive prompts are not possible.
-	AutoApprove bool
 
 	// artifactHubClient is the lazily-initialized ArtifactHub client.
 	artifactHubClient *artifacthub.Client
@@ -137,7 +129,7 @@ func (d *PluginDownloader) Download(p chart.PluginDependency) (string, error) {
 	}
 
 	// Verify plugin trust before downloading
-	if d.VerifyPlugins {
+	if !d.SkipVerification {
 		trustInfo := d.getPluginTrustInfo(p)
 		DisplayPluginSignatureStatus(d.Out, trustInfo)
 
@@ -231,15 +223,6 @@ func (d *PluginDownloader) getPluginTrustInfo(p chart.PluginDependency) *PluginT
 
 // checkPluginTrust checks if a plugin should be trusted and prompts the user if needed.
 func (d *PluginDownloader) checkPluginTrust(info *PluginTrustInfo) error {
-	// Auto-approve mode - allow everything
-	if d.AutoApprove {
-		slog.Debug("auto-approving plugin", "plugin", info.Name)
-		if d.Out != nil {
-			fmt.Fprintf(d.Out, "  ✓ %s v%s - auto-approved\n", info.Name, info.Version)
-		}
-		return nil
-	}
-
 	// Trusted publisher - allow without prompt
 	if info.TrustedPublisher {
 		slog.Debug("plugin from trusted publisher", "plugin", info.Name, "publisher", info.PublisherName)
@@ -258,15 +241,6 @@ func (d *PluginDownloader) checkPluginTrust(info *PluginTrustInfo) error {
 		slog.Debug("plugin signed by verified publisher", "plugin", info.Name, "publisher", info.PublisherName)
 		if d.Out != nil {
 			fmt.Fprintf(d.Out, "  ✓ %s v%s - verified publisher (%s)\n", info.Name, info.Version, info.PublisherName)
-		}
-		return nil
-	}
-
-	// Unsigned plugin with TrustUnsigned flag - allow
-	if !info.Signed && d.TrustUnsigned {
-		slog.Debug("allowing unsigned plugin with --trust-unsigned", "plugin", info.Name)
-		if d.Out != nil {
-			fmt.Fprintf(d.Out, "  ⚠ %s v%s - unsigned (allowed by --trust-unsigned)\n", info.Name, info.Version)
 		}
 		return nil
 	}
@@ -298,13 +272,13 @@ func (d *PluginDownloader) checkPluginTrust(info *PluginTrustInfo) error {
 		}
 	}
 
-	// Non-interactive mode without auto-approve - reject unsigned/unverified plugins
+	// Non-interactive mode: reject plugins that are not auto-trusted
 	if !info.Signed {
-		return fmt.Errorf("plugin %s v%s is unsigned; use --trust-unsigned to allow", info.Name, info.Version)
+		return fmt.Errorf("plugin %s v%s is unsigned: add publisher to %s, or use --verify=false", info.Name, info.Version, TrustConfigPath())
 	}
 
 	if !info.VerifiedPublisher && !info.TrustedPublisher {
-		return fmt.Errorf("plugin %s v%s is from unverified publisher; use interactive mode or add to trusted publishers", info.Name, info.Version)
+		return fmt.Errorf("plugin %s v%s publisher is not verified: add publisher to %s, or use --verify=false", info.Name, info.Version, TrustConfigPath())
 	}
 
 	return nil

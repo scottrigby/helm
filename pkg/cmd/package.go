@@ -92,15 +92,16 @@ func newPackageCmd(out io.Writer) *cobra.Command {
 
 				if client.DependencyUpdate {
 					downloadManager := &downloader.Manager{
-						Out:              io.Discard,
-						ChartPath:        path,
-						Keyring:          client.Keyring,
-						Getters:          p,
-						Debug:            settings.Debug,
-						RegistryClient:   registryClient,
-						RepositoryConfig: settings.RepositoryConfig,
-						RepositoryCache:  settings.RepositoryCache,
-						ContentCache:     settings.ContentCache,
+						Out:                io.Discard,
+						ChartPath:          path,
+						Keyring:            client.Keyring,
+						Getters:            p,
+						Debug:              settings.Debug,
+						RegistryClient:     registryClient,
+						RepositoryConfig:   settings.RepositoryConfig,
+						RepositoryCache:    settings.RepositoryCache,
+						ContentCache:       settings.ContentCache,
+						SkipPluginDownload: true,
 					}
 
 					if err := downloadManager.Update(); err != nil {
@@ -125,7 +126,7 @@ func newPackageCmd(out io.Writer) *cobra.Command {
 	f.StringVar(&client.Version, "version", "", "set the version on the chart to this semver version")
 	f.StringVar(&client.AppVersion, "app-version", "", "set the appVersion on the chart to this version")
 	f.StringVarP(&client.Destination, "destination", "d", ".", "location to write the chart.")
-	f.BoolVarP(&client.DependencyUpdate, "dependency-update", "u", false, `update dependencies from "Chart.yaml" to dir "charts/" before packaging`)
+	f.BoolVarP(&client.DependencyUpdate, "dependency-update", "u", false, `update subchart dependencies from "Chart.yaml" to dir "charts/" before packaging (does not download chart-defined plugins; run "helm dependency update" separately for that)`)
 	f.StringVar(&client.Username, "username", "", "chart repository username where to locate the requested chart")
 	f.StringVar(&client.Password, "password", "", "chart repository password where to locate the requested chart")
 	f.StringVar(&client.CertFile, "cert-file", "", "identify HTTPS client using this SSL certificate file")

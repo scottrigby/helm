@@ -93,13 +93,13 @@ type Manager struct {
 	// In is used to read user input for trust prompts.
 	// If nil, prompts are skipped and plugins are rejected unless auto-trusted.
 	In io.Reader
-	// VerifyPlugins enables plugin verification via ArtifactHub.
-	VerifyPlugins bool
-	// TrustUnsigned allows downloading unsigned plugins without prompting.
-	TrustUnsigned bool
-	// AutoApprove skips all trust prompts and allows all plugins.
-	// This is intended for CI environments where interactive prompts are not possible.
-	AutoApprove bool
+	// SkipVerification disables plugin trust verification.
+	// Set when the user explicitly passes --verify=false to helm dependency update/build.
+	// By default (false), plugins are verified before downloading.
+	SkipVerification bool
+	// SkipPluginDownload skips downloading chart-defined plugins to the content cache.
+	// Used by helm package, which only needs subchart dependencies, not plugins.
+	SkipPluginDownload bool
 }
 
 // Build rebuilds a local charts directory from a lockfile.
@@ -230,7 +230,7 @@ func (m *Manager) buildV3() error {
 	}
 
 	// Download locked plugins to the content cache
-	if len(lock.Plugins) > 0 {
+	if len(lock.Plugins) > 0 && !m.SkipPluginDownload {
 		// Plugins from lock file already have digests, so we can ignore the returned results
 		if _, err := m.downloadPlugins(lockEntriesToPlugins(lock.Plugins)); err != nil {
 			return err
@@ -393,7 +393,7 @@ func (m *Manager) updateV3() error {
 	}
 
 	// Download chart-defined plugins to the content cache
-	if hasPlugins {
+	if hasPlugins && !m.SkipPluginDownload {
 		results, err := m.downloadPlugins(plugins)
 		if err != nil {
 			return err
@@ -459,9 +459,7 @@ func (m *Manager) downloadPlugins(plugins []ci.PluginDependency) ([]DownloadResu
 	downloader.PlainHTTP = m.PlainHTTP
 	downloader.ArtifactHubEndpoint = m.ArtifactHubEndpoint
 	downloader.In = m.In
-	downloader.VerifyPlugins = m.VerifyPlugins
-	downloader.TrustUnsigned = m.TrustUnsigned
-	downloader.AutoApprove = m.AutoApprove
+	downloader.SkipVerification = m.SkipVerification
 
 	return downloader.DownloadAll(plugins)
 }

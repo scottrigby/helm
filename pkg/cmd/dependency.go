@@ -123,7 +123,7 @@ func newDependencyListCmd(out io.Writer) *cobra.Command {
 }
 
 func addDependencySubcommandFlags(f *pflag.FlagSet, client *action.Dependency) {
-	f.BoolVar(&client.Verify, "verify", false, "verify the packages against signatures")
+	f.BoolVar(&client.Verify, "verify", false, "verify packages against signatures; for Chart API v3 charts, also verifies chart-defined plugins (use --verify=false to skip all verification)")
 	f.StringVar(&client.Keyring, "keyring", defaultKeyring(), "keyring containing public keys")
 	f.BoolVar(&client.SkipRefresh, "skip-refresh", false, "do not refresh the local repository cache")
 	f.StringVar(&client.Username, "username", "", "chart repository username where to locate the requested chart")
@@ -134,9 +134,4 @@ func addDependencySubcommandFlags(f *pflag.FlagSet, client *action.Dependency) {
 	f.BoolVar(&client.PlainHTTP, "plain-http", false, "use insecure HTTP connections for the chart download")
 	f.StringVar(&client.CaFile, "ca-file", "", "verify certificates of HTTPS-enabled servers using this CA bundle")
 	f.StringVar(&client.ArtifactHubEndpoint, "artifacthub-endpoint", "", "ArtifactHub API endpoint for plugin discovery (default: https://artifacthub.io)")
-
-	// Plugin trust verification flags
-	f.BoolVar(&client.VerifyPlugins, "verify-plugins", true, "verify chart-defined plugins via ArtifactHub (disable with --verify-plugins=false)")
-	f.BoolVar(&client.TrustUnsigned, "trust-unsigned", false, "trust unsigned plugins without prompting (use with caution)")
-	f.BoolVar(&client.AutoApprove, "auto-approve", false, "skip all plugin trust prompts (for CI environments)")
 }

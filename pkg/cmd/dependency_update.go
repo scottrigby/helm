@@ -59,8 +59,11 @@ func newDependencyUpdateCmd(_ *action.Configuration, out io.Writer) *cobra.Comma
 			if len(args) > 0 {
 				chartpath = filepath.Clean(args[0])
 			}
-			if f := cmd.Flags().Lookup("verify-plugins"); f != nil && f.Changed && !client.VerifyPlugins {
-				fmt.Fprintf(out, "WARNING: Plugin verification disabled. Chart-defined plugins will be downloaded without signature verification.\n")
+			// --verify=false explicitly disables all verification (subcharts and plugins).
+			verifyFlag := cmd.Flags().Lookup("verify")
+			skipPluginVerification := verifyFlag != nil && verifyFlag.Changed && !client.Verify
+			if skipPluginVerification {
+				fmt.Fprintf(out, "WARNING: Verification disabled. Chart-defined plugins and subcharts will be downloaded without signature verification.\n")
 			}
 			registryClient, err := newRegistryClient(client.CertFile, client.KeyFile, client.CaFile,
 				client.InsecureSkipTLSVerify, client.PlainHTTP, client.Username, client.Password)
@@ -81,11 +84,8 @@ func newDependencyUpdateCmd(_ *action.Configuration, out io.Writer) *cobra.Comma
 				Debug:               settings.Debug,
 				PlainHTTP:           client.PlainHTTP,
 				ArtifactHubEndpoint: client.ArtifactHubEndpoint,
-				// Plugin trust verification
-				In:            os.Stdin,
-				VerifyPlugins: client.VerifyPlugins,
-				TrustUnsigned: client.TrustUnsigned,
-				AutoApprove:   client.AutoApprove,
+				In:                  os.Stdin,
+				SkipVerification:    skipPluginVerification,
 			}
 			if client.Verify {
 				man.Verify = downloader.VerifyAlways

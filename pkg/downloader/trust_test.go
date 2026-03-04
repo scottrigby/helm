@@ -323,18 +323,6 @@ func TestPluginDownloaderCheckPluginTrust(t *testing.T) {
 		errorContains string
 	}{
 		{
-			name: "auto-approve allows everything",
-			downloader: &PluginDownloader{
-				AutoApprove: true,
-			},
-			info: &PluginTrustInfo{
-				Name:    "test-plugin",
-				Version: "1.0.0",
-				Signed:  false,
-			},
-			expectError: false,
-		},
-		{
 			name:       "trusted publisher allows",
 			downloader: &PluginDownloader{},
 			info: &PluginTrustInfo{
@@ -356,19 +344,7 @@ func TestPluginDownloaderCheckPluginTrust(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "trust-unsigned allows unsigned plugins",
-			downloader: &PluginDownloader{
-				TrustUnsigned: true,
-			},
-			info: &PluginTrustInfo{
-				Name:    "test-plugin",
-				Version: "1.0.0",
-				Signed:  false,
-			},
-			expectError: false,
-		},
-		{
-			name:       "unsigned plugin without flags rejected",
+			name:       "unsigned plugin rejected in non-interactive mode",
 			downloader: &PluginDownloader{},
 			info: &PluginTrustInfo{
 				Name:    "test-plugin",
