@@ -39,24 +39,6 @@ import (
 	"helm.sh/helm/v4/pkg/repo/v1"
 )
 
-// VerificationStrategy describes a strategy for determining whether to verify a chart.
-type VerificationStrategy int
-
-const (
-	// VerifyNever will skip all verification of a chart.
-	VerifyNever VerificationStrategy = iota
-	// VerifyIfPossible will attempt a verification, it will not error if verification
-	// data is missing. But it will not stop processing if verification fails.
-	VerifyIfPossible
-	// VerifyAlways will always attempt a verification, and will fail if the
-	// verification fails.
-	VerifyAlways
-	// VerifyLater will fetch verification data, but not do any verification.
-	// This is to accommodate the case where another step of the process will
-	// perform verification.
-	VerifyLater
-)
-
 // ErrNoOwnerRepo indicates that a given chart URL can't be found in any repos.
 var ErrNoOwnerRepo = errors.New("could not find a repo containing the given URL")
 
