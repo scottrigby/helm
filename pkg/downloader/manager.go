@@ -611,7 +611,8 @@ func pluginsUnchanged(old, updated []*v3chart.PluginDependency) bool {
 		if old[i].Name != updated[i].Name ||
 			old[i].Type != updated[i].Type ||
 			old[i].Repository != updated[i].Repository ||
-			old[i].Version != updated[i].Version {
+			old[i].Version != updated[i].Version ||
+			old[i].Digest != updated[i].Digest {
 			return false
 		}
 	}

@@ -199,8 +199,10 @@ func (r *v3Accessor) Plugins() []PluginDependency {
 	}
 
 	for i, p := range r.chrt.Metadata.Plugins {
-		// If there's a locked version, use its digest
-		if lp, ok := lockedPlugins[p.Name]; ok && lp.Digest != "" {
+		// Only use the locked digest if the locked version also matches Chart.yaml.
+		// If the version changed (e.g. Chart.yaml bumped from 0.1.3 to 0.1.4), the
+		// old digest is stale and must not be reused — the plugin needs re-downloading.
+		if lp, ok := lockedPlugins[p.Name]; ok && lp.Digest != "" && lp.Version == p.Version {
 			// Create a copy with the digest from lock
 			pluginCopy := *p
 			pluginCopy.Digest = lp.Digest
